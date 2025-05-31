@@ -1,0 +1,17 @@
+name: ❄ Package checks
+run-name: ${{ github.actor }} is testing his implementation of Lox 🚀
+on: [push]
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
+      # - run: nix flake check
+      - name: Prepare dependencies for testing my implementation
+        run: |
+          nix develop --command make -C original_craftinginterpreters get

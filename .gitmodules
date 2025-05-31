@@ -1,0 +1,3 @@
+[submodule "original_craftinginterpreters"]
+	path = original_craftinginterpreters
+	url = https://github.com/munificent/craftinginterpreters.git

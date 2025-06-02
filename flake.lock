@@ -1,5 +1,21 @@
 {
   "nodes": {
+    "crafting-interpreters": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1722554203,
+        "narHash": "sha256-CG6FlxWIjJ3nLNhV4g/WETbnYu9jLEIFr8XmahhW3RQ=",
+        "owner": "munificent",
+        "repo": "craftinginterpreters",
+        "rev": "4a840f70f69c6ddd17cfef4f6964f8e1bcd8c3d4",
+        "type": "github"
+      },
+      "original": {
+        "owner": "munificent",
+        "repo": "craftinginterpreters",
+        "type": "github"
+      }
+    },
     "flake-compat": {
       "flake": false,
       "locked": {
@@ -126,6 +142,7 @@
     },
     "root": {
       "inputs": {
+        "crafting-interpreters": "crafting-interpreters",
         "flake-parts": "flake-parts",
         "git-hooks": "git-hooks",
         "nixpkgs": "nixpkgs",

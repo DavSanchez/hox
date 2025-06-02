@@ -51,9 +51,12 @@ library
   -- Import common warning flags.
   import: warnings
   -- Modules exported by the library.
-  exposed-modules: Scanner
+  exposed-modules:
+    Scanner
+    Token
+
   -- Modules included in this library but not exported.
-  -- other-modules:
+  other-modules: Scanner.Internal
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- Other library packages from which modules are imported.
@@ -97,7 +100,10 @@ test-suite hox-test
   -- The interface type and version of the test suite.
   type: exitcode-stdio-1.0
   -- Directories containing source files.
-  hs-source-dirs: test
+  hs-source-dirs:
+    src
+    test
+
   -- The entrypoint to the test suite.
   main-is: Main.hs
   -- Test dependencies.

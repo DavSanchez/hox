@@ -13,6 +13,10 @@
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    crafting-interpreters = {
+      url = "github:munificent/craftinginterpreters";
+      flake = false;
+    };
   };
 
   outputs =
@@ -37,35 +41,68 @@
             config,
             pkgs,
             system,
+            self',
             ...
           }:
           let
-            # Dependencies for building and running the Lox tests in Robert Nystrom's repository
-            # See <https://github.com/munificent/craftinginterpreters#testing-your-implementation>
-            crafting-interpreters-packages = with pkgs; [
-              gnumake
-              inputs.oldDartNixpkgs.legacyPackages.${system}.dart # Dart 2.19.6
-            ];
+            dart2 = inputs.oldDartNixpkgs.legacyPackages.${system}.dart;
+            crafting-interpreters-check =
+              {
+                testCase ? "",
+                ...
+              }:
+              pkgs.stdenv.mkDerivation {
+                pname = "crafting-interpreters-tests";
+                version = "0.0.0";
+                src = inputs.crafting-interpreters;
+                nativeBuildInputs =
+                  (with pkgs; [
+                    gnumake
+                    openjdk
+                  ])
+                  ++ [ dart2 ];
+                configurePhase = ''
+                  HOME=$PWD
+                  make get
+                '';
+                # This is a fixed output derivation so it has network access (hence add the hash)
+                # It actually produces "nothing" (see installPhase below), we use only for
+                # running the Lox tests with our implementation
+                outputHash = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
+                outputHashAlgo = "sha256";
+                outputHashMode = "recursive";
+
+                # The test run
+                doCheck = testCase != "";
+                checkPhase = ''
+                  dart tool/bin/test.dart ${testCase} --interpreter ${self'.packages.default}/bin/hox
+                '';
+                # tl,dr; derivations have to produce an output ¯\_(ツ)_/¯
+                installPhase = ''
+                  mkdir $out
+                '';
+              };
           in
           {
-            devShells = {
-              default = pkgs.mkShell {
-                shellHook = ''
-                  ${config.pre-commit.installationScript}
-                  echo "Hello Tree Walk Interpreter!"
-                '';
-                packages =
-                  with pkgs.haskellPackages;
-                  [
-                    haskell-language-server
-                    cabal-install
-                    doctest
-                  ]
-                  ++ crafting-interpreters-packages;
-              };
+            checks = {
+              chapter04 = crafting-interpreters-check { testCase = "chap04_scanning"; };
             };
 
-            packages.default = pkgs.haskellPackages.callPackage ./default.nix { };
+            devShells.default = pkgs.mkShell {
+              shellHook = ''
+                ${config.pre-commit.installationScript}
+              '';
+              packages = with pkgs.haskellPackages; [
+                haskell-language-server
+                cabal-install
+                doctest
+              ];
+            };
+
+            packages = {
+              default = pkgs.haskellPackages.callPackage ./default.nix { };
+              craftinginterpreters = crafting-interpreters-check { };
+            };
 
             # Git hooks
             pre-commit = {

@@ -1,4 +1,3 @@
 module Scanner (scanTokens) where
 
-scanTokens :: String -> [String]
-scanTokens = words -- something stupid for now
+import Scanner.Internal (scanTokens)

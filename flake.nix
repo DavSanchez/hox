@@ -59,6 +59,7 @@
                   (with pkgs; [
                     gnumake
                     openjdk
+                    cacert
                   ])
                   ++ [ dart2 ];
                 configurePhase = ''

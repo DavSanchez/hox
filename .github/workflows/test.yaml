@@ -14,3 +14,4 @@ jobs:
         uses: DeterminateSystems/nix-installer-action@main
 
       - run: nix flake check -L
+      - run: nix run .#test-chapter04

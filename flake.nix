@@ -2,7 +2,7 @@
   description = "My implementations of Lox, a programming language from the book 'Crafting Interpreters' by Robert Nystrom";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     oldDartNixpkgs.url = "github:nixos/nixpkgs/8cad3dbe48029cb9def5cdb2409a6c80d3acfe2e"; # Dart 2.19.6
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks = {
@@ -46,47 +46,49 @@
           }:
           let
             dart2 = inputs.oldDartNixpkgs.legacyPackages.${system}.dart;
-            crafting-interpreters-check =
-              {
-                testCase ? "",
-                ...
-              }:
-              pkgs.stdenv.mkDerivation {
-                pname = "crafting-interpreters-tests";
-                version = "0.0.0";
-                src = inputs.crafting-interpreters;
-                nativeBuildInputs =
-                  (with pkgs; [
-                    gnumake
-                    openjdk
-                    cacert
-                  ])
-                  ++ [ dart2 ];
-                configurePhase = ''
-                  HOME=$PWD
-                  make get
-                '';
-                # This is a fixed output derivation so it has network access (hence add the hash)
-                # It actually produces "nothing" (see installPhase below), we use only for
-                # running the Lox tests with our implementation
-                outputHash = "sha256-pQpattmS9VmO3ZIQUFn66az8GSmB4IvYhTTCFn6SUmo=";
-                outputHashAlgo = "sha256";
-                outputHashMode = "recursive";
+            crafting-interpreters-script =
+              testCase:
+              pkgs.writers.writeHaskellBin "crafting-interpreters-script"
+                {
+                  libraries = [
+                    pkgs.haskellPackages.shh
+                    pkgs.haskellPackages.temporary
+                  ];
+                }
+                ''
+                  {-# LANGUAGE TemplateHaskell #-}
+                  import Shh
+                  import System.IO.Temp (withSystemTempDirectory)
 
-                # The test run
-                doCheck = testCase != "";
-                checkPhase = ''
-                  dart tool/bin/test.dart ${testCase} --interpreter ${self'.packages.default}/bin/hox
+                  -- Load binaries from Nix packages. The dependencies will be captured
+                  -- in the closure.
+                  loadFromBins ["${dart2}", "${pkgs.gnumake}", "${pkgs.uutils-coreutils-noprefix}"]
+
+                  testCase :: String
+                  testCase = "${testCase}"
+
+                  main :: IO ()
+                  main = withSystemTempDirectory "crafting-interpreters-tests" $ \tmpDir -> do
+                    -- Copy repository to temporary directory
+                    cp "--no-preserve=all" "-r" "${inputs.crafting-interpreters}/." tmpDir
+                    -- Change to it
+                    cd tmpDir
+                    cd "./tool"
+                    -- Pull dependencies
+                    dart "pub" "get"
+                    cd tmpDir
+                    -- Run the tests!
+                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.default}/bin/hox"
                 '';
-                # tl,dr; derivations have to produce an output ¯\_(ツ)_/¯
-                installPhase = ''
-                  mkdir $out
-                '';
-              };
+            mkTestApp = testCase: {
+              type = "app";
+              program = "${crafting-interpreters-script testCase}/bin/crafting-interpreters-script";
+              meta.description = "Run the Crafting Interpreters test suite for ${testCase}";
+            };
           in
           {
-            checks = {
-              chapter04 = crafting-interpreters-check { testCase = "chap04_scanning"; };
+            apps = {
+              test-chapter04 = mkTestApp "chap04_scanning";
             };
 
             devShells.default = pkgs.mkShell {
@@ -101,8 +103,7 @@
             };
 
             packages = {
-              default = pkgs.haskellPackages.callPackage ./default.nix { };
-              craftinginterpreters = crafting-interpreters-check { };
+              default = pkgs.haskellPackages.callPackage ./hox.nix { };
             };
 
             # Git hooks
@@ -114,19 +115,17 @@
                     enable = true;
                     packageOverrides.treefmt = config.treefmt.build.wrapper;
                   };
-                  # Git
                   actionlint.enable = true; # GitHub Actions
                   convco.enable = true; # Conventional commits
                   gitlint.enable = true; # Git commit messages
                   check-merge-conflicts.enable = true; # Check for merge conflicts
-                  # Nix
-                  flake-checker.enable = true;
-                  # Haskell
+                  flake-checker.enable = true; # Nix
                   hlint.enable = true; # Haskell linter
-                  # Cabal to Nix pacakge definition
-                  cabal2nix.enable = true;
-                  # Markdown
-                  markdownlint.enable = true;
+                  cabal2nix = {
+                    enable = true; # Cabal to Nix pacakge definition
+                    settings.outputFilename = "hox.nix";
+                  };
+                  markdownlint.enable = true; # Markdown
                 };
               };
             };
@@ -136,14 +135,10 @@
               programs = {
                 nixfmt = {
                   enable = true; # Nix
-                  excludes = [
-                    "default.nix" # Autogenerated by cabal2nix
-                  ];
+                  excludes = [ "hox.nix" ]; # Autogenerated by cabal2nix
                 };
-                # Cabal
-                cabal-gild.enable = true;
-                # Haskell code
-                ormolu.enable = true;
+                cabal-gild.enable = true; # Cabal
+                ormolu.enable = true; # Haskell
               };
             };
           };

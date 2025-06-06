@@ -1,5 +1,6 @@
 module Scanner.Internal where
 
+import Data.Bifunctor (Bifunctor (second))
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Text.Read (readMaybe)
 import Token (Token (Token), TokenType (..))
@@ -23,12 +24,12 @@ scanTokens :: String -> [TokenResult]
 scanTokens s = scanTokens' [] (charsWithLines s) ++ [Right (Token EOF (length . lines $ s))]
 
 -- >>> charsWithLines "Hello\nWorld"
--- [(1,'H'),(1,'e'),(1,'l'),(1,'l'),(1,'o'),(2,'W'),(2,'o'),(2,'r'),(2,'l'),(2,'d')]
+-- [(1,'H'),(1,'e'),(1,'l'),(1,'l'),(1,'o'),(1,'\n'),(2,'W'),(2,'o'),(2,'r'),(2,'l'),(2,'d'),(2,'\n')]
 charsWithLines :: String -> IndexedSource
 charsWithLines s =
   let -- Index the lines of the input string, to track what line each token is on.
       -- This creates a [(Int, String)] where the Int is the line number and the String is the line.
-      indexedLines = zip [1 :: Int ..] (lines s)
+      indexedLines = second (++ ['\n']) <$> zip [1 :: Int ..] (lines s)
    in concatMap (\(lineNum, line) -> map (lineNum,) line) indexedLines
 
 scanTokens' :: [TokenResult] -> IndexedSource -> [TokenResult]

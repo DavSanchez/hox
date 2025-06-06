@@ -141,7 +141,7 @@
                   ];
                 };
                 # Cabal
-                # cabal-gild.enable = true; # Not yet available in treefmt-nix
+                cabal-gild.enable = true;
                 # Haskell code
                 ormolu.enable = true;
               };

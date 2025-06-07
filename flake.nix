@@ -2,7 +2,7 @@
   description = "My implementations of Lox, a programming language from the book 'Crafting Interpreters' by Robert Nystrom";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
     oldDartNixpkgs.url = "github:nixos/nixpkgs/8cad3dbe48029cb9def5cdb2409a6c80d3acfe2e"; # Dart 2.19.6
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks = {
@@ -12,6 +12,10 @@
     treefmt-nix = {
       url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+    crafting-interpreters = {
+      url = "github:munificent/craftinginterpreters";
+      flake = false;
     };
   };
 
@@ -37,35 +41,70 @@
             config,
             pkgs,
             system,
+            self',
             ...
           }:
           let
-            # Dependencies for building and running the Lox tests in Robert Nystrom's repository
-            # See <https://github.com/munificent/craftinginterpreters#testing-your-implementation>
-            crafting-interpreters-packages = with pkgs; [
-              gnumake
-              inputs.oldDartNixpkgs.legacyPackages.${system}.dart # Dart 2.19.6
-            ];
+            dart2 = inputs.oldDartNixpkgs.legacyPackages.${system}.dart;
+            crafting-interpreters-script =
+              testCase:
+              pkgs.writers.writeHaskellBin "crafting-interpreters-script"
+                {
+                  libraries = [
+                    pkgs.haskellPackages.shh
+                    pkgs.haskellPackages.temporary
+                  ];
+                }
+                ''
+                  {-# LANGUAGE TemplateHaskell #-}
+                  import Shh
+                  import System.IO.Temp (withSystemTempDirectory)
+
+                  -- Load binaries from Nix packages. The dependencies will be captured
+                  -- in the closure.
+                  loadFromBins ["${dart2}", "${pkgs.gnumake}", "${pkgs.uutils-coreutils-noprefix}"]
+
+                  testCase :: String
+                  testCase = "${testCase}"
+
+                  main :: IO ()
+                  main = withSystemTempDirectory "crafting-interpreters-tests" $ \tmpDir -> do
+                    -- Copy repository to temporary directory
+                    cp "--no-preserve=all" "-r" "${inputs.crafting-interpreters}/." tmpDir
+                    -- Change to it
+                    cd tmpDir
+                    cd "./tool"
+                    -- Pull dependencies
+                    dart "pub" "get"
+                    cd tmpDir
+                    -- Run the tests!
+                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.default}/bin/hox"
+                '';
+            mkTestApp = testCase: {
+              type = "app";
+              program = "${crafting-interpreters-script testCase}/bin/crafting-interpreters-script";
+              meta.description = "Run the Crafting Interpreters test suite for ${testCase}";
+            };
           in
           {
-            devShells = {
-              default = pkgs.mkShell {
-                shellHook = ''
-                  ${config.pre-commit.installationScript}
-                  echo "Hello Tree Walk Interpreter!"
-                '';
-                packages =
-                  with pkgs.haskellPackages;
-                  [
-                    haskell-language-server
-                    cabal-install
-                    doctest
-                  ]
-                  ++ crafting-interpreters-packages;
-              };
+            apps = {
+              test-chapter04 = mkTestApp "chap04_scanning";
             };
 
-            packages.default = pkgs.haskellPackages.callPackage ./default.nix { };
+            devShells.default = pkgs.mkShell {
+              shellHook = ''
+                ${config.pre-commit.installationScript}
+              '';
+              packages = with pkgs.haskellPackages; [
+                haskell-language-server
+                cabal-install
+                doctest
+              ];
+            };
+
+            packages = {
+              default = pkgs.haskellPackages.callPackage ./hox.nix { };
+            };
 
             # Git hooks
             pre-commit = {
@@ -76,19 +115,17 @@
                     enable = true;
                     packageOverrides.treefmt = config.treefmt.build.wrapper;
                   };
-                  # Git
                   actionlint.enable = true; # GitHub Actions
                   convco.enable = true; # Conventional commits
                   gitlint.enable = true; # Git commit messages
                   check-merge-conflicts.enable = true; # Check for merge conflicts
-                  # Nix
-                  flake-checker.enable = true;
-                  # Haskell
+                  flake-checker.enable = true; # Nix
                   hlint.enable = true; # Haskell linter
-                  # Cabal to Nix pacakge definition
-                  cabal2nix.enable = true;
-                  # Markdown
-                  markdownlint.enable = true;
+                  cabal2nix = {
+                    enable = true; # Cabal to Nix pacakge definition
+                    settings.outputFilename = "hox.nix";
+                  };
+                  markdownlint.enable = true; # Markdown
                 };
               };
             };
@@ -98,14 +135,10 @@
               programs = {
                 nixfmt = {
                   enable = true; # Nix
-                  excludes = [
-                    "default.nix" # Autogenerated by cabal2nix
-                  ];
+                  excludes = [ "hox.nix" ]; # Autogenerated by cabal2nix
                 };
-                # Cabal
-                # cabal-gild.enable = true; # Not yet available in treefmt-nix
-                # Haskell code
-                ormolu.enable = true;
+                cabal-gild.enable = true; # Cabal
+                ormolu.enable = true; # Haskell
               };
             };
           };

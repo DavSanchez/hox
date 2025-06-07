@@ -1,3 +1,3 @@
-module Scanner (scanTokens) where
+module Scanner (scanTokens, prettyPrint) where
 
-import Scanner.Internal (scanTokens)
+import Scanner.Internal (prettyPrint, scanTokens)

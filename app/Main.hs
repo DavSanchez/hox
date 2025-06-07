@@ -2,9 +2,11 @@ module Main where
 
 import Data.Either (lefts, rights)
 import Scanner (scanTokens)
+import Scanner qualified as S
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, isEOF, readFile', stdout)
+import Token qualified as T
 
 main :: IO ()
 main = do
@@ -21,10 +23,10 @@ runScript script =
   let tokenResult = scanTokens script
       errors = lefts tokenResult
    in if null errors
-        then mapM_ print (rights tokenResult)
+        then mapM_ (putStrLn . T.prettyPrint) (rights tokenResult)
         else do
           putStrLn "Syntax errors found:"
-          mapM_ print errors
+          mapM_ (putStrLn . S.prettyPrint) errors
           exitWith (ExitFailure 65)
 
 runPrompt :: IO ()

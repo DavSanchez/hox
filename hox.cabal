@@ -15,10 +15,11 @@ name: hox
 -- See the Haskell package versioning policy (PVP) for standards
 -- guiding when and how versions should be incremented.
 -- https://pvp.haskell.org
--- PVP summary:     +-+------- breaking API changes
---                  | | +----- non-breaking API additions
---                  | | | +--- code changes with no API change
-version: 0.1.0.0
+-- PVP summary:
+--       +-+------- breaking API changes
+--       | | +----- non-breaking API additions
+--       | | | +--- code changes with no API change
+version: 0.1.4.1
 -- A short (one-line) description of the package.
 synopsis:
   An implementation of a tree-walk interpreter for Lox, the language explored in the book Crafting Interpreters by Robert Nystrom

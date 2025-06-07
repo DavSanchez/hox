@@ -1,7 +1,7 @@
 { mkDerivation, base, lib }:
 mkDerivation {
   pname = "hox";
-  version = "0.1.0.0";
+  version = "0.1.4.1";
   src = ./.;
   isLibrary = true;
   isExecutable = true;

@@ -1,5 +1,11 @@
 # Revision history for hox
 
-## 0.1.0.0 -- YYYY-mm-dd
+## 0.1.4.1 -- 2025-06-07
+
+* Chapter 04: Scanning.
+* Naive implementation.
+* Passing tests.
+
+## 0.1.0.0 -- 2025-05-31
 
 * First version. Released on an unsuspecting world.

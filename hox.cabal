@@ -57,7 +57,10 @@ library
     Token
 
   -- Modules included in this library but not exported.
-  other-modules: Scanner.Internal
+  other-modules:
+    Scanner.Internal
+    Scanner.Naive
+
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- Other library packages from which modules are imported.

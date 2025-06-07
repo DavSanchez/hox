@@ -16,14 +16,12 @@ prettyPrint (SyntaxError msg line w) = "[line " <> show line <> "] Error" <> w <
 
 type TokenResult = Either SyntaxError Token
 
-type IndexedSource = [(Int, Char)]
-
 -- >>> scanTokens "hello world"
--- [Right (Token {tokenType = Identifier "hello", line = 1}),Right (Token {tokenType = Identifier "world", line = 1}),Right (Token {tokenType = EOF, line = 1})]
+-- [Right (Token {tokenType = IDENTIFIER "hello", line = 1}),Right (Token {tokenType = IDENTIFIER "world", line = 1}),Right (Token {tokenType = EOF, line = 1})]
 -- >>> scanTokens "\"Hello World\""
--- [Right (Token {tokenType = StringToken "\"Hello World\"" "Hello World", line = 1}),Right (Token {tokenType = EOF, line = 1})]
+-- [Right (Token {tokenType = STRING "\"Hello World\"" "Hello World", line = 1}),Right (Token {tokenType = EOF, line = 1})]
 -- >>> scanTokens "hello\nworld"
--- [Right (Token {tokenType = Identifier "hello", line = 1}),Right (Token {tokenType = Identifier "world", line = 2}),Right (Token {tokenType = EOF, line = 2})]
+-- [Right (Token {tokenType = IDENTIFIER "hello", line = 1}),Right (Token {tokenType = IDENTIFIER "world", line = 2}),Right (Token {tokenType = EOF, line = 2})]
 scanTokens :: String -> [TokenResult]
 scanTokens s = reverse $ Right (Token EOF (length . lines $ s)) : scanTokens' [] 1 s
 
@@ -75,14 +73,18 @@ scanTokens' tokenList line (c : ss)
   | isDigit c =
       let maybeNumberStr = ss
           integerPart = c : takeWhile isDigit maybeNumberStr
-          decimalPart = case drop (length integerPart) maybeNumberStr of
-            ('.' : rest) -> '.' : takeWhile isDigit rest
+          decimalPart = case drop (length integerPart - 1) maybeNumberStr of
+            ('.' : rest) ->
+              let decimals = takeWhile isDigit rest
+               in if null decimals
+                    then []
+                    else '.' : decimals
             _ -> []
           numberStr = integerPart ++ decimalPart
           numParseResult = case readMaybe @Double numberStr of
             Just n -> Right (Token (NUMBER numberStr n) line)
             Nothing -> Left (SyntaxError ("Attempted to parse an invalid number: " ++ numberStr) line "")
-       in scanTokens' (numParseResult : tokenList) line (drop (length numberStr) ss)
+       in scanTokens' (numParseResult : tokenList) line (drop (length numberStr - 1) ss)
   -- reserved words and identifiers
   | isAlpha c =
       let identifier = c : takeWhile isAlphaNum ss

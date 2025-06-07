@@ -1,11 +1,11 @@
-{ mkDerivation, base, lib }:
+{ mkDerivation, base, lib, megaparsec }:
 mkDerivation {
   pname = "hox";
   version = "0.1.4.1";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
-  libraryHaskellDepends = [ base ];
+  libraryHaskellDepends = [ base megaparsec ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [ base ];
   homepage = "https://github.com/DavSanchez/hox";

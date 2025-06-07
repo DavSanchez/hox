@@ -60,13 +60,15 @@ library
   other-modules:
     Scanner.Internal
     Scanner.Naive
+    Scanner.ParserCombinators
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- Other library packages from which modules are imported.
   -- GHC 9.10.2 uses base ^>=4.20.1.0
   build-depends:
-    base ^>=4.19.2.0
+    base ^>=4.19.2.0,
+    megaparsec,
 
   -- Directories containing source files.
   hs-source-dirs: src

@@ -1,7 +1,8 @@
 module Scanner (scanTokens, prettyPrint) where
 
 import Scanner.Internal (TokenResult, prettyPrint)
-import Scanner.Naive (naiveScanTokens)
+-- import Scanner.Naive (naiveScanTokens)
+import Scanner.ParserCombinators (megaparsecScanTokens)
 
 -- >>> scanTokens "hello world"
 -- [Right (Token {tokenType = IDENTIFIER "hello", line = 1}),Right (Token {tokenType = IDENTIFIER "world", line = 1}),Right (Token {tokenType = EOF, line = 1})]
@@ -10,4 +11,5 @@ import Scanner.Naive (naiveScanTokens)
 -- >>> scanTokens "hello\nworld"
 -- [Right (Token {tokenType = IDENTIFIER "hello", line = 1}),Right (Token {tokenType = IDENTIFIER "world", line = 2}),Right (Token {tokenType = EOF, line = 2})]
 scanTokens :: String -> [TokenResult]
-scanTokens s = naiveScanTokens s 1 []
+-- scanTokens s = naiveScanTokens s 1 []
+scanTokens = megaparsecScanTokens

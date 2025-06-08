@@ -73,6 +73,7 @@
                     cp "--no-preserve=all" "-r" "${inputs.crafting-interpreters}/." tmpDir
                     -- Change to it
                     cd tmpDir
+                    pwd
                     cd "./tool"
                     -- Pull dependencies
                     dart "pub" "get"

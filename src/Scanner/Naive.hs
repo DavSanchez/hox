@@ -60,11 +60,10 @@ naiveScanTokens ('"' : ss) l tt =
         then Left (SyntaxError "Unterminated string" l "") : tt
         else naiveScanTokens (drop (length stringContent + 1 {- For the closing quote -}) ss) (l + newLinesInString) (Right (Token (STRING ('"' : stringContent ++ ['"']) stringContent) l) : tt)
 -- Number literals
-naiveScanTokens (c : ss) l tt
+naiveScanTokens input@(c : ss) l tt
   | isDigit c =
-      let maybeNumberStr = ss
-          integerPart = c : takeWhile isDigit maybeNumberStr
-          decimalPart = case drop (length integerPart - 1) maybeNumberStr of
+      let integerPart = c : takeWhile isDigit ss
+          decimalPart = case drop (length integerPart) input of
             ('.' : rest) ->
               let decimals = takeWhile isDigit rest
                in if null decimals -- no digits behind the dot?
@@ -75,11 +74,11 @@ naiveScanTokens (c : ss) l tt
           numParseResult = case readMaybe @Double numberStr of
             Just n -> Right (Token (NUMBER numberStr n) l)
             Nothing -> Left (SyntaxError ("Attempted to parse an invalid number: " ++ numberStr) l "")
-       in naiveScanTokens (drop (length numberStr - 1) ss) l (numParseResult : tt)
+       in naiveScanTokens (drop (length numberStr) input) l (numParseResult : tt)
   -- reserved words and identifiers
   | isAlpha c =
       let identifier = c : takeWhile isAlphaNum ss
           tokenType = identifierOrKeyword identifier
-       in naiveScanTokens (drop (length identifier - 1) ss) l (Right (Token tokenType l) : tt)
+       in naiveScanTokens (drop (length identifier) input) l (Right (Token tokenType l) : tt)
 -- If we reach here, it means we encountered an unexpected character
 naiveScanTokens (c : ss) line tt = naiveScanTokens ss line (Left (SyntaxError ("Unexpected character: " ++ [c]) line "") : tt)

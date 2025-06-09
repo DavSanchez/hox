@@ -1,7 +1,7 @@
 module Scanner.Internal where
 
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
-import Token (Token, TokenType (..))
+import Token (Token (..), TokenType (..))
 
 data SyntaxError = SyntaxError
   { errorMessage :: String,
@@ -15,6 +15,14 @@ prettyPrint (SyntaxError msg line w) = "[line " <> show line <> "] Error" <> w <
 
 type TokenResult = Either SyntaxError Token
 
+validToken :: TokenType -> Int -> TokenResult
+validToken tokenType line =
+  Right (Token tokenType line)
+
+syntaxError :: String -> Int -> String -> TokenResult
+syntaxError msg line whereStr =
+  Left (SyntaxError msg line whereStr)
+
 isAlpha :: Char -> Bool
 isAlpha '_' = True
 isAlpha c
@@ -25,21 +33,22 @@ isAlpha _ = False
 isAlphaNum :: Char -> Bool
 isAlphaNum c = isAlpha c || isDigit c
 
-identifierOrKeyword :: String -> TokenType
-identifierOrKeyword "and" = AND
-identifierOrKeyword "class" = CLASS
-identifierOrKeyword "else" = ELSE
-identifierOrKeyword "false" = FALSE
-identifierOrKeyword "fun" = FUN
-identifierOrKeyword "for" = FOR
-identifierOrKeyword "if" = IF
-identifierOrKeyword "nil" = NIL
-identifierOrKeyword "or" = OR
-identifierOrKeyword "print" = PRINT
-identifierOrKeyword "return" = RETURN
-identifierOrKeyword "super" = SUPER
-identifierOrKeyword "this" = THIS
-identifierOrKeyword "true" = TRUE
-identifierOrKeyword "var" = VAR
-identifierOrKeyword "while" = WHILE
-identifierOrKeyword ident = IDENTIFIER ident
+keywords :: [(String, TokenType)]
+keywords =
+  [ ("and", AND),
+    ("class", CLASS),
+    ("else", ELSE),
+    ("false", FALSE),
+    ("fun", FUN),
+    ("for", FOR),
+    ("if", IF),
+    ("nil", NIL),
+    ("or", OR),
+    ("print", PRINT),
+    ("return", RETURN),
+    ("super", SUPER),
+    ("this", THIS),
+    ("true", TRUE),
+    ("var", VAR),
+    ("while", WHILE)
+  ]

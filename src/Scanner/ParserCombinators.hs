@@ -1,15 +1,37 @@
-{-# OPTIONS_GHC -Wno-unrecognised-pragmas #-}
-
-{-# HLINT ignore "Avoid restricted function" #-}
 module Scanner.ParserCombinators where
 
+import Data.Maybe (fromMaybe)
 import Data.Void (Void)
-import Scanner.Internal (SyntaxError (..), TokenResult, identifierOrKeyword, isAlpha, isAlphaNum)
-import Text.Megaparsec (MonadParsec (eof), ParseErrorBundle (bundlePosState), Parsec, PosState (pstateSourcePos), SourcePos (sourceLine), choice, getSourcePos, many, manyTill, runParser, satisfy, try, unPos, (<|>))
+import GHC.Float (int2Double)
+import Scanner.Internal
+  ( SyntaxError (..),
+    TokenResult,
+    isAlpha,
+    isAlphaNum,
+    keywords,
+  )
+import Text.Megaparsec
+  ( MonadParsec (eof),
+    ParseErrorBundle (bundlePosState),
+    Parsec,
+    PosState (pstateSourcePos),
+    SourcePos (sourceLine),
+    choice,
+    getSourcePos,
+    many,
+    manyTill,
+    runParser,
+    satisfy,
+    try,
+    unPos,
+    (<|>),
+  )
 import Text.Megaparsec.Char (char, space1)
 import Text.Megaparsec.Char.Lexer qualified as L
 import Token (Token (..), TokenType (..))
 
+-- The type alias for my parser type.
+-- It is a generic parser (for `a`) that works with `String` as input and `Void` as error type.
 type Parser = Parsec Void String
 
 -- Handles whitespace, line comments, and even block comments!
@@ -101,17 +123,20 @@ lessEqual = withLineN (symbol "<=") (const LESS_EQUAL)
 stringLiteral :: Parser Token
 stringLiteral = withLineN (lexeme (char '\"' *> manyTill L.charLiteral (char '\"'))) (\s -> STRING (show s) s)
 
+-- >>> import Text.Megaparsec (parseMaybe)
+-- >>> parseMaybe float "0"
+-- Nothing
 float :: Parser Token
 float = withLineN (lexeme L.float) (\n -> NUMBER (show n) n)
 
 decimal :: Parser Token
-decimal = withLineN (lexeme @Int L.decimal) (\n -> NUMBER (show n) (fromIntegral n))
+decimal = withLineN (lexeme @Int L.decimal) (\n -> NUMBER (show n) (int2Double n))
 
 identifier :: Parser Token
 identifier =
   withLineN
     ((:) <$> satisfy isAlpha <*> lexeme (many $ satisfy isAlphaNum))
-    identifierOrKeyword
+    (\s -> fromMaybe (IDENTIFIER s) (lookup s keywords))
 
 atEof :: Parser Token
 atEof = withLineN eof (const EOF)

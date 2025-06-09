@@ -40,16 +40,16 @@ sc =
   L.space
     space1
     (L.skipLineComment "//")
-    (L.skipBlockComment "/*" "*/") -- could replace with `fail` or something
+    (L.skipBlockComment "/*" "*/") -- not explored in the book. could replace with `fail`?
 
 -- >>> import Text.Megaparsec (parseMaybe)
--- >>> parseMaybe (symbol "hello world") "hello world"
+-- >>> parseMaybe (symbol "hello world") "hello world  // a comment"
 -- Just "hello world"
 symbol :: String -> Parser String
 symbol = L.symbol sc
 
 -- >>> import Text.Megaparsec (parseMaybe)
--- >>> parseMaybe (lexeme (char 'a')) "a"
+-- >>> parseMaybe (lexeme (char 'a')) "a     \n/* some block\ncomment */"
 -- Just 'a'
 lexeme :: Parser a -> Parser a
 lexeme = L.lexeme sc

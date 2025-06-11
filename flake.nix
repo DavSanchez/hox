@@ -64,9 +64,6 @@
                   -- in the closure.
                   loadFromBins ["${dart2}", "${pkgs.gnumake}", "${pkgs.uutils-coreutils-noprefix}"]
 
-                  testCase :: String
-                  testCase = "${testCase}"
-
                   main :: IO ()
                   main = withSystemTempDirectory "crafting-interpreters-tests" $ \tmpDir -> do
                     -- Copy repository to temporary directory

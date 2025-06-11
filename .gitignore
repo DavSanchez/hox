@@ -40,3 +40,6 @@ cabal.project.local~
 
 # Nix
 result
+
+# Crafting Interpreters folder
+craftinginterpreters

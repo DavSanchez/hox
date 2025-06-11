@@ -96,11 +96,16 @@
               shellHook = ''
                 ${config.pre-commit.installationScript}
               '';
-              packages = with pkgs.haskellPackages; [
-                haskell-language-server
-                cabal-install
-                doctest
-              ];
+              packages =
+                (with pkgs.haskellPackages; [
+                  haskell-language-server
+                  cabal-install
+                  doctest
+                ])
+                ++ [
+                  pkgs.gnumake
+                  dart2
+                ];
             };
 
             packages = {

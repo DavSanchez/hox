@@ -157,10 +157,7 @@ test-suite hox-test
   -- The interface type and version of the test suite.
   type: exitcode-stdio-1.0
   -- Directories containing source files.
-  hs-source-dirs:
-    src
-    test
-
+  hs-source-dirs: test
   -- The entrypoint to the test suite.
   main-is: Main.hs
   -- Test dependencies.

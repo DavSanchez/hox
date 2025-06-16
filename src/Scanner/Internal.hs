@@ -1,4 +1,14 @@
-module Scanner.Internal where
+module Scanner.Internal
+  ( SyntaxError (..),
+    TokenResult,
+    isAlpha,
+    isAlphaNum,
+    keywords,
+    syntaxError,
+    prettyPrint,
+    validToken,
+  )
+where
 
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Token (Token (..), TokenType (..))
@@ -8,7 +18,7 @@ data SyntaxError = SyntaxError
     errorLine :: Int,
     errorWhere :: String
   }
-  deriving (Show)
+  deriving stock (Show)
 
 prettyPrint :: SyntaxError -> String
 prettyPrint (SyntaxError msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg

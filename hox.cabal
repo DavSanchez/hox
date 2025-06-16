@@ -121,6 +121,7 @@ library
   -- Other library packages from which modules are imported.
   -- GHC 9.10.2 uses base ^>=4.20.1.0
   build-depends:
+    -- `megaparsec` is only used by the Scanner.ParserCombinators module (ch04) for now.
     megaparsec
 
   -- Directories containing source files.

@@ -42,14 +42,15 @@ category: Language
 build-type: Simple
 -- Extra doc files to be distributed with the package, such as a CHANGELOG or a README.
 extra-doc-files: CHANGELOG.md
-tested-with: ghc ==9.8.4
+tested-with: ghc ==9.10.1
 
 -- Extra source files to be distributed with the package, such as examples, or a tutorial module.
 -- extra-source-files:
 common common-options
   -- Base language which the package is written in.
-  default-language: GHC2021
-  build-depends: base ^>=4.19.2.0
+  default-language: GHC2024
+  -- GHC 9.10.2 uses base ^>=4.20.1.0
+  build-depends: base ^>=4.20.0.0
   -- ghc-options: -Wall
   -- Flags recommended by the Summoner project:
   -- <https://github.com/kowainik/summoner/blob/fbed9cf0534d67c359d8be3b9b35e69cfeaac729/summoner-cli/src/Summoner/Template/Cabal.hs#L128>
@@ -97,9 +98,6 @@ common common-options
     ghc-options:
       -Wterm-variable-capture
       -Winconsistent-flags
-  default-extensions:
-    DerivingStrategies
-    GADTs
 
 library
   -- Import common warning flags.
@@ -119,7 +117,6 @@ library
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- Other library packages from which modules are imported.
-  -- GHC 9.10.2 uses base ^>=4.20.1.0
   build-depends:
     -- `megaparsec` is only used by the Scanner.ParserCombinators module (ch04) for now.
     megaparsec
@@ -150,7 +147,6 @@ executable hox
 test-suite hox-test
   -- Import common warning flags.
   import: common-options
-  default-language: GHC2021
   -- Modules included in this executable, other than Main.
   -- other-modules:
   -- LANGUAGE extensions used by modules in this package.

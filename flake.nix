@@ -128,7 +128,7 @@
                   cabal2nix = {
                     enable = true; # Cabal to Nix pacakge definition
                     settings.outputFilename = "hox.nix";
-                    package = haskellPackages.cabal2nix;
+                    extraPackages = [ haskellPackages.cabal2nix ];
                   };
                   markdownlint.enable = true; # Markdown
                 };

@@ -124,10 +124,7 @@
                   gitlint.enable = true; # Git commit messages
                   check-merge-conflicts.enable = true; # Check for merge conflicts
                   flake-checker.enable = true; # Nix
-                  hlint = {
-                    enable = true; # Haskell linter
-                    package = haskellPackages.hlint;
-                  };
+                  hlint.enable = true; # Haskell linter
                   cabal2nix = {
                     enable = true; # Cabal to Nix pacakge definition
                     settings.outputFilename = "hox.nix";

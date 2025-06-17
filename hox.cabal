@@ -99,6 +99,13 @@ common common-options
       -Wterm-variable-capture
       -Winconsistent-flags
 
+  if impl(ghc >=9.10)
+    ghc-options:
+      -Wbadly-staged-types
+      -Wdata-kinds-tc
+      -Wdefaulted-exception-context
+      -Wincomplete-record-selectors
+
 library
   -- Import common warning flags.
   import: common-options

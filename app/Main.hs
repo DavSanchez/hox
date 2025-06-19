@@ -2,8 +2,7 @@ module Main (main) where
 
 import Data.Either (lefts, rights)
 import Data.List.NonEmpty (toList)
-import Scanner (scanTokens)
-import Scanner.Error qualified as S
+import Scanner (prettyPrintErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, isEOF, readFile', stdout)
@@ -27,7 +26,7 @@ runScript script =
         then mapM_ (putStrLn . T.prettyPrint) (rights $ toList tokenResult)
         else do
           putStrLn "Syntax errors found:"
-          mapM_ (putStrLn . S.prettyPrintErr) errors
+          mapM_ (putStrLn . prettyPrintErr) errors
           exitWith (ExitFailure 65)
 
 runPrompt :: IO ()

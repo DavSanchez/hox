@@ -5,23 +5,13 @@ module Scanner.Internal
     isAlphaNum,
     keywords,
     syntaxError,
-    prettyPrint,
     validToken,
   )
 where
 
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
+import Scanner.Error (SyntaxError (..))
 import Token (Token (..), TokenType (..))
-
-data SyntaxError = SyntaxError
-  { errorMessage :: String,
-    errorLine :: Int,
-    errorWhere :: String
-  }
-  deriving stock (Show)
-
-prettyPrint :: SyntaxError -> String
-prettyPrint (SyntaxError msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg
 
 type TokenResult = Either SyntaxError Token
 

@@ -117,6 +117,7 @@ library
 
   -- Modules included in this library but not exported.
   other-modules:
+    Scanner.Error
     Scanner.Internal
     Scanner.Naive
     Scanner.ParserCombinators
@@ -155,7 +156,9 @@ test-suite hox-test
   -- Import common warning flags.
   import: common-options
   -- Modules included in this executable, other than Main.
-  -- other-modules:
+  other-modules:
+    Scanner.Props
+
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- The interface type and version of the test suite.
@@ -166,7 +169,9 @@ test-suite hox-test
   main-is: Main.hs
   -- Test dependencies.
   build-depends:
-    hox
+    hox,
+    tasty,
+    tasty-quickcheck,
 
   ghc-options:
     -threaded

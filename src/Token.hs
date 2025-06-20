@@ -44,7 +44,7 @@ data TokenType
   | VAR
   | WHILE
   | EOF
-  deriving (Show)
+  deriving stock (Show, Eq)
 
 type Lexeme = String
 
@@ -52,7 +52,7 @@ data Token = Token
   { tokenType :: TokenType,
     line :: Int
   }
-  deriving (Show)
+  deriving stock (Show, Eq)
 
 -- |  Pretty print a token the way the book expects
 -- >>> prettyPrint (Token (IDENTIFIER "foo") 1)

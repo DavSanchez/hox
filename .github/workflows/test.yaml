@@ -5,7 +5,10 @@ on: [push]
 
 jobs:
   checks:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
     steps:
       - name: Check out repository code
         uses: actions/checkout@v4
@@ -13,5 +16,14 @@ jobs:
       - name: Install Nix
         uses: DeterminateSystems/nix-installer-action@main
 
-      - run: nix flake check -L
-      - run: nix run .#test-chapter04
+      - name: Set up Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: Run nix flake checks
+        run: nix flake check -L
+
+      # - name: Run doctests (pending making part of Nix build)
+      #   run: nix develop --command cabal repl --with-compiler=doctest --repl-options=--verbose
+
+      - name: Run Crafting Interpreter tests for Chapter 04
+        run: nix run .#test-chapter04

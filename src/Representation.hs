@@ -1,4 +1,11 @@
-module Representation (prettyPrintExpr) where
+module Representation
+  ( BinaryOperator (..),
+    Expression (..),
+    Literal (..),
+    UnaryOperator (..),
+    prettyPrintExpr,
+  )
+where
 
 import Data.Char (toLower)
 
@@ -69,6 +76,13 @@ prettyPrintLit (String s) = "String " <> s
 prettyPrintLit (Bool b) = (map toLower . show) b
 prettyPrintLit Nil = "nil"
 
+-- | Prints and expression in the format expected by the Crafting Interpreters book.
+-- >>> prettyPrintExpr (Binary (Literal (Number 1)) Plus (Literal (Number 2)))
+-- "(+ 1.0 2.0)"
+-- >>> prettyPrintExpr (Binary (Unary UMinus (Literal (Number 123))) Star (Literal (Number 45.67)))
+-- "(* (- 123.0) 45.67)"
+-- >>> prettyPrintExpr (Binary (Unary UMinus (Literal (Number 123))) Star (Grouping (Literal (Number 45.67))))
+-- "(* (- 123.0) (group 45.67))"
 prettyPrintExpr :: Expression -> String
 prettyPrintExpr (Literal lit) = prettyPrintLit lit
 prettyPrintExpr (Unary op expr) = "(" <> prettyPrintUnOp op <> " " <> prettyPrintExpr expr <> ")"

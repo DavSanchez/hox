@@ -1,8 +1,8 @@
-module Main where
+module Main (main) where
 
 import Data.Either (lefts, rights)
-import Scanner (scanTokens)
-import Scanner qualified as S
+import Data.List.NonEmpty (toList)
+import Scanner (prettyPrintErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, isEOF, readFile', stdout)
@@ -21,12 +21,12 @@ main = do
 runScript :: String -> IO ()
 runScript script =
   let tokenResult = scanTokens script
-      errors = lefts tokenResult
+      errors = lefts $ toList tokenResult
    in if null errors
-        then mapM_ (putStrLn . T.prettyPrint) (rights tokenResult)
+        then mapM_ (putStrLn . T.prettyPrint) (rights $ toList tokenResult)
         else do
           putStrLn "Syntax errors found:"
-          mapM_ (putStrLn . S.prettyPrint) errors
+          mapM_ (putStrLn . prettyPrintErr) errors
           exitWith (ExitFailure 65)
 
 runPrompt :: IO ()

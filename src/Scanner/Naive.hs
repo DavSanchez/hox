@@ -1,6 +1,7 @@
 module Scanner.Naive (naiveScanTokens) where
 
 import Data.Char (isDigit)
+import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
 import Scanner.Internal (TokenResult, isAlpha, isAlphaNum, keywords, syntaxError, validToken)
 import Text.Read (readMaybe)
@@ -15,9 +16,9 @@ naiveScanTokens ::
   -- | Accumulated tokens
   [TokenResult] ->
   -- | Resulting list of tokens
-  [TokenResult]
+  NonEmpty TokenResult
 -- We start with the base case: no more characters to process
-naiveScanTokens "" l tt = reverse $ validToken EOF l : tt
+naiveScanTokens "" l tt = validToken EOF l :| tt
 -- Single character tokens
 -- >>> naiveScanTokens "((\n(((" 1 []
 -- [Right (Token {tokenType = LEFT_PAREN, line = 1}),Right (Token {tokenType = LEFT_PAREN, line = 1}),Right (Token {tokenType = LEFT_PAREN, line = 2}),Right (Token {tokenType = LEFT_PAREN, line = 2}),Right (Token {tokenType = LEFT_PAREN, line = 2}),Right (Token {tokenType = EOF, line = 2})]
@@ -56,7 +57,7 @@ naiveScanTokens ('"' : ss) l tt =
   let stringContent = takeWhile (/= '"') ss -- Take characters until the next quote
       newLinesInString = length $ filter (== '\n') stringContent
    in if stringContent == ss -- If there are no closing quotes, the calculated remainder is the same as the remaining input string
-        then syntaxError "Unterminated string" l "" : tt
+        then syntaxError "Unterminated string" l "" :| tt
         else
           naiveScanTokens
             (drop (length stringContent + 1 {- For the closing quote -}) ss)

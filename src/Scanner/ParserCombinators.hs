@@ -1,4 +1,4 @@
-module Scanner.ParserCombinators where
+module Scanner.ParserCombinators (megaparsecScanTokens) where
 
 import Data.Maybe (fromMaybe)
 import Data.Void (Void)

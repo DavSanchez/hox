@@ -132,6 +132,26 @@
                     extraPackages = [ haskellPackages.cabal2nix ];
                   };
                   markdownlint.enable = true; # Markdown
+                  # Custom
+                  haskell-doctests = {
+                    enable = true;
+                    entry = "${
+                      pkgs.writeShellApplication {
+                        name = "haskell-doctests";
+                        runtimeInputs = with haskellPackages; [
+                          self'.packages.hox.env
+                          cabal-install
+                          doctest
+                        ];
+                        text = ''
+                          export NIX_GHC=${self'.packages.hox.env}/bin/ghc
+                          export NIX_GHC_LIBDIR=${self'.packages.hox.env}/lib/ghc-9.10.1
+                          export HASKELL_PACKAGE_SANDBOXES="$NIX_GHC_LIBDIR/package.conf.d"
+                          cabal repl --with-compiler=doctest --repl-options=--verbose
+                        '';
+                      }
+                    }/bin/haskell-doctests";
+                  };
                 };
               };
             };

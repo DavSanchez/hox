@@ -111,6 +111,7 @@ library
   import: common-options
   -- Modules exported by the library.
   exposed-modules:
+    Representation
     Scanner
     Token
 
@@ -156,6 +157,7 @@ test-suite hox-test
   import: common-options
   -- Modules included in this executable, other than Main.
   other-modules:
+    RepresentingCode
     Scanner.Props
 
   -- LANGUAGE extensions used by modules in this package.

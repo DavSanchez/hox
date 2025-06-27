@@ -76,7 +76,7 @@
                     dart "pub" "get"
                     cd tmpDir
                     -- Run the tests!
-                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.default}/bin/hox"
+                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.hox}/bin/hox"
                 '';
             mkTestApp = testCase: {
               type = "app";
@@ -106,8 +106,9 @@
                 ];
             };
 
-            packages = {
-              default = haskellPackages.callPackage ./hox.nix { };
+            packages = rec {
+              hox = haskellPackages.callPackage ./hox.nix { };
+              default = hox;
             };
 
             # Git hooks

@@ -1,17 +1,17 @@
-module Scanner.Internal where
+module Scanner.Internal
+  ( SyntaxError (..),
+    TokenResult,
+    isAlpha,
+    isAlphaNum,
+    keywords,
+    syntaxError,
+    validToken,
+  )
+where
 
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
+import Scanner.Error (SyntaxError (..))
 import Token (Token (..), TokenType (..))
-
-data SyntaxError = SyntaxError
-  { errorMessage :: String,
-    errorLine :: Int,
-    errorWhere :: String
-  }
-  deriving (Show)
-
-prettyPrint :: SyntaxError -> String
-prettyPrint (SyntaxError msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg
 
 type TokenResult = Either SyntaxError Token
 

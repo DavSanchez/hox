@@ -1,5 +1,9 @@
 # Revision history for hox
 
+## 0.1.5.0 -- 2025-06-28
+
+* Chapter 05: Representing Code.
+
 ## 0.1.4.2 -- 2025-06-08
 
 * Chapter 04: Scanning.

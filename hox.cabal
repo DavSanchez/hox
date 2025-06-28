@@ -19,7 +19,7 @@ name: hox
 --       +-+------- breaking API changes
 --       | | +----- non-breaking API additions
 --       | | | +--- code changes with no API change
-version: 0.1.4.2
+version: 0.1.5.0
 -- A short (one-line) description of the package.
 synopsis:
   An implementation of a tree-walk interpreter for Lox, the language explored in the book Crafting Interpreters by Robert Nystrom

@@ -1,7 +1,6 @@
 module Main (main) where
 
-import System.Environment (getArgs)
-import Test.DocTest (mainFromCabal)
+import Test.DocTest (doctest)
 
 main :: IO ()
-main = mainFromCabal "hox" =<< getArgs
+main = doctest ["src/Scanner.hs", "src/Token.hs", "src/Scanner"]

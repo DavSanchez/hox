@@ -187,5 +187,4 @@ test-suite doctests
   main-is: Doctests.hs
   ghc-options: -threaded
   build-depends:
-    doctest-parallel >=0.1,
-    hox,
+    doctest

@@ -98,6 +98,7 @@
                 (with haskellPackages; [
                   haskell-language-server
                   cabal-install
+                  doctest
                 ])
                 ++ [
                   pkgs.gnumake

@@ -179,3 +179,13 @@ test-suite hox-test
     -threaded
     -rtsopts
     -with-rtsopts=-N
+
+test-suite doctests
+  import: common-options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: test
+  main-is: Doctests.hs
+  ghc-options: -threaded
+  build-depends:
+    doctest-parallel >=0.1,
+    hox,

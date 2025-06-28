@@ -1,5 +1,5 @@
-{ mkDerivation, base, lib, megaparsec, tasty, tasty-hunit
-, tasty-quickcheck
+{ mkDerivation, base, doctest-parallel, lib, megaparsec, tasty
+, tasty-hunit, tasty-quickcheck
 }:
 mkDerivation {
   pname = "hox";
@@ -9,7 +9,9 @@ mkDerivation {
   isExecutable = true;
   libraryHaskellDepends = [ base megaparsec ];
   executableHaskellDepends = [ base ];
-  testHaskellDepends = [ base tasty tasty-hunit tasty-quickcheck ];
+  testHaskellDepends = [
+    base doctest-parallel tasty tasty-hunit tasty-quickcheck
+  ];
   homepage = "https://github.com/DavSanchez/hox";
   description = "An implementation of a tree-walk interpreter for Lox, the language explored in the book Crafting Interpreters by Robert Nystrom";
   license = lib.licenses.bsd3;

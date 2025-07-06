@@ -89,6 +89,7 @@
             apps = {
               test-chapter04 = mkTestApp "chap04_scanning";
               test-chapter06 = mkTestApp "chap06_parsing";
+              test-chapter07 = mkTestApp "chap07_evaluating";
             };
 
             devShells.default = pkgs.mkShell {

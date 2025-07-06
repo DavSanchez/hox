@@ -8,6 +8,12 @@ import Token (Token (..), TokenType, isNumber, isString)
 import Token qualified as T
 
 -- | Basic parser type. For an error type `e`, an input type `s`, and an output type `a`.
+-- A rough equivalent to this in Rust would be:
+-- ```rust
+-- pub struct Parser<E, S, A> {
+--     run_parser: fn(S) -> Result<(A, S), E>,
+-- }
+-- ```
 newtype Parser e s a = Parser
   { runParser :: s -> Either e (a, s)
   }

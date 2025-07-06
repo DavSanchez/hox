@@ -4,3 +4,5 @@
 
 - [x] Chapter 04: Scanning
 - [x] Chapter 05: Representing Code
+- [x] Chapter 06: Parsing Expressions
+- [ ] Chapter 07: Evaluating Expressions

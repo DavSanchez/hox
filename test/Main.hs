@@ -5,7 +5,12 @@ import Scanner.Props (scannerProperties)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 
 tests :: TestTree
-tests = testGroup "Lox Tests" [scannerProperties, prettyPrintExprUnitTests]
+tests =
+  testGroup
+    "Lox Tests"
+    [ scannerProperties,
+      prettyPrintExprUnitTests
+    ]
 
 main :: IO ()
 main = defaultMain tests

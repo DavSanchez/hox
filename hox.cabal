@@ -19,7 +19,7 @@ name: hox
 --       +-+------- breaking API changes
 --       | | +----- non-breaking API additions
 --       | | | +--- code changes with no API change
-version: 0.1.5.0
+version: 0.1.6.0
 -- A short (one-line) description of the package.
 synopsis:
   An implementation of a tree-walk interpreter for Lox, the language explored in the book Crafting Interpreters by Robert Nystrom
@@ -111,24 +111,22 @@ library
   import: common-options
   -- Modules exported by the library.
   exposed-modules:
-    Representation
+    Expression
     Scanner
     Token
 
   -- Modules included in this library but not exported.
   other-modules:
+    Expression.AST
+    Expression.Parser
     Scanner.Error
     Scanner.Internal
     Scanner.Naive
-    Scanner.ParserCombinators
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- Other library packages from which modules are imported.
   build-depends:
-    -- `megaparsec` is only used by the Scanner.ParserCombinators module (ch04) for now.
-    megaparsec
-
   -- Directories containing source files.
   hs-source-dirs: src
 

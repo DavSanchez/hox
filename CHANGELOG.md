@@ -1,5 +1,9 @@
 # Revision history for hox
 
+## 0.1.6.0 -- 2025-07-06
+
+* Chapter 06: Parsing Expressions.
+
 ## 0.1.5.0 -- 2025-06-28
 
 * Chapter 05: Representing Code.

@@ -2,11 +2,11 @@ module Main (main) where
 
 import Data.Either (lefts, rights)
 import Data.List.NonEmpty (toList)
+import Expression (Parser (runParser), expression, prettyPrintExpr)
 import Scanner (prettyPrintErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, isEOF, readFile', stdout)
-import Token qualified as T
 
 main :: IO ()
 main = do
@@ -23,7 +23,14 @@ runScript script =
   let tokenResult = scanTokens script
       errors = lefts $ toList tokenResult
    in if null errors
-        then mapM_ (putStrLn . T.prettyPrint) (rights $ toList tokenResult)
+        then
+          let expr = fmap fst $ runParser expression $ rights $ toList tokenResult
+           in case expr of
+                Right e -> putStrLn $ prettyPrintExpr e
+                Left err -> do
+                  putStrLn "Parsing error:"
+                  putStrLn err
+                  exitWith (ExitFailure 65)
         else do
           putStrLn "Syntax errors found:"
           mapM_ (putStrLn . prettyPrintErr) errors

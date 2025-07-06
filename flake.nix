@@ -88,6 +88,7 @@
           {
             apps = {
               test-chapter04 = mkTestApp "chap04_scanning";
+              test-chapter06 = mkTestApp "chap06_parsing";
             };
 
             devShells.default = pkgs.mkShell {
@@ -107,8 +108,8 @@
             };
 
             packages = rec {
-              hox = haskellPackages.callPackage ./hox.nix { };
               default = hox;
+              hox = haskellPackages.callPackage ./hox.nix { };
             };
 
             # Git hooks

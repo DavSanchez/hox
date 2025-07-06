@@ -155,6 +155,7 @@ test-suite hox-test
   import: common-options
   -- Modules included in this executable, other than Main.
   other-modules:
+    RepresentingCode
     Scanner.Props
 
   -- LANGUAGE extensions used by modules in this package.

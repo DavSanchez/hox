@@ -122,15 +122,11 @@ library
     Scanner.Error
     Scanner.Internal
     Scanner.Naive
-    Scanner.ParserCombinators
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:
   -- Other library packages from which modules are imported.
   build-depends:
-    -- `megaparsec` is only used by the Scanner.ParserCombinators module (ch04) for now.
-    megaparsec
-
   -- Directories containing source files.
   hs-source-dirs: src
 

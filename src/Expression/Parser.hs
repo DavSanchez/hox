@@ -1,10 +1,10 @@
-module Expression.Parser where
+module Expression.Parser (TokenParser, Parser (..), expression) where
 
 import Control.Applicative (Alternative (..))
 import Control.Monad (void)
 import Expression.AST (Expression)
 import Expression.AST qualified as AST
-import Token (Token (..), TokenType)
+import Token (Token (..), TokenType, isNumber, isString)
 import Token qualified as T
 
 -- | Basic parser type. For an error type `e`, an input type `s`, and an output type `a`.
@@ -118,16 +118,13 @@ parseDiv = matchTokenType T.SLASH >> pure (AST.Binary AST.Slash)
 
 -- Unary expressions
 unary :: TokenParser Expression
-unary =
-  ( do
-      op <- matchUnaryOp
-      AST.Unary op <$> unary
-  )
-    <|> primary
-  where
-    matchUnaryOp = do
-      t <- matchTokenType T.BANG <|> matchTokenType T.MINUS
-      pure (if tokenType t == T.BANG then AST.Bang else AST.UMinus)
+unary = ((parseBang <|> parseMinusUnary) <*> unary) <|> primary
+
+parseBang :: TokenParser (Expression -> Expression)
+parseBang = matchTokenType T.BANG >> pure (AST.Unary AST.Bang)
+
+parseMinusUnary :: TokenParser (Expression -> Expression)
+parseMinusUnary = matchTokenType T.MINUS >> pure (AST.Unary AST.UMinus)
 
 -- Primary expressions
 primary :: TokenParser Expression
@@ -137,39 +134,29 @@ primary =
     <|> parseNil
     <|> parseNumber
     <|> parseString
-    <|> ( AST.Grouping
-            <$> parens expression
-        )
-  where
-    parseFalse = do
-      void $ matchTokenType T.FALSE
-      pure (AST.Literal (AST.Bool False))
-    parseTrue = do
-      void $ matchTokenType T.TRUE
-      pure (AST.Literal (AST.Bool True))
-    parseNil = do
-      void $ matchTokenType T.NIL
-      pure (AST.Literal AST.Nil)
-    parseNumber = do
-      t <-
-        satisfy
-          ( \t -> case tokenType t of
-              T.NUMBER _ _ -> True
-              _ -> False
-          )
-      case t of
-        Token (T.NUMBER _ n) _ -> pure (AST.Literal (AST.Number n))
-        _ -> empty
-    parseString = do
-      t <-
-        satisfy
-          ( \t -> case tokenType t of
-              T.STRING _ _ -> True
-              _ -> False
-          )
-      case t of
-        Token (T.STRING _ s) _ -> pure (AST.Literal (AST.String s))
-        _ -> empty
+    <|> parseGrouping
+
+parseFalse :: TokenParser Expression
+parseFalse = matchTokenType T.FALSE >> pure (AST.Literal (AST.Bool False))
+
+parseTrue :: TokenParser Expression
+parseTrue = matchTokenType T.TRUE >> pure (AST.Literal (AST.Bool True))
+
+parseNil :: TokenParser Expression
+parseNil = matchTokenType T.NIL >> pure (AST.Literal AST.Nil)
+
+parseNumber :: TokenParser Expression
+parseNumber = do
+  Token (T.NUMBER _ n) _ <- satisfy (isNumber . tokenType)
+  pure (AST.Literal (AST.Number n))
+
+parseString :: TokenParser Expression
+parseString = do
+  Token (T.STRING _ s) _ <- satisfy (isString . tokenType)
+  pure (AST.Literal (AST.String s))
+
+parseGrouping :: TokenParser Expression
+parseGrouping = AST.Grouping <$> parens expression
 
 -- Helpers
 

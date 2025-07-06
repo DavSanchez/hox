@@ -1,4 +1,11 @@
-module Token (Token (..), TokenType (..), prettyPrint) where
+module Token
+  ( Token (..),
+    TokenType (..),
+    prettyPrint,
+    isNumber,
+    isString,
+  )
+where
 
 data TokenType
   = -- Single character tokens
@@ -45,6 +52,14 @@ data TokenType
   | WHILE
   | EOF
   deriving stock (Show, Eq)
+
+isNumber :: TokenType -> Bool
+isNumber (NUMBER _ _) = True
+isNumber _ = False
+
+isString :: TokenType -> Bool
+isString (STRING _ _) = True
+isString _ = False
 
 type Lexeme = String
 

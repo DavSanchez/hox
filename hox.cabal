@@ -117,6 +117,8 @@ library
 
   -- Modules included in this library but not exported.
   other-modules:
+    Expression.AST
+    Expression.Parser
     Scanner.Error
     Scanner.Internal
     Scanner.Naive

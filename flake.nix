@@ -107,8 +107,8 @@
             };
 
             packages = rec {
-              hox = haskellPackages.callPackage ./hox.nix { };
               default = hox;
+              hox = haskellPackages.callPackage ./hox.nix { };
             };
 
             # Git hooks

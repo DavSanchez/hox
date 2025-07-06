@@ -72,89 +72,49 @@ expression = equality
 
 -- Equality
 equality :: TokenParser Expression
-equality = do
-  left <- comparison
-  equalityRest left
+equality = leftAssociative comparison (parseEq <|> parseNeq)
 
--- Left-associativity chaining of additional equalities
-equalityRest :: Expression -> TokenParser Expression
-equalityRest left =
-  ( do
-      op <- matchEqualityOp
-      right <- comparison
-      equalityRest (AST.Binary op left right)
-  )
-    <|> pure left
-  where
-    matchEqualityOp = do
-      t <- matchTokenType T.EQUAL_EQUAL <|> matchTokenType T.BANG_EQUAL
-      pure (if tokenType t == T.EQUAL_EQUAL then AST.EqualEqual else AST.BangEqual)
+parseEq :: TokenParser (Expression -> Expression -> Expression)
+parseEq = matchTokenType T.EQUAL_EQUAL >> pure (AST.Binary AST.EqualEqual)
+
+parseNeq :: TokenParser (Expression -> Expression -> Expression)
+parseNeq = matchTokenType T.BANG_EQUAL >> pure (AST.Binary AST.BangEqual)
 
 -- Comparison
 comparison :: TokenParser Expression
-comparison = do
-  left <- term
-  comparisonRest left
+comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
-comparisonRest :: Expression -> TokenParser Expression
-comparisonRest left =
-  ( do
-      op <- matchComparisonOp
-      right <- term
-      comparisonRest (AST.Binary op left right)
-  )
-    <|> pure left
-  where
-    matchComparisonOp = do
-      t <-
-        matchTokenType T.GREATER
-          <|> matchTokenType T.GREATER_EQUAL
-          <|> matchTokenType T.LESS
-          <|> matchTokenType T.LESS_EQUAL
-      case tokenType t of
-        T.GREATER -> pure AST.Greater
-        T.GREATER_EQUAL -> pure AST.GreaterEqual
-        T.LESS -> pure AST.Less
-        T.LESS_EQUAL -> pure AST.LessEqual
-        _ -> empty
+parseGT :: TokenParser (Expression -> Expression -> Expression)
+parseGT = matchTokenType T.GREATER >> pure (AST.Binary AST.Greater)
+
+parseGTE :: TokenParser (Expression -> Expression -> Expression)
+parseGTE = matchTokenType T.GREATER_EQUAL >> pure (AST.Binary AST.GreaterEqual)
+
+parseLT :: TokenParser (Expression -> Expression -> Expression)
+parseLT = matchTokenType T.LESS >> pure (AST.Binary AST.Less)
+
+parseLTE :: TokenParser (Expression -> Expression -> Expression)
+parseLTE = matchTokenType T.LESS_EQUAL >> pure (AST.Binary AST.LessEqual)
 
 -- Terms
 term :: TokenParser Expression
-term = do
-  left <- factor
-  termRest left
+term = leftAssociative factor (parsePlus <|> parseMinus)
 
-termRest :: Expression -> TokenParser Expression
-termRest left =
-  ( do
-      op <- matchTermOp
-      right <- factor
-      termRest (AST.Binary op left right)
-  )
-    <|> pure left
-  where
-    matchTermOp = do
-      t <- matchTokenType T.PLUS <|> matchTokenType T.MINUS
-      pure (if tokenType t == T.PLUS then AST.Plus else AST.BMinus)
+parsePlus :: TokenParser (Expression -> Expression -> Expression)
+parsePlus = matchTokenType T.PLUS >> pure (AST.Binary AST.Plus)
+
+parseMinus :: TokenParser (Expression -> Expression -> Expression)
+parseMinus = matchTokenType T.MINUS >> pure (AST.Binary AST.BMinus)
 
 -- Factors
 factor :: TokenParser Expression
-factor = do
-  left <- unary
-  factorRest left
+factor = leftAssociative unary (parseMul <|> parseDiv)
 
-factorRest :: Expression -> TokenParser Expression
-factorRest left =
-  ( do
-      op <- matchFactorOp
-      right <- unary
-      factorRest (AST.Binary op left right)
-  )
-    <|> pure left
-  where
-    matchFactorOp = do
-      t <- matchTokenType T.STAR <|> matchTokenType T.SLASH
-      pure (if tokenType t == T.STAR then AST.Star else AST.Slash)
+parseMul :: TokenParser (Expression -> Expression -> Expression)
+parseMul = matchTokenType T.STAR >> pure (AST.Binary AST.Star)
+
+parseDiv :: TokenParser (Expression -> Expression -> Expression)
+parseDiv = matchTokenType T.SLASH >> pure (AST.Binary AST.Slash)
 
 -- Unary expressions
 unary :: TokenParser Expression
@@ -241,4 +201,4 @@ leftAssociative pOperand pOperator = do
     op <- pOperator
     next <- pOperand
     pure (op, next)
-  pure $ foldl (\acc (op, next) -> op acc next) first rest
+  pure $ foldl' (\acc (op, next) -> op acc next) first rest

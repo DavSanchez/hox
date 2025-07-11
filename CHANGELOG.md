@@ -1,8 +1,8 @@
 # Revision history for hox
 
-## 0.1.7.0 -- 2025-07-XX
+## 0.1.7.0 -- 2025-07-10
 
-* TODO: Chapter 07: Evaluating Expressions.
+* Chapter 07: Evaluating Expressions.
 
 ## 0.1.6.0 -- 2025-07-06
 

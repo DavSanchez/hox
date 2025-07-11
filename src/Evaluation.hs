@@ -44,7 +44,7 @@ evalUnaryOp Bang v = (Right . VBool . not . isTruthy) v
 evalUnaryOp op v = Left $ "Invalid unary operation: " <> show op <> " with " <> show v
 
 evalBinaryOp :: BinaryOperator -> Value -> Value -> Either String Value
--- Numeric operations
+-- Some numeric operations
 evalBinaryOp Greater (VNumber n1) (VNumber n2) = Right $ VBool (n1 > n2)
 evalBinaryOp GreaterEqual (VNumber n1) (VNumber n2) = Right $ VBool (n1 >= n2)
 evalBinaryOp Less (VNumber n1) (VNumber n2) = Right $ VBool (n1 < n2)
@@ -53,7 +53,7 @@ evalBinaryOp BMinus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 - n2)
 evalBinaryOp Plus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 + n2)
 -- Concatenation for strings
 evalBinaryOp Plus (VString s1) (VString s2) = Right $ VString (s1 ++ s2)
--- Division and multiplication, with error handling for division by zero
+-- More numerics: Division and multiplication, with error handling for division by zero
 evalBinaryOp Slash (VNumber n1) (VNumber n2)
   | n2 == 0 = Left "Division by zero" -- Handle or just fail?
   | otherwise = Right $ VNumber (n1 / n2)

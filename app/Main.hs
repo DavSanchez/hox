@@ -2,7 +2,8 @@ module Main (main) where
 
 import Data.Either (lefts, rights)
 import Data.List.NonEmpty (toList)
-import Expression (Parser (runParser), expression, prettyPrintExpr)
+import Evaluation (evalExpr, printValue)
+import Expression (Parser (runParser), expression)
 import Scanner (prettyPrintErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -26,11 +27,16 @@ runScript script =
         then
           let expr = fmap fst $ runParser expression $ rights $ toList tokenResult
            in case expr of
-                Right e -> putStrLn $ prettyPrintExpr e
                 Left err -> do
                   putStrLn "Parsing error:"
                   putStrLn err
                   exitWith (ExitFailure 65)
+                Right e -> case printValue <$> evalExpr e of
+                  Left evalErr -> do
+                    putStrLn "Evaluation error:"
+                    putStrLn evalErr
+                    exitWith (ExitFailure 70)
+                  Right value -> putStrLn value
         else do
           putStrLn "Syntax errors found:"
           mapM_ (putStrLn . prettyPrintErr) errors

@@ -32,7 +32,7 @@ jobs:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
         test: ["chapter04", "chapter06", "chapter07"]
-    name: Crafting Interpreter tests for ${{ matrix.test }}
+    name: ${{ matrix.test }} tests from Crafting Interpreters
     steps:
       - name: Check out repository code
         uses: actions/checkout@v5
@@ -43,5 +43,5 @@ jobs:
       - name: Set up Nix cache
         uses: DeterminateSystems/magic-nix-cache-action@main
 
-      - name: Run Crafting Interpreter tests for ${{ matrix.test }}
+      - name: ${{ matrix.test }} tests from Crafting Interpreters
         run: nix run .#test-${{ matrix.test }}

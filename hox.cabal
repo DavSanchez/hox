@@ -112,6 +112,8 @@ library
   exposed-modules:
     Evaluation
     Expression
+    Grammar
+    Parser
     Scanner
     Token
 

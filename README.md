@@ -6,3 +6,4 @@
 - [x] Chapter 05: Representing Code
 - [x] Chapter 06: Parsing Expressions
 - [x] Chapter 07: Evaluating Expressions
+- [ ] Chapter 08: Statements and State

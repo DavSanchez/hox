@@ -25,15 +25,9 @@ main = do
       putStrLn "Usage: hox [[--<CHAP>] script]"
       exitWith (ExitFailure 64)
   where
-    handleChap04Out = \case
-      Left err -> handleErr err
-      Right tokens -> mapM_ (putStrLn . prettyPrintToken) tokens
-    handleChap06Out = \case
-      Left err -> handleErr err
-      Right expr -> putStrLn $ prettyPrintExpr expr
-    handleChap07Out = \case
-      Left err -> handleErr err
-      Right value -> putStrLn $ printValue value
+    handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
+    handleChap06Out = either handleErr (putStrLn . prettyPrintExpr)
+    handleChap07Out = either handleErr (putStrLn . printValue)
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]

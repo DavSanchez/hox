@@ -18,12 +18,17 @@ scannerProperties =
 eofOrUnterminatedString :: String -> Bool
 eofOrUnterminatedString s =
   let lastToken = NE.last $ scanTokens s
-      numDoubleQuotes = length $ filter (== '"') s
+      numDoubleQuotes = length $ filter (== '"') $ removeComments s
       result = bimap errorMessage tokenType lastToken
    in result
         == if even numDoubleQuotes -- Strings are closed?
           then Right EOF
           else Left "Unterminated string"
+
+removeComments :: String -> String
+removeComments ('/' : '/' : ss) = removeComments $ drop 1 $ dropWhile (/= '\n') ss
+removeComments (s : ss) = s : removeComments ss
+removeComments [] = []
 
 lessOrEqualTokensThanInputLength :: String -> Bool
 lessOrEqualTokensThanInputLength s =

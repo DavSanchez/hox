@@ -2,7 +2,7 @@
   description = "My implementations of Lox, a programming language from the book 'Crafting Interpreters' by Robert Nystrom";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
     oldDartNixpkgs.url = "github:nixos/nixpkgs/8cad3dbe48029cb9def5cdb2409a6c80d3acfe2e"; # Dart 2.19.6
     flake-parts.url = "github:hercules-ci/flake-parts";
     git-hooks = {
@@ -83,7 +83,7 @@
               program = "${crafting-interpreters-script testCase}/bin/crafting-interpreters-script";
               meta.description = "Run the Crafting Interpreters test suite for ${testCase}";
             };
-            haskellPackages = pkgs.haskell.packages.ghc9101; # GHC 9.10.1
+            haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
           in
           {
             apps = {
@@ -104,7 +104,6 @@
                   doctest
                 ])
                 ++ [
-                  pkgs.haskellPackages.hlint # not tied to the current Haskell compiler version
                   pkgs.gnumake
                   dart2
                 ];
@@ -128,7 +127,10 @@
                   convco.enable = true; # Conventional commits
                   gitlint.enable = true; # Git commit messages
                   check-merge-conflicts.enable = true; # Check for merge conflicts
-                  hlint.enable = true; # Haskell linter
+                  hlint = {
+                    enable = true; # Haskell linter
+                    package = haskellPackages.hlint;
+                  };
                   cabal2nix = {
                     enable = true; # Cabal to Nix pacakge definition
                     settings.outputFilename = "hox.nix";

@@ -20,6 +20,7 @@ main = do
     ["--chap04_scanning", script] -> readFile' script >>= handleChap04Out . runChapter04
     ["--chap06_parsing", script] -> readFile' script >>= handleChap06Out . (runChapter04 >=> runChapter06)
     ["--chap07_evaluating", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
+    ["--chap08_statements", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07) -- TODO same as chapter 07 for now
     [script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
     _ -> do
       putStrLn "Usage: hox [[--<CHAP>] script]"

@@ -61,3 +61,19 @@ jobs:
 
       - name: ${{ matrix.test }} tests from Crafting Interpreters
         run: nix run .#test-${{ matrix.test }}
+
+  check-all-green:
+    name: 🟢 All required checks and tests pass
+    if: always()
+    runs-on: Ubuntu-latest
+    needs:
+      - nix-checks
+      - doctests
+      - crafting-interpreter-tests
+    steps:
+      - name: Decide whether the needed jobs succeeded or failed
+        uses: re-actors/alls-green@release/v1
+        with:
+          # allowed-failures: docs, linters
+          # allowed-skips: non-voting-flaky-job
+          jobs: ${{ toJSON(needs) }}

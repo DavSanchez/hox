@@ -103,6 +103,7 @@
                   doctest
                 ])
                 ++ [
+                  pkgs.haskellPackages.hlint # not tied to the current Haskell compiler version
                   pkgs.gnumake
                   dart2
                 ];

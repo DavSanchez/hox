@@ -1,4 +1,4 @@
-module Evaluation (evalExpr, printValue) where
+module Evaluation (evalExpr, printValue, Value) where
 
 import Data.Char (toLower)
 import Expression.AST

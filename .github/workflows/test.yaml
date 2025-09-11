@@ -4,11 +4,12 @@ run-name: ${{ github.actor }} is testing his implementation of Lox 🚀
 on: [push]
 
 jobs:
-  checks:
+  basic-tests:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    name: Basic checks and tests
     steps:
       - name: Check out repository code
         uses: actions/checkout@v5
@@ -25,11 +26,22 @@ jobs:
       - name: Run doctests
         run: nix develop --command cabal repl --with-compiler=doctest --repl-options=--verbose
 
-      # - name: Run Crafting Interpreter tests for Chapter 04
-      #   run: nix run .#test-chapter04
+  crafting-interpreter-tests:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+        test: ["chapter04", "chapter06", "chapter07"]
+    name: ${{ matrix.test }} tests from Crafting Interpreters
+    steps:
+      - name: Check out repository code
+        uses: actions/checkout@v5
 
-      # - name: Run Crafting Interpreter tests for Chapter 06
-      #   run: nix run .#test-chapter06
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@main
 
-      - name: Run Crafting Interpreter tests for Chapter 07
-        run: nix run .#test-chapter07
+      - name: Set up Nix cache
+        uses: DeterminateSystems/magic-nix-cache-action@main
+
+      - name: ${{ matrix.test }} tests from Crafting Interpreters
+        run: nix run .#test-${{ matrix.test }}

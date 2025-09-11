@@ -76,7 +76,7 @@
                     dart "pub" "get"
                     cd tmpDir
                     -- Run the tests!
-                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.hox}/bin/hox"
+                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.hox}/bin/hox" "--arguments" "--${testCase}"
                 '';
             mkTestApp = testCase: {
               type = "app";

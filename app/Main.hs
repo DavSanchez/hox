@@ -5,7 +5,8 @@ import Data.Bifunctor (Bifunctor (first), bimap)
 import Data.Either (lefts, rights)
 import Data.List.NonEmpty (toList)
 import Evaluation (Value, evalExpr, printValue)
-import Expression (Expression, Parser (runParser), expression, prettyPrintExpr)
+import Expression (Expression, expression, prettyPrintExpr)
+import Parser (runParser)
 import Scanner (SyntaxError, prettyPrintErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -20,7 +21,8 @@ main = do
     ["--chap04_scanning", script] -> readFile' script >>= handleChap04Out . runChapter04
     ["--chap06_parsing", script] -> readFile' script >>= handleChap06Out . (runChapter04 >=> runChapter06)
     ["--chap07_evaluating", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
-    [script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
+    ["--chap08_statements", script] -> readFile' script >>= handleChap07Out . currentImpl -- TODO same as chapter 07 for now
+    [script] -> readFile' script >>= handleChap07Out . currentImpl
     _ -> do
       putStrLn "Usage: hox [[--<CHAP>] script]"
       exitWith (ExitFailure 64)
@@ -28,6 +30,9 @@ main = do
     handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
     handleChap06Out = either handleErr (putStrLn . prettyPrintExpr)
     handleChap07Out = either handleErr (putStrLn . printValue)
+
+currentImpl :: String -> Either InterpreterError Value
+currentImpl = runChapter04 >=> runChapter06 >=> runChapter07
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]

@@ -1,10 +1,10 @@
-module Grammar () where
+module Grammar (Program, program) where
 
-import Expression.AST (Expression)
+import Control.Applicative (Alternative (many))
+import Parser (TokenParser)
+import Statements (Statement, parseStatement)
 
 newtype Program = Program [Statement] deriving stock (Show)
 
-data Statement
-  = ExprStmt Expression
-  | PrintStmt Expression
-  deriving stock (Show)
+program :: TokenParser Program
+program = Program <$> many parseStatement

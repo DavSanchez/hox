@@ -4,8 +4,8 @@ import Control.Applicative (Alternative (..))
 import Control.Monad (void)
 import Expression.AST (Expression)
 import Expression.AST qualified as AST
-import Parser (Parser (Parser), TokenParser)
-import Token (Token (..), TokenType, isNumber, isString)
+import Parser (TokenParser, matchTokenType, satisfy)
+import Token (Token (..), isNumber, isString)
 import Token qualified as T
 
 {-
@@ -123,14 +123,6 @@ parseGrouping :: TokenParser Expression
 parseGrouping = AST.Grouping <$> parens expression
 
 -- Helpers
-
-satisfy :: (Token -> Bool) -> TokenParser Token
-satisfy predicate = Parser $ \case
-  (t : tt) | predicate t -> Right (t, tt)
-  _ -> Left "Parser: unexpected token"
-
-matchTokenType :: TokenType -> TokenParser Token
-matchTokenType tType = satisfy (\t -> tokenType t == tType)
 
 parens :: TokenParser a -> TokenParser a
 parens p = do

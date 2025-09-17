@@ -1,4 +1,8 @@
-# Revision history for hox
+# Revision history for `hox`
+
+## 0.1.8.0 -- 2025-09-XX
+
+* Chapter 08: Statements and State.
 
 ## 0.1.7.0 -- 2025-07-10
 

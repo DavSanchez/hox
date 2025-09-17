@@ -115,6 +115,7 @@ library
     Grammar
     Parser
     Scanner
+    Statements
     Token
 
   -- Modules included in this library but not exported.

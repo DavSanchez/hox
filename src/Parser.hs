@@ -1,7 +1,7 @@
-module Parser (TokenParser, Parser (Parser, runParser)) where
+module Parser (TokenParser, Parser (Parser, runParser), matchTokenType, satisfy) where
 
 import Control.Applicative (Alternative (..))
-import Token (Token)
+import Token (Token (tokenType), TokenType)
 
 -- | Basic parser type. For an error type `e`, an input type `s`, and an output type `a`.
 -- A rough equivalent to this in Rust would be:
@@ -46,3 +46,13 @@ instance Alternative TokenParser where
 
 instance MonadFail TokenParser where
   fail = Parser . const . Left
+
+-- Helpers
+
+satisfy :: (Token -> Bool) -> TokenParser Token
+satisfy predicate = Parser $ \case
+  (t : tt) | predicate t -> Right (t, tt)
+  _ -> Left "Parser: unexpected token"
+
+matchTokenType :: TokenType -> TokenParser Token
+matchTokenType tType = satisfy (\t -> tokenType t == tType)

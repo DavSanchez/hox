@@ -1,7 +1,7 @@
 { mkDerivation, base, lib, tasty, tasty-hunit, tasty-quickcheck }:
 mkDerivation {
   pname = "hox";
-  version = "0.1.7.0";
+  version = "0.1.8.0";
   src = ./.;
   isLibrary = true;
   isExecutable = true;

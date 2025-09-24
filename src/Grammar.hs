@@ -17,6 +17,6 @@ evaluate (Program stmts) = mapM_ S.evaluate stmts
 -- we do not have any error recovery!! Synchronizing is not possible as of now.
 program :: TokenParser Program
 program = do
-  stmts <- many parseStatement -- At least one statement would be required for the program
+  stmts <- many parseStatement
   void $ matchTokenType T.EOF
   pure (Program stmts)

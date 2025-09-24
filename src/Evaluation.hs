@@ -8,6 +8,7 @@ import Expression.AST
     UnaryOperator (..),
   )
 import GHC.Float (int2Double)
+import Numeric (showFFloat)
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value
@@ -21,7 +22,7 @@ data Value
 printValue :: Value -> String
 printValue (VNumber n)
   | n == int2Double (round n) = show (round n :: Int)
-  | otherwise = show n
+  | otherwise = showFFloat Nothing n []
 printValue (VBool b) = (map toLower . show) b
 printValue (VString s) = s
 printValue VNil = "nil"

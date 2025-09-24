@@ -18,11 +18,13 @@ data Value
   deriving stock (Show, Eq)
 
 -- | Pretty prints a value according to the Crafting Interpreters book.
+-- >>> printValue <$> evalExpr (Literal (Number (-0.0)))
+-- Right "-0"
 printValue :: Value -> String
 printValue (VNumber n) =
   let (integer :: Integer, decimal) = properFraction n
    in if decimal == 0
-        then show integer -- Print as integer if no decimal part
+        then if isNegativeZero n then "-0" else show integer
         else showFFloat Nothing n "" -- Otherwise, print as floating-point number
 printValue (VBool b) = (map toLower . show) b
 printValue (VString s) = s
@@ -31,6 +33,8 @@ printValue VNil = "nil"
 -- | Evaluates an expression and returns a value or an error message.
 -- If the evaluation is successful, it returns a `Value`.
 -- If there is an error,it returns a `String` describing it. (TODO: Get a better error type)
+-- >>> evalExpr (Literal (Number (-0.0)))
+-- Right (VNumber (-0.0))
 evalExpr :: Expression -> Either String Value
 evalExpr (Literal lit) = Right $ evalLiteral lit
 evalExpr (Grouping expr) = evalExpr expr

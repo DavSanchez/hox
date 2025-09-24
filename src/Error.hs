@@ -1,7 +1,9 @@
 module Error (InterpreterError (..), handleErr) where
 
+import GHC.IO.Handle.Text (hPutStrLn)
 import Scanner.Error (SyntaxError, prettyPrintErr)
 import System.Exit (ExitCode (ExitFailure), exitWith)
+import System.IO (stderr)
 
 -- Error handling
 data InterpreterError = Syntax [SyntaxError] | Parse String | Eval String deriving stock (Show)
@@ -9,11 +11,11 @@ data InterpreterError = Syntax [SyntaxError] | Parse String | Eval String derivi
 handleErr :: InterpreterError -> IO ()
 handleErr = \case
   Syntax errs -> do
-    mapM_ (putStrLn . prettyPrintErr) errs
+    mapM_ (hPutStrLn stderr . prettyPrintErr) errs
     exitWith (ExitFailure 65)
   Parse err -> do
-    putStrLn err
+    hPutStrLn stderr err
     exitWith (ExitFailure 65)
   Eval err -> do
-    putStrLn err
+    hPutStrLn stderr err
     exitWith (ExitFailure 70)

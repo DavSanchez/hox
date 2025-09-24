@@ -111,12 +111,12 @@ parseNil = matchTokenType T.NIL >> pure (AST.Literal AST.Nil)
 
 parseNumber :: TokenParser Expression
 parseNumber = do
-  Token (T.NUMBER _ n) _ <- satisfy (isNumber . tokenType)
+  Token (T.NUMBER _ n) _ <- satisfy (isNumber . tokenType) "expected a number"
   pure (AST.Literal (AST.Number n))
 
 parseString :: TokenParser Expression
 parseString = do
-  Token (T.STRING _ s) _ <- satisfy (isString . tokenType)
+  Token (T.STRING _ s) _ <- satisfy (isString . tokenType) "expected a string"
   pure (AST.Literal (AST.String s))
 
 parseGrouping :: TokenParser Expression

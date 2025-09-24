@@ -39,7 +39,7 @@ runPrompt = do
     else getLine >>= currentImpl >> runPrompt
 
 currentImpl :: String -> IO ()
-currentImpl = either handleErr evaluate . (runChapter04 >=> runChapter08)
+currentImpl = handleChap08Out . (runChapter04 >=> runChapter08)
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
@@ -68,7 +68,7 @@ handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . printValue)
 
 -- Chapter 08 operations
--- The previous chapters where "but a hack". Now we have the real deal
+-- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: [Token] -> Either InterpreterError Program
 runChapter08 = bimap Parse fst . runParser program
 

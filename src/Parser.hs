@@ -1,7 +1,7 @@
 module Parser (TokenParser, Parser (Parser, runParser), matchTokenType, satisfy) where
 
 import Control.Applicative (Alternative (..))
-import Token (Token (tokenType), TokenType)
+import Token (Token (tokenType), TokenType, toString)
 
 -- | Basic parser type. For an error type `e`, an input type `s`, and an output type `a`.
 -- A rough equivalent to this in Rust would be:
@@ -16,6 +16,9 @@ newtype Parser e s a = Parser
   }
 
 -- | Concrete type for our program parser.
+--
+-- It's the same as @Parser String [Token] a@ for a generic type `a`, which itself just
+-- contains a function @[Token] -> Either String (a, [Token])@ under the `runParser` field.
 type TokenParser = Parser String [Token]
 
 instance Functor TokenParser where
@@ -49,10 +52,10 @@ instance MonadFail TokenParser where
 
 -- Helpers
 
-satisfy :: (Token -> Bool) -> TokenParser Token
-satisfy predicate = Parser $ \case
+satisfy :: (Token -> Bool) -> String -> TokenParser Token
+satisfy predicate failMsg = Parser $ \case
   (t : tt) | predicate t -> Right (t, tt)
-  _ -> Left "Parser: unexpected token"
+  _ -> Left failMsg
 
 matchTokenType :: TokenType -> TokenParser Token
-matchTokenType tType = satisfy (\t -> tokenType t == tType)
+matchTokenType tType = satisfy (\t -> tokenType t == tType) ("expected " <> toString tType)

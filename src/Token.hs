@@ -4,6 +4,7 @@ module Token
     prettyPrintToken,
     isNumber,
     isString,
+    toString,
   )
 where
 
@@ -114,3 +115,44 @@ prettyPrintToken (Token TRUE _) = "TRUE true null"
 prettyPrintToken (Token VAR _) = "VAR var null"
 prettyPrintToken (Token WHILE _) = "WHILE while null"
 prettyPrintToken (Token EOF _) = "EOF  null"
+
+toString :: TokenType -> String
+toString (IDENTIFIER s) = s
+toString (STRING _ s) = s
+toString (NUMBER _ n) = show n
+toString LEFT_PAREN = "("
+toString RIGHT_PAREN = ")"
+toString LEFT_BRACE = "{"
+toString RIGHT_BRACE = "}"
+toString COMMA = ","
+toString DOT = "."
+toString MINUS = "-"
+toString PLUS = "+"
+toString SEMICOLON = ";"
+toString SLASH = "/"
+toString STAR = "*"
+toString BANG = "!"
+toString BANG_EQUAL = "!="
+toString EQUAL = "="
+toString EQUAL_EQUAL = "=="
+toString GREATER = ">"
+toString GREATER_EQUAL = ">="
+toString LESS = "<"
+toString LESS_EQUAL = "<="
+toString AND = "and"
+toString CLASS = "class"
+toString ELSE = "else"
+toString FALSE = "false"
+toString TRUE = "true"
+toString FUN = "fun"
+toString FOR = "for"
+toString IF = "if"
+toString NIL = "nil"
+toString OR = "or"
+toString PRINT = "print"
+toString RETURN = "return"
+toString SUPER = "super"
+toString THIS = "this"
+toString VAR = "var"
+toString WHILE = "while"
+toString EOF = "EOF"

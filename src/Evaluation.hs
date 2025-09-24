@@ -7,7 +7,6 @@ import Expression.AST
     Literal (..),
     UnaryOperator (..),
   )
-import GHC.Float (int2Double)
 import Numeric (showFFloat)
 
 -- | Represents the values that can be produced by evaluating an expression.
@@ -20,9 +19,11 @@ data Value
 
 -- | Pretty prints a value according to the Crafting Interpreters book.
 printValue :: Value -> String
-printValue (VNumber n)
-  | n == int2Double (round n) = show (round n :: Int)
-  | otherwise = showFFloat Nothing n []
+printValue (VNumber n) =
+  let (integer :: Integer, decimal) = properFraction n
+   in if decimal == 0
+        then show integer -- Print as integer if no decimal part
+        else showFFloat Nothing n "" -- Otherwise, print as floating-point number
 printValue (VBool b) = (map toLower . show) b
 printValue (VString s) = s
 printValue VNil = "nil"

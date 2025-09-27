@@ -1,14 +1,15 @@
 module Expression
   ( prettyPrintExpr,
-    Parser (runParser),
     expression,
     BinaryOperator (..),
+    BiOp (..),
     Expression (..),
     Literal (..),
     UnaryOperator (..),
+    UnOp (..),
   )
 where
 
-import Expression.AST (BinaryOperator (..), Expression (..), Literal (..), UnaryOperator (..))
-import Expression.Parser (Parser (runParser), expression)
+import Expression.AST (BiOp (..), BinaryOperator (..), Expression (..), Literal (..), UnOp (..), UnaryOperator (..))
+import Expression.Parser (expression)
 import Expression.PrettyPrinter (prettyPrintExpr)

@@ -55,7 +55,7 @@ handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
 
 -- Chapter 06 operations
 runChapter06 :: [Token] -> Either InterpreterError Expression
-runChapter06 = bimap Parse fst . fmap (\(out, _, errs) -> (out, errs)) . runParser expression
+runChapter06 = bimap Parse fst . runParser expression
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
 handleChap06Out = either handleErr (putStrLn . prettyPrintExpr)
@@ -70,7 +70,7 @@ handleChap07Out = either handleErr (putStrLn . printValue)
 -- Chapter 08 operations
 -- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: [Token] -> Either InterpreterError Program
-runChapter08 = bimap Parse fst . fmap (\(out, _, errs) -> (out, errs)) . runParser program
+runChapter08 = bimap Parse fst . runParser program
 
 handleChap08Out :: Either InterpreterError Program -> IO ()
 handleChap08Out = either handleErr evaluate

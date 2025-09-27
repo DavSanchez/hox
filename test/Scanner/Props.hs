@@ -23,7 +23,7 @@ eofOrUnterminatedString s =
    in result
         == if even numDoubleQuotes -- Strings are closed?
           then Right EOF
-          else Left "Unterminated string"
+          else Left "Unterminated string."
 
 removeComments :: String -> String
 removeComments ('/' : '/' : ss) = removeComments $ drop 1 $ dropWhile (/= '\n') ss

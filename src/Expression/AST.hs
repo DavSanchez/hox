@@ -1,7 +1,9 @@
 module Expression.AST
   ( Expression (..),
     BinaryOperator (..),
+    BiOp (..),
     UnaryOperator (..),
+    UnOp (..),
     Literal (..),
   )
 where
@@ -34,9 +36,13 @@ data Expression
 data Literal = Number Double | String String | Bool Bool | Nil
   deriving stock (Show)
 
-data UnaryOperator = UMinus | Bang deriving stock (Show)
+data UnaryOperator = UnaryOperator {uOpLine :: Int, uOp :: UnOp} deriving stock (Show)
 
-data BinaryOperator
+data UnOp = UMinus | Bang deriving stock (Show)
+
+data BinaryOperator = BinaryOperator {bOpLine :: Int, bOp :: BiOp} deriving stock (Show)
+
+data BiOp
   = EqualEqual
   | BangEqual
   | Less

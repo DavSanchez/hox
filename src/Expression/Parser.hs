@@ -39,56 +39,56 @@ equality :: TokenParser Expression
 equality = leftAssociative comparison (parseEq <|> parseNeq)
 
 parseEq :: TokenParser (Expression -> Expression -> Expression)
-parseEq = matchTokenType T.EQUAL_EQUAL >> pure (AST.Binary AST.EqualEqual)
+parseEq = matchTokenType T.EQUAL_EQUAL >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.EqualEqual}))
 
 parseNeq :: TokenParser (Expression -> Expression -> Expression)
-parseNeq = matchTokenType T.BANG_EQUAL >> pure (AST.Binary AST.BangEqual)
+parseNeq = matchTokenType T.BANG_EQUAL >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.BangEqual}))
 
 -- Comparison
 comparison :: TokenParser Expression
 comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
 parseGT :: TokenParser (Expression -> Expression -> Expression)
-parseGT = matchTokenType T.GREATER >> pure (AST.Binary AST.Greater)
+parseGT = matchTokenType T.GREATER >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.Greater}))
 
 parseGTE :: TokenParser (Expression -> Expression -> Expression)
-parseGTE = matchTokenType T.GREATER_EQUAL >> pure (AST.Binary AST.GreaterEqual)
+parseGTE = matchTokenType T.GREATER_EQUAL >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.GreaterEqual}))
 
 parseLT :: TokenParser (Expression -> Expression -> Expression)
-parseLT = matchTokenType T.LESS >> pure (AST.Binary AST.Less)
+parseLT = matchTokenType T.LESS >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.Less}))
 
 parseLTE :: TokenParser (Expression -> Expression -> Expression)
-parseLTE = matchTokenType T.LESS_EQUAL >> pure (AST.Binary AST.LessEqual)
+parseLTE = matchTokenType T.LESS_EQUAL >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.LessEqual}))
 
 -- Terms
 term :: TokenParser Expression
 term = leftAssociative factor (parsePlus <|> parseMinus)
 
 parsePlus :: TokenParser (Expression -> Expression -> Expression)
-parsePlus = matchTokenType T.PLUS >> pure (AST.Binary AST.Plus)
+parsePlus = matchTokenType T.PLUS >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.Plus}))
 
 parseMinus :: TokenParser (Expression -> Expression -> Expression)
-parseMinus = matchTokenType T.MINUS >> pure (AST.Binary AST.BMinus)
+parseMinus = matchTokenType T.MINUS >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.BMinus}))
 
 -- Factors
 factor :: TokenParser Expression
 factor = leftAssociative unary (parseMul <|> parseDiv)
 
 parseMul :: TokenParser (Expression -> Expression -> Expression)
-parseMul = matchTokenType T.STAR >> pure (AST.Binary AST.Star)
+parseMul = matchTokenType T.STAR >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.Star}))
 
 parseDiv :: TokenParser (Expression -> Expression -> Expression)
-parseDiv = matchTokenType T.SLASH >> pure (AST.Binary AST.Slash)
+parseDiv = matchTokenType T.SLASH >>= \token -> pure (AST.Binary (AST.BinaryOperator {bOpLine = T.line token, bOp = AST.Slash}))
 
 -- Unary expressions
 unary :: TokenParser Expression
 unary = ((parseBang <|> parseMinusUnary) <*> unary) <|> primary
 
 parseBang :: TokenParser (Expression -> Expression)
-parseBang = matchTokenType T.BANG >> pure (AST.Unary AST.Bang)
+parseBang = matchTokenType T.BANG >>= \token -> pure (AST.Unary (AST.UnaryOperator {uOpLine = T.line token, uOp = AST.Bang}))
 
 parseMinusUnary :: TokenParser (Expression -> Expression)
-parseMinusUnary = matchTokenType T.MINUS >> pure (AST.Unary AST.UMinus)
+parseMinusUnary = matchTokenType T.MINUS >>= \token -> pure (AST.Unary (AST.UnaryOperator {uOpLine = T.line token, uOp = AST.UMinus}))
 
 -- Primary expressions
 primary :: TokenParser Expression

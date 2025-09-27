@@ -12,7 +12,7 @@ import Parser (runParser)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.IO (hFlush, isEOF, readFile', stdout)
+import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
 import Token (Token, prettyPrintToken)
 
 main :: IO ()
@@ -26,7 +26,7 @@ main = do
     ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . (runChapter04 >=> runChapter08)
     [script] -> readFile' script >>= currentImpl
     _ -> do
-      putStrLn "Usage: hox [[--<CHAP>] script]"
+      hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"
       exitWith (ExitFailure 64)
 
 runPrompt :: IO ()
@@ -55,7 +55,7 @@ handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
 
 -- Chapter 06 operations
 runChapter06 :: [Token] -> Either InterpreterError Expression
-runChapter06 = bimap Parse fst . runParser expression
+runChapter06 = bimap Parse fst . fmap (\(out, _, errs) -> (out, errs)) . runParser expression
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
 handleChap06Out = either handleErr (putStrLn . prettyPrintExpr)
@@ -70,7 +70,7 @@ handleChap07Out = either handleErr (putStrLn . printValue)
 -- Chapter 08 operations
 -- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: [Token] -> Either InterpreterError Program
-runChapter08 = bimap Parse fst . runParser program
+runChapter08 = bimap Parse fst . fmap (\(out, _, errs) -> (out, errs)) . runParser program
 
 handleChap08Out :: Either InterpreterError Program -> IO ()
 handleChap08Out = either handleErr evaluate

@@ -1,4 +1,4 @@
-module Parser (TokenParser, Parser (Parser, runParser), ParseError (..), prettyPrintParseErr, matchTokenType, satisfy) where
+module Parser (TokenParser, Parser (Parser, runParser), ParseError (..), prettyPrintParseErr, matchTokenType, satisfy, peekToken) where
 
 import Control.Applicative (Alternative (..))
 import Scanner.Error (Error (..), prettyPrintErr)
@@ -81,6 +81,11 @@ instance MonadFail TokenParser where
 
 -- Helpers
 
+peekToken :: TokenParser Token
+peekToken = Parser $ \case
+  [] -> Left (ParseError Nothing "Unexpected end of input.")
+  (t : tt) -> Right (t, t : tt)
+
 satisfy :: (Token -> Bool) -> String -> TokenParser Token
 satisfy predicate failMsg = Parser $ \case
   (t : tt) | predicate t -> Right (t, tt)
@@ -88,4 +93,4 @@ satisfy predicate failMsg = Parser $ \case
   [] -> Left (ParseError Nothing failMsg)
 
 matchTokenType :: TokenType -> TokenParser Token
-matchTokenType tType = satisfy (\t -> tokenType t == tType) ("Expect " <> toString tType)
+matchTokenType tType = satisfy (\t -> tokenType t == tType) ("Expect " <> toString tType <> ".")

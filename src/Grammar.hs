@@ -15,8 +15,8 @@ evaluate (Program stmts) = mapM_ S.evaluate stmts
 parseProgram :: [Token] -> Either [ParseError] Program
 parseProgram tokens =
   let results = parseProgram' tokens
-      errors = lefts results
-      stmts = rights results
+      errors = lefts results -- Collection of errors
+      stmts = rights results -- Parsed program
    in if null errors
         then Right (Program stmts)
         else Left errors

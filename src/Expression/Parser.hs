@@ -32,7 +32,7 @@ primary        → NUMBER | STRING | "true" | "false" | "nil"
 -- >>> runParser expression tokenList
 -- Right (Binary Plus (Grouping (Binary Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (Binary Plus (Literal (Number 3.0)) (Literal (Number 4.0)))),[Token {tokenType = EOF, line = 1}])
 expression :: TokenParser Expression
-expression = equality
+expression = equality <|> fail "Expect expression."
 
 -- Equality
 equality :: TokenParser Expression

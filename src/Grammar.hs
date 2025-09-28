@@ -1,10 +1,10 @@
-module Grammar (Program, program, evaluate) where
+module Grammar (Program, parseProgram, evaluate) where
 
-import Control.Applicative (Alternative (many))
-import Data.Functor (void)
-import Parser (TokenParser, matchTokenType)
+import Data.Either (lefts, rights)
+import Parser (ParseError, Parser (runParser))
 import Statements (Statement, parseStatement)
 import Statements qualified as S
+import Token (Token (..))
 import Token qualified as T
 
 newtype Program = Program [Statement] deriving stock (Show)
@@ -12,11 +12,33 @@ newtype Program = Program [Statement] deriving stock (Show)
 evaluate :: Program -> IO ()
 evaluate (Program stmts) = mapM_ S.evaluate stmts
 
--- This one does not work as expected because `many` will succeed if zero or more statements
--- are parsed successfully, this means that we do not have any error reporting and what is more,
--- we do not have any error recovery!! Synchronizing is not possible as of now.
-program :: TokenParser Program
-program = do
-  stmts <- many parseStatement
-  void $ matchTokenType T.EOF
-  pure (Program stmts)
+parseProgram :: [Token] -> Either [ParseError] Program
+parseProgram tokens =
+  let results = parseProgram' tokens
+      errors = lefts results
+      stmts = rights results
+   in if null errors
+        then Right (Program stmts)
+        else Left errors
+
+parseProgram' :: [Token] -> [Either ParseError Statement]
+parseProgram' [] = [] -- Should not happen, as we always expect at least EOF
+parseProgram' [Token {tokenType = T.EOF}] = []
+parseProgram' tokens = case runParser parseStatement tokens of
+  Left err -> Left err : parseProgram' (synchronize tokens)
+  Right (stmt, rest) -> Right stmt : parseProgram' rest
+
+-- | Drop the current token and keep going until we find a statement start
+synchronize :: [Token] -> [Token]
+synchronize s = dropWhile (not . isStmtStart) (drop 1 s)
+  where
+    isStmtStart :: Token -> Bool
+    isStmtStart Token {tokenType = T.CLASS} = True
+    isStmtStart Token {tokenType = T.FUN} = True
+    isStmtStart Token {tokenType = T.VAR} = True
+    isStmtStart Token {tokenType = T.FOR} = True
+    isStmtStart Token {tokenType = T.IF} = True
+    isStmtStart Token {tokenType = T.WHILE} = True
+    isStmtStart Token {tokenType = T.PRINT} = True
+    isStmtStart Token {tokenType = T.RETURN} = True
+    isStmtStart _ = False

@@ -3,11 +3,12 @@ module Main (main) where
 import Control.Monad ((>=>))
 import Data.Bifunctor (Bifunctor (first), bimap)
 import Data.Either (lefts, rights)
+import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
 import Evaluation (Value, evalExpr, printValue)
 import Expression (Expression, expression, prettyPrintExpr)
-import Grammar (Program, evaluate, program)
+import Grammar (Program, evaluate, parseProgram)
 import Parser (runParser)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
@@ -55,7 +56,7 @@ handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
 
 -- Chapter 06 operations
 runChapter06 :: [Token] -> Either InterpreterError Expression
-runChapter06 = bimap Parse fst . runParser expression
+runChapter06 = bimap (Parse . singleton) fst . runParser expression
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
 handleChap06Out = either handleErr (putStrLn . prettyPrintExpr)
@@ -70,7 +71,7 @@ handleChap07Out = either handleErr (putStrLn . printValue)
 -- Chapter 08 operations
 -- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: [Token] -> Either InterpreterError Program
-runChapter08 = bimap Parse fst . runParser program
+runChapter08 = first Parse . parseProgram
 
 handleChap08Out :: Either InterpreterError Program -> IO ()
 handleChap08Out = either handleErr evaluate

@@ -3,12 +3,12 @@ module Error (InterpreterError (..), handleErr) where
 import Evaluation (EvalError, prettyPrintEvalErr)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Parser (ParseError, prettyPrintParseErr)
-import Scanner.Error (SyntaxError, prettyPrintErr)
+import Scanner.Error (Error, prettyPrintErr)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (stderr)
 
 -- Error handling
-data InterpreterError = Syntax [SyntaxError] | Parse ParseError | Eval EvalError deriving stock (Show)
+data InterpreterError = Syntax [Error] | Parse [ParseError] | Eval EvalError deriving stock (Show)
 
 handleErr :: InterpreterError -> IO ()
 handleErr = \case
@@ -16,7 +16,7 @@ handleErr = \case
     mapM_ (hPutStrLn stderr . prettyPrintErr) errs
     exitWith (ExitFailure 65)
   Parse err -> do
-    hPutStrLn stderr (prettyPrintParseErr err)
+    mapM_ (hPutStrLn stderr . prettyPrintParseErr) err
     exitWith (ExitFailure 65)
   Eval err -> do
     hPutStrLn stderr (prettyPrintEvalErr err)

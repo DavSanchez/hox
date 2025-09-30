@@ -116,7 +116,7 @@ library
     Parser
     Program
     Scanner
-    Statements
+    Statement
     Token
 
   -- Modules included in this library but not exported.

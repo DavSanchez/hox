@@ -3,8 +3,8 @@ module Program (Program, parseProgram, evaluate) where
 import Data.Either (lefts, rights)
 import Data.Void (Void)
 import Parser (ParseError, Parser (runParser))
-import Statements (Statement, parseStatement)
-import Statements qualified as S
+import Statement (Statement, parseStatement)
+import Statement qualified as S
 import Token (Token (..))
 import Token qualified as T
 

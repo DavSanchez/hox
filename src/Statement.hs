@@ -1,4 +1,4 @@
-module Statements (parseStatement, Statement, evaluate) where
+module Statement (parseStatement, Statement, evaluate) where
 
 import Data.Bifunctor (Bifunctor (first))
 import Error (InterpreterError (Eval), handleErr)

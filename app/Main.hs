@@ -7,9 +7,9 @@ import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
 import Evaluation (Value, evalExpr, printValue)
-import Expression (Expression, expression, prettyPrintExpr)
-import Grammar (Program, evaluate, parseProgram)
+import Expression (Expression, expression, prettyPrint)
 import Parser (runParser)
+import Program (Program, evaluate, parseProgram)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -59,7 +59,7 @@ runChapter06 :: [Token] -> Either InterpreterError Expression
 runChapter06 = bimap (Parse . singleton) fst . runParser expression
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
-handleChap06Out = either handleErr (putStrLn . prettyPrintExpr)
+handleChap06Out = either handleErr (putStrLn . prettyPrint)
 
 -- Chapter 07 operations
 runChapter07 :: Expression -> Either InterpreterError Value

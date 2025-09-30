@@ -3,8 +3,7 @@ module Statements (parseStatement, Statement, evaluate) where
 import Data.Bifunctor (Bifunctor (first))
 import Error (InterpreterError (Eval), handleErr)
 import Evaluation (evalExpr, printValue)
-import Expression.AST (Expression)
-import Expression.Parser (expression)
+import Expression (Expression, expression)
 import Parser (TokenParser, matchTokenType, peekToken)
 import Token (Token (..))
 import Token qualified as T
@@ -12,7 +11,7 @@ import Token qualified as T
 data Statement
   = ExprStmt Expression
   | PrintStmt Expression
-  deriving stock (Show)
+  deriving stock (Show, Eq)
 
 evaluate :: Statement -> IO ()
 evaluate (ExprStmt expr) = either handleErr (const $ pure ()) $ first Eval (evalExpr expr)

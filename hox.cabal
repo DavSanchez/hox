@@ -113,17 +113,14 @@ library
     Error
     Evaluation
     Expression
-    Grammar
     Parser
+    Program
     Scanner
     Statements
     Token
 
   -- Modules included in this library but not exported.
   other-modules:
-    Expression.AST
-    Expression.Parser
-    Expression.PrettyPrinter
     Scanner.Error
     Scanner.Internal
     Scanner.Naive

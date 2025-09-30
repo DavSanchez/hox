@@ -5,7 +5,7 @@ import Scanner.Error (Error (..), prettyPrintErr)
 import Token (Token (..), TokenType, toString)
 import Token qualified as T
 
--- | Basic parser type. For an error type `e`, an input type `s`, and an output type `a`.
+-- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.
 -- A rough equivalent to this in Rust would be:
 --
 -- @
@@ -17,23 +17,17 @@ newtype Parser e s a = Parser
   { runParser :: s -> Either e (a, s)
   }
 
--- newtype ParseErrors = ParseErrors [ParseError]
---   deriving stock (Show, Eq)
---   deriving newtype (Semigroup, Monoid)
-
--- toErrList :: ParseErrors -> [ParseError]
--- toErrList (ParseErrors errs) = errs
-
-prettyPrintParseErr :: ParseError -> String
-prettyPrintParseErr (ParseError (Just (Token T.EOF line)) msg) = prettyPrintErr (Error msg line " at end")
-prettyPrintParseErr (ParseError (Just (Token tType line)) msg) = prettyPrintErr (Error msg line (" at '" <> toString tType <> "'"))
-prettyPrintParseErr (ParseError Nothing msg) = prettyPrintErr (Error msg 0 " at unknown") -- catchall... should not happen
-
+-- | A parse error, containing the token where the error happened (if any) and a message.
 data ParseError = ParseError
   { errToken :: Maybe Token,
     errMessage :: String
   }
   deriving stock (Show, Eq)
+
+prettyPrintParseErr :: ParseError -> String
+prettyPrintParseErr (ParseError (Just (Token T.EOF line)) msg) = prettyPrintErr (Error msg line " at end")
+prettyPrintParseErr (ParseError (Just (Token tType line)) msg) = prettyPrintErr (Error msg line (" at '" <> toString tType <> "'"))
+prettyPrintParseErr (ParseError Nothing msg) = prettyPrintErr (Error msg 0 " at unknown") -- catchall... should not happen
 
 -- | Concrete type for our program parser.
 --
@@ -83,8 +77,8 @@ instance MonadFail TokenParser where
 
 peekToken :: TokenParser Token
 peekToken = Parser $ \case
-  [] -> Left (ParseError Nothing "Unexpected end of input.")
   (t : tt) -> Right (t, t : tt)
+  [] -> Left (ParseError Nothing "Unexpected end of input.")
 
 satisfy :: (Token -> Bool) -> String -> TokenParser Token
 satisfy predicate failMsg = Parser $ \case

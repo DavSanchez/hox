@@ -52,6 +52,7 @@ evalExpr (BinaryOperation line op e1 e2) = do
   v1 <- evalExpr e1
   v2 <- evalExpr e2
   evalBinaryOp line op v1 v2
+evalExpr (Variable line name) = Left $ EvalError line ("Undefined variable: " <> name)
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)

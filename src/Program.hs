@@ -1,16 +1,13 @@
 module Program (Program, parseProgram, evaluate) where
 
 import Data.Either (lefts, rights)
-import Data.Void (Void)
 import Parser (ParseError, Parser (runParser))
-import Statement (Statement, parseStatement)
-import Statement qualified as S
+import Program.Statement (Statement, statement)
+import Program.Statement qualified as S
 import Token (Token (..))
 import Token qualified as T
 
 newtype Program = Program [Statement] deriving stock (Show)
-
-data Declaration = VarDecl Void | Statement Statement deriving stock (Show, Eq)
 
 evaluate :: Program -> IO ()
 evaluate (Program stmts) = mapM_ S.evaluate stmts
@@ -27,7 +24,7 @@ parseProgram tokens =
 parseProgram' :: [Token] -> [Either ParseError Statement]
 parseProgram' [] = [] -- Should not happen, as we always expect at least EOF
 parseProgram' [Token {tokenType = T.EOF}] = []
-parseProgram' tokens = case runParser parseStatement tokens of
+parseProgram' tokens = case runParser statement tokens of
   Left err -> Left err : parseProgram' (synchronize tokens)
   Right (stmt, rest) -> Right stmt : parseProgram' rest
 

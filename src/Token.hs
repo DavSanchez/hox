@@ -4,6 +4,7 @@ module Token
     prettyPrintToken,
     isNumber,
     isString,
+    isIdentifier,
     toString,
   )
 where
@@ -61,6 +62,10 @@ isNumber _ = False
 isString :: TokenType -> Bool
 isString (STRING _ _) = True
 isString _ = False
+
+isIdentifier :: TokenType -> Bool
+isIdentifier (IDENTIFIER _) = True
+isIdentifier _ = False
 
 type Lexeme = String
 

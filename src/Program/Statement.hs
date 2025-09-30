@@ -1,4 +1,4 @@
-module Statement (parseStatement, Statement, evaluate) where
+module Program.Statement (statement, Statement, evaluate) where
 
 import Data.Bifunctor (Bifunctor (first))
 import Error (InterpreterError (Eval), handleErr)
@@ -17,8 +17,8 @@ evaluate :: Statement -> IO ()
 evaluate (ExprStmt expr) = either handleErr (const $ pure ()) $ first Eval (evalExpr expr)
 evaluate (PrintStmt expr) = either handleErr (putStrLn . printValue) $ first Eval (evalExpr expr)
 
-parseStatement :: TokenParser Statement
-parseStatement = do
+statement :: TokenParser Statement
+statement = do
   t <- peekToken
   case tokenType t of
     T.PRINT -> parsePrintStmt

@@ -29,7 +29,7 @@ module Expression
   )
 where
 
-import Control.Applicative (many, (<|>))
+import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
 import Parser (TokenParser, matchTokenType, satisfy)
@@ -58,8 +58,14 @@ data Expression
       Expression
       -- | Right operand expression.
       Expression
-  | -- | A grouped expression, e.g., (a + b)
+  | -- | A grouped expression, e.g. @(a + b)@.
     Grouping Expression
+  | -- | A variable (identifier).
+    Variable
+      -- | The line number where the variable appears.
+      Int
+      -- | The name of the variable.
+      String
   deriving stock (Show, Eq)
 
 -- | Represents a literal value in the AST.
@@ -99,12 +105,13 @@ data BinaryOperator
   deriving stock (Show, Eq)
 
 -- >>> import Token (Token (..), TokenType (..))
+-- >>> import Parser
 -- >>> tokenList = [Token {tokenType = NUMBER "1" 1.0, line = 1},Token {tokenType = EQUAL_EQUAL, line = 1},Token {tokenType = NUMBER "2" 2.0, line = 1},Token {tokenType = EQUAL_EQUAL, line = 1},Token {tokenType = NUMBER "3" 3.0, line = 1},Token {tokenType = EQUAL_EQUAL, line = 1},Token {tokenType = NUMBER "4" 4.0, line = 1},Token {tokenType = EOF, line = 1}]
 -- >>> runParser expression tokenList
--- Right (Binary EqualEqual (Binary EqualEqual (Binary EqualEqual (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))) (Literal (Number 4.0)),[Token {tokenType = EOF, line = 1}])
+-- Right (BinaryOperation 1 EqualEqual (BinaryOperation 1 EqualEqual (BinaryOperation 1 EqualEqual (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))) (Literal (Number 4.0)),[Token {tokenType = EOF, line = 1}])
 -- >>> tokenList = [Token {tokenType = LEFT_PAREN, line = 1},Token {tokenType = NUMBER "1" 1.0, line = 1},Token {tokenType = PLUS, line = 1},Token {tokenType = NUMBER "2" 2.0, line = 1},Token {tokenType = RIGHT_PAREN, line = 1},Token {tokenType = PLUS, line = 1},Token {tokenType = LEFT_PAREN, line = 1},Token {tokenType = NUMBER "3" 3.0, line = 1},Token {tokenType = PLUS, line = 1},Token {tokenType = NUMBER "4" 4.0, line = 1},Token {tokenType = RIGHT_PAREN, line = 1},Token {tokenType = EOF, line = 1}]
 -- >>> runParser expression tokenList
--- Right (Binary Plus (Grouping (Binary Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (Binary Plus (Literal (Number 3.0)) (Literal (Number 4.0)))),[Token {tokenType = EOF, line = 1}])
+-- Right (BinaryOperation 1 Plus (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (BinaryOperation 1 Plus (Literal (Number 3.0)) (Literal (Number 4.0)))),[Token {tokenType = EOF, line = 1}])
 expression :: TokenParser Expression
 expression = equality <|> fail "Expect expression."
 
@@ -221,17 +228,18 @@ leftAssociative pOperand pOperator = do
   pure $ foldl' (\acc (op, next) -> op acc next) first rest
 
 -- | Prints and expression in the format expected by the Crafting Interpreters book.
--- >>> prettyPrint (Binary (BinaryOperator 1 Plus) (Literal (Number 1)) (Literal (Number 2)))
+-- >>> prettyPrint (BinaryOperation 1 Plus (Literal (Number 1)) (Literal (Number 2)))
 -- "(+ 1.0 2.0)"
--- >>> prettyPrint (Binary (BinaryOperator 1 Star) (Unary (UnaryOperator 1 UMinus) (Literal (Number 123))) (Literal (Number 45.67)))
+-- >>> prettyPrint (BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Literal (Number 45.67)))
 -- "(* (- 123.0) 45.67)"
--- >>> prettyPrint (Binary (BinaryOperator 1 Star) (Unary (UnaryOperator 1 UMinus) (Literal (Number 123))) (Grouping (Literal (Number 45.67))))
+-- >>> prettyPrint (BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Grouping (Literal (Number 45.67))))
 -- "(* (- 123.0) (group 45.67))"
 prettyPrint :: Expression -> String
 prettyPrint (Literal lit) = prettyPrintLit lit
 prettyPrint (UnaryOperation _ op expr) = "(" <> prettyPrintUnOp op <> " " <> prettyPrint expr <> ")"
 prettyPrint (BinaryOperation _ op e1 e2) = "(" <> prettyPrintBinOp op <> " " <> prettyPrint e1 <> " " <> prettyPrint e2 <> ")"
 prettyPrint (Grouping expr) = "(group " <> prettyPrint expr <> ")"
+prettyPrint (Variable _ name) = name
 
 prettyPrintBinOp :: BinaryOperator -> String
 prettyPrintBinOp EqualEqual = "=="

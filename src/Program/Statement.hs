@@ -2,7 +2,7 @@ module Program.Statement (statement, Statement) where
 
 import Data.Bifunctor (Bifunctor (first))
 import Error (InterpreterError (Eval), handleErr)
-import Evaluation (evalExpr, printValue)
+import Evaluation (evalExpr)
 import Expression (Expression, expression)
 import Parser (TokenParser, matchTokenType, peekToken)
 import Token (Token (..))

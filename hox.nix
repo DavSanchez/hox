@@ -1,4 +1,4 @@
-{ mkDerivation, base, containers, lib, tasty, tasty-hunit
+{ mkDerivation, base, containers, lib, mtl, tasty, tasty-hunit
 , tasty-quickcheck
 }:
 mkDerivation {
@@ -7,7 +7,7 @@ mkDerivation {
   src = ./.;
   isLibrary = true;
   isExecutable = true;
-  libraryHaskellDepends = [ base containers ];
+  libraryHaskellDepends = [ base containers mtl ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [ base tasty tasty-hunit tasty-quickcheck ];
   homepage = "https://github.com/DavSanchez/hox";

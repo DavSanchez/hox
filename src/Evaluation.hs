@@ -1,6 +1,5 @@
-module Evaluation (evalExpr, EvalError, printValue, prettyPrintEvalErr, Value) where
+module Evaluation (evalExpr, EvalError, prettyPrintEvalErr, Value) where
 
-import Data.Char (toLower)
 import Environment (Environment, get)
 import Expression
   ( BinaryOperator (..),
@@ -8,7 +7,6 @@ import Expression
     Literal (..),
     UnaryOperator (..),
   )
-import Numeric (showFFloat)
 import Value (Value (..))
 
 data EvalError = EvalError
@@ -19,19 +17,6 @@ data EvalError = EvalError
 
 prettyPrintEvalErr :: EvalError -> String
 prettyPrintEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
-
--- | Pretty prints a value according to the Crafting Interpreters book.
--- >>> printValue <$> evalExpr (Literal (Number (-0.0)))
--- Right "-0"
-printValue :: Value -> String
-printValue (VNumber n) =
-  let (integer :: Integer, decimal) = properFraction n
-   in if decimal == 0
-        then if isNegativeZero n then "-0" else show integer
-        else showFFloat Nothing n "" -- Otherwise, print as floating-point number
-printValue (VBool b) = (map toLower . show) b
-printValue (VString s) = s
-printValue VNil = "nil"
 
 -- | Evaluates an expression and returns a value or an error message.
 -- If the evaluation is successful, it returns a `Value`.

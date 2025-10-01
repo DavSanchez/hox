@@ -1,6 +1,7 @@
 module Program.Declaration (Declaration, declaration) where
 
 import Control.Applicative (Alternative ((<|>)))
+import Environment (Environment)
 import Expression (Expression, expression)
 import Parser (TokenParser, matchTokenType, satisfy)
 import Program.Statement (Statement, statement)

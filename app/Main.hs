@@ -6,7 +6,7 @@ import Data.Either (lefts, rights)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
-import Evaluation (Value, evalExpr, printValue)
+import Evaluation (Value, evalExpr)
 import Expression (Expression, expression, prettyPrint)
 import Parser (runParser)
 import Program (Program, interpret, parseProgram)
@@ -15,6 +15,7 @@ import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
 import Token (Token, prettyPrintToken)
+import Value (printValue)
 
 main :: IO ()
 main = do
@@ -74,4 +75,4 @@ runChapter08 :: [Token] -> Either InterpreterError Program
 runChapter08 = first Parse . parseProgram
 
 handleChap08Out :: Either InterpreterError Program -> IO ()
-handleChap08Out = either handleErr (interpret mempty)
+handleChap08Out = either handleErr interpret

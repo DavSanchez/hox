@@ -1,6 +1,7 @@
 module Evaluation (evalExpr, EvalError, printValue, prettyPrintEvalErr, Value) where
 
 import Data.Char (toLower)
+import Environment (Environment, get)
 import Expression
   ( BinaryOperator (..),
     Expression (..),
@@ -8,14 +9,7 @@ import Expression
     UnaryOperator (..),
   )
 import Numeric (showFFloat)
-
--- | Represents the values that can be produced by evaluating an expression.
-data Value
-  = VNumber Double
-  | VBool Bool
-  | VString String
-  | VNil
-  deriving stock (Show, Eq)
+import Value (Value (..))
 
 data EvalError = EvalError
   { errorLine :: Int,
@@ -44,15 +38,18 @@ printValue VNil = "nil"
 -- If there is an error,it returns an `EvalError` describing it.
 -- >>> evalExpr (Literal (Number (-0.0)))
 -- Right (VNumber (-0.0))
-evalExpr :: Expression -> Either EvalError Value
-evalExpr (Literal lit) = Right $ evalLiteral lit
-evalExpr (Grouping expr) = evalExpr expr
-evalExpr (UnaryOperation line op e) = evalExpr e >>= evalUnaryOp line op
-evalExpr (BinaryOperation line op e1 e2) = do
-  v1 <- evalExpr e1
-  v2 <- evalExpr e2
+evalExpr :: Environment -> Expression -> Either EvalError Value
+evalExpr _ (Literal lit) = Right $ evalLiteral lit
+evalExpr env (Grouping expr) = evalExpr env expr
+evalExpr env (UnaryOperation line op e) = evalExpr env e >>= evalUnaryOp line op
+evalExpr env (BinaryOperation line op e1 e2) = do
+  v1 <- evalExpr env e1
+  v2 <- evalExpr env e2
   evalBinaryOp line op v1 v2
-evalExpr (Variable line name) = Left $ EvalError line ("Undefined variable: " <> name)
+evalExpr env (Variable line name) =
+  case get name env of
+    Nothing -> Left $ EvalError line ("Undefined variable '" <> name <> "'.")
+    Just value -> Right value
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)

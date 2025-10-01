@@ -180,6 +180,7 @@ primary =
     <|> parseNumber
     <|> parseString
     <|> parseGrouping
+    <|> parseVarName
 
 parseFalse :: TokenParser Expression
 parseFalse = matchTokenType T.FALSE >> pure (Literal (Bool False))
@@ -202,6 +203,11 @@ parseString = do
 
 parseGrouping :: TokenParser Expression
 parseGrouping = Grouping <$> parens expression
+
+parseVarName :: TokenParser Expression
+parseVarName = do
+  Token {tokenType = T.IDENTIFIER name, line = lineNum} <- satisfy (T.isIdentifier . tokenType) "variable"
+  pure (Variable lineNum name)
 
 -- Helpers
 

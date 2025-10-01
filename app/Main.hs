@@ -9,7 +9,7 @@ import Error (InterpreterError (..), handleErr)
 import Evaluation (Value, evalExpr, printValue)
 import Expression (Expression, expression, prettyPrint)
 import Parser (runParser)
-import Program (Program, evaluate, parseProgram)
+import Program (Program, interpret, parseProgram)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -63,7 +63,7 @@ handleChap06Out = either handleErr (putStrLn . prettyPrint)
 
 -- Chapter 07 operations
 runChapter07 :: Expression -> Either InterpreterError Value
-runChapter07 = first Eval . evalExpr
+runChapter07 = first Eval . evalExpr mempty
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . printValue)
@@ -74,4 +74,4 @@ runChapter08 :: [Token] -> Either InterpreterError Program
 runChapter08 = first Parse . parseProgram
 
 handleChap08Out :: Either InterpreterError Program -> IO ()
-handleChap08Out = either handleErr evaluate
+handleChap08Out = either handleErr (interpret mempty)

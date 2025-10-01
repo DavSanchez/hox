@@ -1,30 +1,30 @@
-module Program (Program, parseProgram, evaluate) where
+module Program (Program, parseProgram, interpret) where
 
 import Data.Either (lefts, rights)
+import Environment (Environment)
 import Parser (ParseError, Parser (runParser))
-import Program.Statement (Statement, statement)
-import Program.Statement qualified as S
+import Program.Declaration (Declaration, declaration)
 import Token (Token (..))
 import Token qualified as T
 
-newtype Program = Program [Statement] deriving stock (Show)
+newtype Program = Program [Declaration] deriving stock (Show)
 
-evaluate :: Program -> IO ()
-evaluate (Program stmts) = mapM_ S.evaluate stmts
+interpret :: Environment -> Program -> IO ()
+interpret globalEnv (Program stmts) = pure () -- mapM_ S.evaluate stmts
 
 parseProgram :: [Token] -> Either [ParseError] Program
 parseProgram tokens =
   let results = parseProgram' tokens
       errors = lefts results -- Collection of errors
-      stmts = rights results -- Parsed program
+      declarations = rights results -- Parsed program
    in if null errors
-        then Right (Program stmts)
+        then Right (Program declarations)
         else Left errors
 
-parseProgram' :: [Token] -> [Either ParseError Statement]
+parseProgram' :: [Token] -> [Either ParseError Declaration]
 parseProgram' [] = [] -- Should not happen, as we always expect at least EOF
 parseProgram' [Token {tokenType = T.EOF}] = []
-parseProgram' tokens = case runParser statement tokens of
+parseProgram' tokens = case runParser declaration tokens of
   Left err -> Left err : parseProgram' (synchronize tokens)
   Right (stmt, rest) -> Right stmt : parseProgram' rest
 

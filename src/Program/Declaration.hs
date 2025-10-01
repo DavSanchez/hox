@@ -1,4 +1,4 @@
-module Program.Declaration (declaration) where
+module Program.Declaration (Declaration, declaration) where
 
 import Control.Applicative (Alternative ((<|>)))
 import Expression (Expression, expression)
@@ -19,7 +19,7 @@ declaration :: TokenParser Declaration
 declaration = VarDecl <$> variable <|> Statement <$> statement
 
 variable :: TokenParser Variable
-variable = matchTokenType T.VAR *> (withInitializer <|> noInitializer) <* matchTokenType T.SEMICOLON
+variable = matchTokenType T.VAR *> (withInitializer <|> noInitializer) <* varDeclEnd
 
 withInitializer :: TokenParser Variable
 withInitializer = Variable <$> variableName <*> (Just <$> (matchTokenType T.EQUAL *> expression))
@@ -29,5 +29,8 @@ noInitializer = Variable <$> variableName <*> pure Nothing
 
 variableName :: TokenParser String
 variableName = do
-  Token {tokenType = T.IDENTIFIER name} <- satisfy (T.isIdentifier . tokenType) "Expect identifier."
+  Token {tokenType = T.IDENTIFIER name} <- satisfy (T.isIdentifier . tokenType) "variable name"
   pure name
+
+varDeclEnd :: TokenParser Token
+varDeclEnd = satisfy (\t -> tokenType t == T.SEMICOLON) "';' after variable declaration"

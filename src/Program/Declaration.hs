@@ -1,4 +1,4 @@
-module Program.Declaration (Declaration, declaration) where
+module Program.Declaration (Declaration (..), Variable (..), declaration) where
 
 import Control.Applicative (Alternative ((<|>)))
 import Environment (Environment)

@@ -32,7 +32,7 @@ where
 import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
-import Parser (TokenParser, matchTokenType, satisfy)
+import Parser (TokenParser, matchTokenType, peekToken, satisfy)
 import Token (Token (Token, tokenType), isNumber, isString)
 import Token qualified as T
 
@@ -120,15 +120,19 @@ data BinaryOperator
 -- >>> runParser expression tokenList
 -- Right (BinaryOperation 1 Plus (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (BinaryOperation 1 Plus (Literal (Number 3.0)) (Literal (Number 4.0)))),[Token {tokenType = EOF, line = 1}])
 expression :: TokenParser Expression
-expression = assignment <|> equality <|> fail "Expect expression."
+expression = assignment
 
 assignment :: TokenParser Expression
 assignment = do
-  expr <- equality
-  void $ matchTokenType T.EQUAL
-  case expr of
-    VariableExpr lineNum name -> VariableAssignment lineNum name <$> expression
-    _ -> fail "Invalid assignment target."
+  expr <- equality <|> fail "Expect expression."
+  t <- peekToken
+  if tokenType t /= T.EQUAL
+    then pure expr
+    else case expr of
+      VariableExpr lineNum name -> do
+        void $ matchTokenType T.EQUAL
+        VariableAssignment lineNum name <$> assignment
+      _ -> fail "Invalid assignment target."
 
 -- Equality
 equality :: TokenParser Expression

@@ -68,11 +68,11 @@ noInitializer = Variable <$> variableName <*> pure Nothing
 
 variableName :: TokenParser String
 variableName = do
-  Token {tokenType = T.IDENTIFIER name} <- satisfy (T.isIdentifier . tokenType) "variable name"
+  Token {tokenType = T.IDENTIFIER name} <- satisfy (T.isIdentifier . tokenType) "Expect variable name"
   pure name
 
 varDeclEnd :: TokenParser Token
-varDeclEnd = satisfy (\t -> tokenType t == T.SEMICOLON) "';' after variable declaration"
+varDeclEnd = satisfy (\t -> tokenType t == T.SEMICOLON) "Expect ';' after variable declaration"
 
 statement :: TokenParser Statement
 statement = do

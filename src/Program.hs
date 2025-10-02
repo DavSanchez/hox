@@ -1,6 +1,7 @@
 module Program (Program, parseProgram, interpret) where
 
-import Control.Monad.State (StateT)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.State (MonadState, StateT)
 import Data.Either (lefts, rights)
 import Environment (Environment)
 import Parser (ParseError, Parser (runParser))
@@ -8,11 +9,14 @@ import Program.Declaration (Declaration, declaration)
 import Token (Token (..))
 import Token qualified as T
 
-type Interpreter = StateT Environment IO
+newtype Interpreter m a = Interpreter
+  { runInterpreter :: StateT Environment m a
+  }
+  deriving newtype (Functor, Applicative, Monad, MonadState Environment, MonadIO)
 
 newtype Program = Program [Declaration] deriving stock (Show)
 
-interpret :: Program -> Interpreter ()
+interpret :: (MonadIO m) => Program -> m ()
 interpret (Program stmts) = pure () -- mapM_ S.evaluate stmts
 
 parseProgram :: [Token] -> Either [ParseError] Program

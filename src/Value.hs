@@ -12,8 +12,10 @@ data Value
   deriving stock (Show, Eq)
 
 -- | Pretty prints a value according to the Crafting Interpreters book.
--- >>> printValue <$> evalExpr (Literal (Number (-0.0)))
--- Right "-0"
+-- >>> printValue (VNumber (-0.0))
+-- "-0"
+-- >>> printValue (VNumber 42.5)
+-- "42.5"
 printValue :: Value -> String
 printValue (VNumber n) =
   let (integer :: Integer, decimal) = properFraction n

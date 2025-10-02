@@ -21,7 +21,7 @@ prettyPrintEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
 -- | Evaluates an expression and returns a value or an error message.
 -- If the evaluation is successful, it returns a `Value`.
 -- If there is an error,it returns an `EvalError` describing it.
--- >>> evalExpr (Literal (Number (-0.0)))
+-- >>> evalExpr mempty (Literal (Number (-0.0)))
 -- Right (VNumber (-0.0))
 evalExpr :: Environment -> Expression -> Either EvalError Value
 evalExpr _ (Literal lit) = Right $ evalLiteral lit

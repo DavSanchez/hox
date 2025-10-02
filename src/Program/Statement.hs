@@ -1,8 +1,5 @@
-module Program.Statement (statement, Statement) where
+module Program.Statement (statement, Statement (..)) where
 
-import Data.Bifunctor (Bifunctor (first))
-import Error (InterpreterError (Eval), handleErr)
-import Evaluation (evalExpr)
 import Expression (Expression, expression)
 import Parser (TokenParser, matchTokenType, peekToken)
 import Token (Token (..))
@@ -12,10 +9,6 @@ data Statement
   = ExprStmt Expression
   | PrintStmt Expression
   deriving stock (Show, Eq)
-
--- evaluate :: Statement -> IO ()
--- evaluate (ExprStmt expr) = either handleErr (const $ pure ()) $ first Eval (evalExpr expr)
--- evaluate (PrintStmt expr) = either handleErr (putStrLn . printValue) $ first Eval (evalExpr expr)
 
 statement :: TokenParser Statement
 statement = do

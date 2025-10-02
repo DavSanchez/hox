@@ -1,35 +1,12 @@
-module Program (Program, parseProgram, interpret) where
+module Program (Program (..), parseProgram) where
 
-import Control.Monad.Except (ExceptT, MonadError (throwError))
-import Control.Monad.IO.Class (MonadIO)
-import Control.Monad.State (MonadState, StateT, get, modify)
 import Data.Either (lefts, rights)
-import Environment (Environment, define)
-import Error (InterpreterError (Eval))
-import Evaluation (evalExpr)
 import Parser (ParseError, Parser (runParser))
-import Program.Declaration (Declaration (VarDecl), Variable (..), declaration)
+import Program.Declaration (Declaration, declaration)
 import Token (Token (..))
 import Token qualified as T
-import Value (Value (..))
-
-newtype Interpreter m a = Interpreter
-  { runInterpreter :: ExceptT InterpreterError (StateT Environment m) a
-  }
-  deriving newtype (Functor, Applicative, Monad, MonadState Environment, MonadIO, MonadError InterpreterError)
 
 newtype Program = Program [Declaration] deriving stock (Show)
-
-interpret :: (MonadIO m, MonadState Environment m, MonadError InterpreterError m) => Program -> m ()
-interpret (Program decls) = mapM_ interpretDecl decls
-
-interpretDecl :: (MonadIO m, MonadState Environment m, MonadError InterpreterError m) => Declaration -> m ()
-interpretDecl (VarDecl (Variable {varName, varInitializer})) = do
-  env <- get
-  value <- case varInitializer of
-    Just expr -> either (throwError . Eval) pure (evalExpr env expr)
-    Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
-  modify (define varName value)
 
 parseProgram :: [Token] -> Either [ParseError] Program
 parseProgram tokens =

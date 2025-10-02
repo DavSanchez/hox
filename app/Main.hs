@@ -8,8 +8,9 @@ import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
 import Evaluation (Value, evalExpr)
 import Expression (Expression, expression, prettyPrint)
+import Interpreter (Interpreter, interpreterFailure, programInterpreter, runInterpreter)
 import Parser (runParser)
-import Program (Program, interpret, parseProgram)
+import Program (parseProgram)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
@@ -25,7 +26,7 @@ main = do
     ["--chap04_scanning", script] -> readFile' script >>= handleChap04Out . runChapter04
     ["--chap06_parsing", script] -> readFile' script >>= handleChap06Out . (runChapter04 >=> runChapter06)
     ["--chap07_evaluating", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
-    ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . (runChapter04 >=> runChapter08)
+    ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . runChapter08 . runChapter04
     [script] -> readFile' script >>= currentImpl
     _ -> do
       hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"
@@ -41,7 +42,7 @@ runPrompt = do
     else getLine >>= currentImpl >> runPrompt
 
 currentImpl :: String -> IO ()
-currentImpl = handleChap08Out . (runChapter04 >=> runChapter08)
+currentImpl = handleChap08Out . runChapter08 . runChapter04
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
@@ -71,8 +72,17 @@ handleChap07Out = either handleErr (putStrLn . printValue)
 
 -- Chapter 08 operations
 -- The previous chapters where "but a hack". Now we have the real deal!
-runChapter08 :: [Token] -> Either InterpreterError Program
-runChapter08 = first Parse . parseProgram
+runChapter08 :: Either InterpreterError [Token] -> Interpreter ()
+runChapter08 (Left err) = interpreterFailure err
+runChapter08 (Right tokens) = do
+  case parseProgram tokens of
+    Left errs -> interpreterFailure (Parse errs)
+    Right prog -> programInterpreter prog
 
-handleChap08Out :: Either InterpreterError Program -> IO ()
-handleChap08Out = either handleErr interpret
+-- handleChap08Out :: Either InterpreterError Program -> IO ()
+handleChap08Out :: Interpreter a -> IO ()
+handleChap08Out interpreter = do
+  result <- runInterpreter interpreter
+  case result of
+    Left err -> handleErr err
+    Right _ -> pure ()

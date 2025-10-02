@@ -114,6 +114,7 @@ library
     Error
     Evaluation
     Expression
+    Interpreter
     Parser
     Program
     Scanner

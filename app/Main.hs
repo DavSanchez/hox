@@ -1,14 +1,14 @@
 module Main (main) where
 
 import Control.Monad ((>=>))
-import Data.Bifunctor (Bifunctor (first), bimap)
+import Data.Bifunctor (bimap)
 import Data.Either (lefts, rights)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
-import Evaluation (Value, evalExpr)
+import Evaluation (Value)
 import Expression (Expression, expression, prettyPrint)
-import Interpreter (Interpreter, interpreterFailure, programInterpreter, runInterpreter)
+import Interpreter (Interpreter, evaluateExpr, interpreterFailure, programInterpreter, runInterpreter, runNoIOInterpreter)
 import Parser (runParser)
 import Program (parseProgram)
 import Scanner (scanTokens)
@@ -65,7 +65,7 @@ handleChap06Out = either handleErr (putStrLn . prettyPrint)
 
 -- Chapter 07 operations
 runChapter07 :: Expression -> Either InterpreterError Value
-runChapter07 = first Eval . evalExpr mempty
+runChapter07 = runNoIOInterpreter . evaluateExpr
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . printValue)

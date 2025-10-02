@@ -1,9 +1,7 @@
-module Evaluation (evalExpr, EvalError, prettyPrintEvalErr, Value) where
+module Evaluation (evalLiteral, evalUnaryOp, evalBinaryOp, EvalError (..), prettyPrintEvalErr, Value) where
 
-import Environment (Environment, get)
 import Expression
   ( BinaryOperator (..),
-    Expression (..),
     Literal (..),
     UnaryOperator (..),
   )
@@ -17,24 +15,6 @@ data EvalError = EvalError
 
 prettyPrintEvalErr :: EvalError -> String
 prettyPrintEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
-
--- | Evaluates an expression and returns a value or an error message.
--- If the evaluation is successful, it returns a `Value`.
--- If there is an error,it returns an `EvalError` describing it.
--- >>> evalExpr mempty (Literal (Number (-0.0)))
--- Right (VNumber (-0.0))
-evalExpr :: Environment -> Expression -> Either EvalError Value
-evalExpr _ (Literal lit) = Right $ evalLiteral lit
-evalExpr env (Grouping expr) = evalExpr env expr
-evalExpr env (UnaryOperation line op e) = evalExpr env e >>= evalUnaryOp line op
-evalExpr env (BinaryOperation line op e1 e2) = do
-  v1 <- evalExpr env e1
-  v2 <- evalExpr env e2
-  evalBinaryOp line op v1 v2
-evalExpr env (Variable line name) =
-  case get name env of
-    Nothing -> Left $ EvalError line ("Undefined variable '" <> name <> "'.")
-    Just value -> Right value
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)

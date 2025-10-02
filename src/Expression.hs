@@ -61,11 +61,18 @@ data Expression
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping Expression
   | -- | A variable (identifier).
-    Variable
+    VariableExpr
       -- | The line number where the variable appears.
       Int
       -- | The name of the variable.
       String
+  | VariableAssignment
+      -- | The line number where the assignment happens.
+      Int
+      -- | The name of the variable being assigned to.
+      String
+      -- | The expression whose value is being assigned to the variable.
+      Expression
   deriving stock (Show, Eq)
 
 -- | Represents a literal value in the AST.
@@ -113,7 +120,15 @@ data BinaryOperator
 -- >>> runParser expression tokenList
 -- Right (BinaryOperation 1 Plus (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (BinaryOperation 1 Plus (Literal (Number 3.0)) (Literal (Number 4.0)))),[Token {tokenType = EOF, line = 1}])
 expression :: TokenParser Expression
-expression = equality <|> fail "Expect expression."
+expression = assignment <|> equality <|> fail "Expect expression."
+
+assignment :: TokenParser Expression
+assignment = do
+  expr <- equality
+  void $ matchTokenType T.EQUAL
+  case expr of
+    VariableExpr lineNum name -> VariableAssignment lineNum name <$> expression
+    _ -> fail "Invalid assignment target."
 
 -- Equality
 equality :: TokenParser Expression
@@ -207,7 +222,7 @@ parseGrouping = Grouping <$> parens expression
 parseVarName :: TokenParser Expression
 parseVarName = do
   Token {tokenType = T.IDENTIFIER name, line = lineNum} <- satisfy (T.isIdentifier . tokenType) "variable"
-  pure (Variable lineNum name)
+  pure (VariableExpr lineNum name)
 
 -- Helpers
 
@@ -245,7 +260,8 @@ prettyPrint (Literal lit) = prettyPrintLit lit
 prettyPrint (UnaryOperation _ op expr) = "(" <> prettyPrintUnOp op <> " " <> prettyPrint expr <> ")"
 prettyPrint (BinaryOperation _ op e1 e2) = "(" <> prettyPrintBinOp op <> " " <> prettyPrint e1 <> " " <> prettyPrint e2 <> ")"
 prettyPrint (Grouping expr) = "(group " <> prettyPrint expr <> ")"
-prettyPrint (Variable _ name) = name
+prettyPrint (VariableExpr _ name) = name
+prettyPrint (VariableAssignment _ name expr) = "(= " <> name <> " " <> prettyPrint expr <> ")"
 
 prettyPrintBinOp :: BinaryOperator -> String
 prettyPrintBinOp EqualEqual = "=="

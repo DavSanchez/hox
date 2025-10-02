@@ -55,20 +55,24 @@ synchronize s = dropWhile (not . isStmtStart) (drop 1 s)
     isStmtStart _ = False
 
 declaration :: TokenParser Declaration
-declaration = VarDecl <$> variable <|> Statement <$> statement
+declaration = do
+  t <- peekToken
+  case tokenType t of
+    T.VAR -> VarDecl <$> variable
+    _ -> Statement <$> statement
 
 variable :: TokenParser Variable
-variable = matchTokenType T.VAR *> (withInitializer <|> noInitializer) <* varDeclEnd
+variable = matchTokenType T.VAR *> (Variable <$> variableName <*> (withInitializer <|> noInitializer)) <* varDeclEnd
 
-withInitializer :: TokenParser Variable
-withInitializer = Variable <$> variableName <*> (Just <$> (matchTokenType T.EQUAL *> expression))
+withInitializer :: TokenParser (Maybe Expression)
+withInitializer = Just <$> (matchTokenType T.EQUAL *> expression)
 
-noInitializer :: TokenParser Variable
-noInitializer = Variable <$> variableName <*> pure Nothing
+noInitializer :: TokenParser (Maybe Expression)
+noInitializer = pure Nothing
 
 variableName :: TokenParser String
 variableName = do
-  Token {tokenType = T.IDENTIFIER name} <- satisfy (T.isIdentifier . tokenType) "Expect variable name"
+  Token {tokenType = T.IDENTIFIER name} <- satisfy (T.isIdentifier . tokenType) "Expect variable name."
   pure name
 
 varDeclEnd :: TokenParser Token

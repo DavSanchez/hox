@@ -3,15 +3,13 @@ module Interpreter (Interpreter, runInterpreter, programInterpreter, interpreter
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State (MonadState (get), StateT, evalStateT, modify)
+import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Functor (void)
 import Environment qualified as Env
 import Error (InterpreterError (Eval))
 import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
 import Expression (Expression (..))
-import Program (Program (..))
-import Program.Declaration
-import Program.Statement (Statement (..))
+import Program (Declaration (..), Program (..), Statement (..), Variable (..))
 import Value (Value (VNil), printValue)
 
 type Interpreter = InterpreterT IO
@@ -80,6 +78,14 @@ interpretStatement ::
   Statement -> m ()
 interpretStatement (PrintStmt expr) = interpretPrint expr
 interpretStatement (ExprStmt expr) = void $ evaluateExpr expr
+-- How does this receive a copy of the environment that does not clash with the parent one?
+interpretStatement (BlockStmt decls) = do
+  -- Get parent environment
+  parentEnv <- get
+  -- Run the actions (TODO: are blocks expressions that resolve to a value?)
+  mapM_ interpretDecl decls
+  -- Restore the environment
+  put parentEnv
 
 interpretPrint ::
   ( MonadState Env.Environment m,

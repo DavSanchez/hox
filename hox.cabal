@@ -123,8 +123,6 @@ library
 
   -- Modules included in this library but not exported.
   other-modules:
-    Program.Declaration
-    Program.Statement
     Scanner.Error
     Scanner.Internal
     Scanner.Naive

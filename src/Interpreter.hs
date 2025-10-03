@@ -1,9 +1,8 @@
 module Interpreter (Interpreter, runInterpreter, programInterpreter, interpreterFailure, runNoIOInterpreter, evaluateExpr) where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
-import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
+import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
 import Data.Functor (void)
 import Environment qualified as Env
 import Error (InterpreterError (Eval))
@@ -28,9 +27,25 @@ newtype InterpreterT m a = Interpreter
       Applicative,
       Monad,
       MonadState Env.Environment,
-      MonadIO,
-      MonadError InterpreterError
+      MonadError InterpreterError,
+      MonadPrinter
     )
+
+class (Monad m) => MonadPrinter m where
+  printLn :: String -> m ()
+
+-- Real world
+instance MonadPrinter IO where
+  printLn :: String -> IO ()
+  printLn = putStrLn
+
+instance (MonadPrinter m) => MonadPrinter (StateT s m) where
+  printLn :: String -> StateT s m ()
+  printLn = lift . printLn
+
+instance (MonadPrinter m) => MonadPrinter (ExceptT e m) where
+  printLn :: String -> ExceptT e m ()
+  printLn = lift . printLn
 
 -- | A version of the interpreter that runs without any IO capabilities, useful for testing.
 -- Used for evaluating expressions on previous chapters.
@@ -43,17 +58,17 @@ runNoIOInterpreter :: NoIOInterpreter a -> Either InterpreterError a
 runNoIOInterpreter interpreter = runIdentity $ evalStateT (runExceptT (runInterpreterT interpreter)) mempty
 
 programInterpreter ::
-  ( MonadIO m,
-    MonadState Env.Environment m,
-    MonadError InterpreterError m
+  ( MonadState Env.Environment m,
+    MonadError InterpreterError m,
+    MonadPrinter m
   ) =>
   Program -> m ()
 programInterpreter (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadIO m,
-    MonadState Env.Environment m,
-    MonadError InterpreterError m
+  ( MonadState Env.Environment m,
+    MonadError InterpreterError m,
+    MonadPrinter m
   ) =>
   Declaration -> m ()
 interpretDecl (VarDecl var) = declareVariable var
@@ -73,7 +88,7 @@ declareVariable (Variable {varName, varInitializer}) = do
 interpretStatement ::
   ( MonadState Env.Environment m,
     MonadError InterpreterError m,
-    MonadIO m
+    MonadPrinter m
   ) =>
   Statement -> m ()
 interpretStatement (PrintStmt expr) = interpretPrint expr
@@ -90,10 +105,10 @@ interpretStatement (BlockStmt decls) = do
 interpretPrint ::
   ( MonadState Env.Environment m,
     MonadError InterpreterError m,
-    MonadIO m
+    MonadPrinter m
   ) =>
   Expression -> m ()
-interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . printValue
+interpretPrint expr = evaluateExpr expr >>= printLn . printValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::

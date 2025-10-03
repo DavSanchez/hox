@@ -1,68 +1,65 @@
-module Evaluation (evalExpr, printValue, Value) where
+module Evaluation
+  ( evalLiteral,
+    evalUnaryOp,
+    evalBinaryOp,
+    EvalError (..),
+    prettyPrintEvalErr,
+    Value,
+  )
+where
 
-import Data.Char (toLower)
-import Expression.AST
+import Expression
   ( BinaryOperator (..),
-    Expression (..),
     Literal (..),
     UnaryOperator (..),
   )
-import GHC.Float (int2Double)
+import Value (Value (..))
 
--- | Represents the values that can be produced by evaluating an expression.
-data Value
-  = VNumber Double
-  | VBool Bool
-  | VString String
-  | VNil
+data EvalError = EvalError
+  { errorLine :: Int,
+    errorMessage :: String
+  }
   deriving stock (Show, Eq)
 
--- | Pretty prints a value according to the Crafting Interpreters book.
-printValue :: Value -> String
-printValue (VNumber n)
-  | n == int2Double (round n) = show (round n :: Int)
-  | otherwise = show n
-printValue (VBool b) = (map toLower . show) b
-printValue (VString s) = s
-printValue VNil = "nil"
+prettyPrintEvalErr :: EvalError -> String
+prettyPrintEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
 
--- | Evaluates an expression and returns a value or an error message.
--- If the evaluation is successful, it returns a `Value`.
--- If there is an error,it returns a `String` describing it. (TODO: Get a better error type)
-evalExpr :: Expression -> Either String Value
-evalExpr (Literal lit) = Right $ evalLiteral lit
-evalExpr (Grouping expr) = evalExpr expr
-evalExpr (Unary op e) = evalExpr e >>= evalUnaryOp op
-evalExpr (Binary op e1 e2) = do
-  v1 <- evalExpr e1
-  v2 <- evalExpr e2
-  evalBinaryOp op v1 v2
+evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
+evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)
+evalUnaryOp line UMinus _ = Left $ EvalError line "Operand must be a number."
+evalUnaryOp _ Bang v = (Right . VBool . not . isTruthy) v
 
-evalUnaryOp :: UnaryOperator -> Value -> Either String Value
-evalUnaryOp UMinus (VNumber n) = Right $ VNumber (negate n)
-evalUnaryOp Bang v = (Right . VBool . not . isTruthy) v
-evalUnaryOp op v = Left $ "Invalid unary operation: " <> show op <> " with " <> show v
-
-evalBinaryOp :: BinaryOperator -> Value -> Value -> Either String Value
--- Some numeric operations
-evalBinaryOp Greater (VNumber n1) (VNumber n2) = Right $ VBool (n1 > n2)
-evalBinaryOp GreaterEqual (VNumber n1) (VNumber n2) = Right $ VBool (n1 >= n2)
-evalBinaryOp Less (VNumber n1) (VNumber n2) = Right $ VBool (n1 < n2)
-evalBinaryOp LessEqual (VNumber n1) (VNumber n2) = Right $ VBool (n1 <= n2)
-evalBinaryOp BMinus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 - n2)
-evalBinaryOp Plus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 + n2)
--- Concatenation for strings
-evalBinaryOp Plus (VString s1) (VString s2) = Right $ VString (s1 ++ s2)
--- More numerics: Division and multiplication, with error handling for division by zero
-evalBinaryOp Slash (VNumber n1) (VNumber n2)
-  | n2 == 0 = Left "Division by zero" -- Handle or just fail?
+evalBinaryOp :: Int -> BinaryOperator -> Value -> Value -> Either EvalError Value
+-- Greater than
+evalBinaryOp _ Greater (VNumber n1) (VNumber n2) = Right $ VBool (n1 > n2)
+evalBinaryOp line Greater _ _ = Left $ EvalError line "Operands must be numbers."
+-- Greater than or equal to
+evalBinaryOp _ GreaterEqual (VNumber n1) (VNumber n2) = Right $ VBool (n1 >= n2)
+evalBinaryOp line GreaterEqual _ _ = Left $ EvalError line "Operands must be numbers."
+-- Less than
+evalBinaryOp _ Less (VNumber n1) (VNumber n2) = Right $ VBool (n1 < n2)
+evalBinaryOp line Less _ _ = Left $ EvalError line "Operands must be numbers."
+-- Less than or equal to
+evalBinaryOp _ LessEqual (VNumber n1) (VNumber n2) = Right $ VBool (n1 <= n2)
+evalBinaryOp line LessEqual _ _ = Left $ EvalError line "Operands must be numbers."
+-- Subtraction only works for two numbers
+evalBinaryOp _ BMinus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 - n2)
+evalBinaryOp line BMinus _ _ = Left $ EvalError line "Operands must be numbers."
+-- Summation only works for two numbers (sum) or two strings (concatenation)
+evalBinaryOp _ Plus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 + n2)
+evalBinaryOp _ Plus (VString s1) (VString s2) = Right $ VString (s1 ++ s2)
+evalBinaryOp line Plus _ _ = Left $ EvalError line "Operands must be two numbers or two strings."
+-- Division and multiplication, with error handling for division by zero
+evalBinaryOp line Slash (VNumber n1) (VNumber n2)
+  | n2 == 0 = Left $ EvalError line "Division by zero"
   | otherwise = Right $ VNumber (n1 / n2)
-evalBinaryOp Star (VNumber n1) (VNumber n2) = Right $ VNumber (n1 * n2)
+evalBinaryOp line Slash _ _ = Left $ EvalError line "Operands must be numbers."
+-- Multiplication
+evalBinaryOp _ Star (VNumber n1) (VNumber n2) = Right $ VNumber (n1 * n2)
+evalBinaryOp line Star _ _ = Left $ EvalError line "Operands must be numbers."
 -- Equality and inequality checks
-evalBinaryOp EqualEqual v1 v2 = Right $ VBool (v1 == v2)
-evalBinaryOp BangEqual v1 v2 = Right $ VBool (v1 /= v2)
--- Unsupported operations, or mismatched types
-evalBinaryOp op v1 v2 = Left $ "Invalid binary operation: " <> show op <> " with " <> show v1 <> " and " <> show v2
+evalBinaryOp _ EqualEqual v1 v2 = Right $ VBool (v1 == v2)
+evalBinaryOp _ BangEqual v1 v2 = Right $ VBool (v1 /= v2)
 
 evalLiteral :: Literal -> Value
 evalLiteral (Number n) = VNumber n

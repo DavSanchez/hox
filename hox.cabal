@@ -19,7 +19,7 @@ name: hox
 --       +-+------- breaking API changes
 --       | | +----- non-breaking API additions
 --       | | | +--- code changes with no API change
-version: 0.1.7.0
+version: 0.1.8.0
 -- A short (one-line) description of the package.
 synopsis:
   An implementation of a tree-walk interpreter for Lox, the language explored in the book Crafting Interpreters by Robert Nystrom
@@ -110,16 +110,19 @@ library
   import: common-options
   -- Modules exported by the library.
   exposed-modules:
+    Environment
+    Error
     Evaluation
     Expression
+    Interpreter
+    Parser
+    Program
     Scanner
     Token
+    Value
 
   -- Modules included in this library but not exported.
   other-modules:
-    Expression.AST
-    Expression.Parser
-    Expression.PrettyPrinter
     Scanner.Error
     Scanner.Internal
     Scanner.Naive
@@ -128,6 +131,9 @@ library
   -- other-extensions:
   -- Other library packages from which modules are imported.
   build-depends:
+    containers,
+    mtl,
+
   -- Directories containing source files.
   hs-source-dirs: src
 

@@ -1,11 +1,11 @@
-module Scanner.Error (SyntaxError (..), prettyPrintErr) where
+module Scanner.Error (Error (..), prettyPrintErr) where
 
-data SyntaxError = SyntaxError
+data Error = Error
   { errorMessage :: String,
     errorLine :: Int,
     errorWhere :: String
   }
   deriving stock (Show, Eq)
 
-prettyPrintErr :: SyntaxError -> String
-prettyPrintErr (SyntaxError msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg
+prettyPrintErr :: Error -> String
+prettyPrintErr (Error msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg

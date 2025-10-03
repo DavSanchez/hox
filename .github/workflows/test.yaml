@@ -1,4 +1,4 @@
-name: ❄ Package checks
+name: CI
 run-name: ${{ github.actor }} is testing his implementation of Lox 🚀
 
 on: [push]
@@ -6,10 +6,10 @@ on: [push]
 jobs:
   nix-checks:
     runs-on: ${{ matrix.os }}
+    name: ❄️ Nix flake check (${{ matrix.os }})
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-    name: Nix flake check
     steps:
       - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
@@ -28,7 +28,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-    name: Basic checks and tests
+    name: 📜 Doctests (${{ matrix.os }})
     steps:
       - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31
@@ -47,8 +47,8 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-        test: ["chapter04", "chapter06", "chapter07"]
-    name: ${{ matrix.test }} tests from Crafting Interpreters
+        test: ["chapter04", "chapter06", "chapter07", "chapter08"]
+    name: ⚙️ Crafting Interpreters tests (${{ matrix.test }}, ${{ matrix.os }})
     steps:
       - uses: actions/checkout@v5
       - uses: cachix/install-nix-action@v31

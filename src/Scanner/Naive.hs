@@ -57,7 +57,7 @@ naiveScanTokens ('"' : ss) l tt =
   let stringContent = takeWhile (/= '"') ss -- Take characters until the next quote
       newLinesInString = length $ filter (== '\n') stringContent
    in if stringContent == ss -- If there are no closing quotes, the calculated remainder is the same as the remaining input string
-        then syntaxError "Unterminated string" l "" :| tt
+        then syntaxError "Unterminated string." l "" :| tt
         else
           naiveScanTokens
             (drop (length stringContent + 1 {- For the closing quote -}) ss)

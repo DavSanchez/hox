@@ -1,6 +1,7 @@
 # `hox`: A tree-walk Lox interpreter in Haskell
 
-[![❄ Package checks](https://github.com/DavSanchez/hox/actions/workflows/test.yaml/badge.svg)](https://github.com/DavSanchez/hox/actions/workflows/test.yaml)
+[![❄️ Package checks](https://github.com/DavSanchez/hox/actions/workflows/test.yaml/badge.svg)](https://github.com/DavSanchez/hox/actions/workflows/test.yaml)
+[![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 
 - [x] Chapter 04: Scanning
 - [x] Chapter 05: Representing Code

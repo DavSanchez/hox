@@ -1,4 +1,9 @@
-module Scanner (scanTokens, prettyPrintErr, Error (..)) where
+module Scanner
+  ( scanTokens,
+    prettyPrintErr,
+    Error (..),
+  )
+where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE

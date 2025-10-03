@@ -1,4 +1,13 @@
-module Parser (TokenParser, Parser (Parser, runParser), ParseError (..), prettyPrintParseErr, matchTokenType, satisfy, peekToken) where
+module Parser
+  ( TokenParser,
+    Parser (Parser, runParser),
+    ParseError (..),
+    prettyPrintParseErr,
+    matchTokenType,
+    satisfy,
+    peekToken,
+  )
+where
 
 import Control.Applicative (Alternative (..))
 import Scanner.Error (Error (..), prettyPrintErr)

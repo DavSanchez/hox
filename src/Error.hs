@@ -1,4 +1,8 @@
-module Error (InterpreterError (..), handleErr) where
+module Error
+  ( InterpreterError (..),
+    handleErr,
+  )
+where
 
 import Evaluation (EvalError, prettyPrintEvalErr)
 import GHC.IO.Handle.Text (hPutStrLn)

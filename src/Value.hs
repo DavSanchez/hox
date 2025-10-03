@@ -1,4 +1,8 @@
-module Value (Value (..), printValue) where
+module Value
+  ( Value (..),
+    printValue,
+  )
+where
 
 import Data.Char (toLower)
 import Numeric (showFFloat)

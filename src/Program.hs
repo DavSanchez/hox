@@ -1,4 +1,11 @@
-module Program (Program (..), parseProgram, Declaration (..), Statement (..), Variable (..)) where
+module Program
+  ( Program (..),
+    parseProgram,
+    Declaration (..),
+    Statement (..),
+    Variable (..),
+  )
+where
 
 import Control.Applicative (Alternative ((<|>)))
 import Data.Either (lefts, rights)

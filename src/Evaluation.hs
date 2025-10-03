@@ -1,4 +1,12 @@
-module Evaluation (evalLiteral, evalUnaryOp, evalBinaryOp, EvalError (..), prettyPrintEvalErr, Value) where
+module Evaluation
+  ( evalLiteral,
+    evalUnaryOp,
+    evalBinaryOp,
+    EvalError (..),
+    prettyPrintEvalErr,
+    Value,
+  )
+where
 
 import Expression
   ( BinaryOperator (..),

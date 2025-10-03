@@ -1,4 +1,12 @@
-module Interpreter (Interpreter, runInterpreter, programInterpreter, interpreterFailure, runNoIOInterpreter, evaluateExpr) where
+module Interpreter
+  ( Interpreter,
+    runInterpreter,
+    programInterpreter,
+    interpreterFailure,
+    runNoIOInterpreter,
+    evaluateExpr,
+  )
+where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))

@@ -1,4 +1,9 @@
-module Environment (Environment, define, get) where
+module Environment
+  ( Environment,
+    define,
+    get,
+  )
+where
 
 import Data.Map.Strict qualified as M
 import Value (Value)

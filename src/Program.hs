@@ -35,6 +35,7 @@ data Statement
       -- | else
       (Maybe Statement)
   | PrintStmt Expression
+  | WhileStmt Expression Statement
   | BlockStmt [Declaration]
   deriving stock (Show, Eq)
 
@@ -99,6 +100,7 @@ statement = do
   case tokenType t of
     T.IF -> parseIfStmt
     T.PRINT -> parsePrintStmt
+    T.WHILE -> parseWhileStmt
     T.LEFT_BRACE -> parseBlockStmt
     _ -> parseExprStmt
 
@@ -118,6 +120,13 @@ parseIfStmt = do
 
 parsePrintStmt :: TokenParser Statement
 parsePrintStmt = matchTokenType T.PRINT *> (PrintStmt <$> expression) <* matchTokenType T.SEMICOLON
+
+parseWhileStmt :: TokenParser Statement
+parseWhileStmt = do
+  void $ matchTokenType T.LEFT_PAREN <|> fail "Expect '(' after 'while'."
+  expr <- expression
+  void $ matchTokenType T.RIGHT_PAREN <|> fail "Expect ')' after condition."
+  WhileStmt expr <$> statement
 
 parseBlockStmt :: TokenParser Statement
 parseBlockStmt = matchTokenType T.LEFT_BRACE *> (BlockStmt <$> parseScopedProgram)

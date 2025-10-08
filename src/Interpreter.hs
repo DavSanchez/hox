@@ -8,6 +8,7 @@ module Interpreter
   )
 where
 
+import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
@@ -114,6 +115,9 @@ interpretStatement (BlockStmt decls) = do
   mapM_ interpretDecl decls
   -- Restore the environment
   put parentEnv
+interpretStatement while@(WhileStmt expr stmt) =
+  evaluateExpr expr
+    >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
 
 interpretPrint ::
   ( MonadState Env.Environment m,

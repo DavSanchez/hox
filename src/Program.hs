@@ -112,11 +112,9 @@ parseIfStmt = do
   void $ matchTokenType T.RIGHT_PAREN <|> fail "Expect ')' after if condition."
   thenBranch <- statement
   t <- peekToken
-  let result =
-        if tokenType t == T.ELSE
-          then IfStmt expr thenBranch . Just <$> statement
-          else pure $ IfStmt expr thenBranch Nothing
-  result <* matchTokenType T.SEMICOLON
+  if tokenType t == T.ELSE
+    then IfStmt expr thenBranch . Just <$> statement
+    else pure $ IfStmt expr thenBranch Nothing
 
 parsePrintStmt :: TokenParser Statement
 parsePrintStmt = matchTokenType T.PRINT *> (PrintStmt <$> expression) <* matchTokenType T.SEMICOLON

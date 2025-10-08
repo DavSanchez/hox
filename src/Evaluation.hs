@@ -4,6 +4,7 @@ module Evaluation
     evalBinaryOp,
     EvalError (..),
     prettyPrintEvalErr,
+    isTruthy,
     Value,
   )
 where

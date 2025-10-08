@@ -18,6 +18,7 @@ module Expression
   ( -- * Data types
     Expression (..),
     Literal (..),
+    LogicalOperator (..),
     UnaryOperator (..),
     BinaryOperator (..),
 
@@ -34,12 +35,15 @@ import Data.Char (toLower)
 import Data.Functor (void)
 import Parser (TokenParser, matchTokenType, peekToken, satisfy)
 import Token (Token (Token, tokenType), isNumber, isString)
+import Token qualified as AST
 import Token qualified as T
 
 -- | Represents an expression in the AST.
 data Expression
   = -- | A literal value.
     Literal Literal
+  | -- | Logical expression
+    Logical Int LogicalOperator Expression Expression
   | -- | A unary operation.
     UnaryOperation
       -- | Line number where the operator appears.
@@ -77,6 +81,12 @@ data Expression
 
 -- | Represents a literal value in the AST.
 data Literal = Number Double | String String | Bool Bool | Nil
+  deriving stock (Show, Eq)
+
+-- | Represents a logical operator in the AST.
+data LogicalOperator
+  = Or
+  | And
   deriving stock (Show, Eq)
 
 -- | Represents a unary operator in the AST.
@@ -124,15 +134,32 @@ expression = assignment
 
 assignment :: TokenParser Expression
 assignment = do
-  expr <- equality <|> fail "Expect expression."
+  expr <- orOp <|> fail "Expect expression."
   t <- peekToken
-  if tokenType t /= T.EQUAL
-    then pure expr
-    else case expr of
-      VariableExpr lineNum name -> do
-        void $ matchTokenType T.EQUAL
-        VariableAssignment lineNum name <$> assignment
-      _ -> fail "Invalid assignment target."
+  if tokenType t == T.EQUAL
+    then varAssign expr
+    else pure expr
+
+varAssign :: Expression -> TokenParser Expression
+varAssign expr = do
+  case expr of
+    VariableExpr lineNum name -> do
+      void $ matchTokenType T.EQUAL
+      VariableAssignment lineNum name <$> assignment
+    _ -> fail "Invalid assignment target."
+
+-- Logic
+orOp :: TokenParser Expression
+orOp = leftAssociative andOp parseOr
+
+parseOr :: TokenParser (Expression -> Expression -> Expression)
+parseOr = matchTokenType T.OR >>= \t -> pure (Logical (T.line t) Or)
+
+parseAnd :: TokenParser (Expression -> Expression -> Expression)
+parseAnd = matchTokenType T.AND >>= \t -> pure (Logical (T.line t) And)
+
+andOp :: TokenParser Expression
+andOp = leftAssociative equality parseAnd
 
 -- Equality
 equality :: TokenParser Expression
@@ -266,6 +293,7 @@ prettyPrint (BinaryOperation _ op e1 e2) = "(" <> prettyPrintBinOp op <> " " <> 
 prettyPrint (Grouping expr) = "(group " <> prettyPrint expr <> ")"
 prettyPrint (VariableExpr _ name) = name
 prettyPrint (VariableAssignment _ name expr) = "(= " <> name <> " " <> prettyPrint expr <> ")"
+prettyPrint (Logical _ op e1 e2) = "(" <> prettyPrintLogicOp op <> " " <> prettyPrint e1 <> prettyPrint e2 <> ")"
 
 prettyPrintBinOp :: BinaryOperator -> String
 prettyPrintBinOp EqualEqual = "=="
@@ -282,6 +310,10 @@ prettyPrintBinOp Slash = "/"
 prettyPrintUnOp :: UnaryOperator -> String
 prettyPrintUnOp UMinus = "-"
 prettyPrintUnOp Bang = "!"
+
+prettyPrintLogicOp :: LogicalOperator -> String
+prettyPrintLogicOp Or = "or"
+prettyPrintLogicOp And = "and"
 
 prettyPrintLit :: Literal -> String
 prettyPrintLit (Number n) = show n

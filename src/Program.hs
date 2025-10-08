@@ -9,6 +9,7 @@ where
 
 import Control.Applicative (Alternative ((<|>)))
 import Data.Either (lefts, rights)
+import Data.Functor (void)
 import Expression (Expression, expression)
 import Parser (ParseError, Parser (..), TokenParser, matchTokenType, peekToken, satisfy)
 import Token (Token (..))
@@ -26,6 +27,13 @@ data Variable = Variable
 
 data Statement
   = ExprStmt Expression
+  | IfStmt
+      -- | if
+      Expression
+      -- | then
+      Statement
+      -- | else
+      (Maybe Statement)
   | PrintStmt Expression
   | BlockStmt [Declaration]
   deriving stock (Show, Eq)
@@ -89,12 +97,26 @@ statement :: TokenParser Statement
 statement = do
   t <- peekToken
   case tokenType t of
+    T.IF -> parseIfStmt
     T.PRINT -> parsePrintStmt
     T.LEFT_BRACE -> parseBlockStmt
     _ -> parseExprStmt
 
 parseExprStmt :: TokenParser Statement
 parseExprStmt = ExprStmt <$> expression <* matchTokenType T.SEMICOLON
+
+parseIfStmt :: TokenParser Statement
+parseIfStmt = do
+  void $ matchTokenType T.LEFT_PAREN <|> fail "Expect '(' after 'if'."
+  expr <- expression
+  void $ matchTokenType T.RIGHT_PAREN <|> fail "Expect ')' after if condition."
+  thenBranch <- statement
+  t <- peekToken
+  let result =
+        if tokenType t == T.ELSE
+          then IfStmt expr thenBranch . Just <$> statement
+          else pure $ IfStmt expr thenBranch Nothing
+  result <* matchTokenType T.SEMICOLON
 
 parsePrintStmt :: TokenParser Statement
 parsePrintStmt = matchTokenType T.PRINT *> (PrintStmt <$> expression) <* matchTokenType T.SEMICOLON

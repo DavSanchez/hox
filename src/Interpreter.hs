@@ -11,11 +11,12 @@ where
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
+import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Environment qualified as Env
 import Error (InterpreterError (Eval))
-import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
-import Expression (Expression (..))
+import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp, isTruthy)
+import Expression (Expression (..), LogicalOperator (..))
 import Program (Declaration (..), Program (..), Statement (..), Variable (..))
 import Value (Value (VNil), printValue)
 
@@ -101,7 +102,11 @@ interpretStatement ::
   Statement -> m ()
 interpretStatement (PrintStmt expr) = interpretPrint expr
 interpretStatement (ExprStmt expr) = void $ evaluateExpr expr
--- How does this receive a copy of the environment that does not clash with the parent one?
+interpretStatement (IfStmt expr thenBranch elseBranch) = do
+  cond <- isTruthy <$> evaluateExpr expr -- if (isTruthy . evaluateExpr) expr then undefined else undefined
+  if cond
+    then interpretStatement thenBranch
+    else traverse_ interpretStatement elseBranch
 interpretStatement (BlockStmt decls) = do
   -- Get parent environment
   parentEnv <- get
@@ -150,3 +155,9 @@ evaluateExpr (VariableAssignment line name expr) = do
         Eval $
           EvalError line ("Undefined variable '" <> name <> "'.")
     Just _ -> modify (Env.define name value) >> pure value
+evaluateExpr (Logical _ op e1 e2) =
+  evaluateExpr e1
+    >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
+  where
+    shortCircuits Or expr = isTruthy expr
+    shortCircuits And expr = (not . isTruthy) expr

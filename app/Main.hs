@@ -27,7 +27,8 @@ main = do
     ["--chap06_parsing", script] -> readFile' script >>= handleChap06Out . (runChapter04 >=> runChapter06)
     ["--chap07_evaluating", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
     ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . runChapter08 . runChapter04
-    [script] -> readFile' script >>= currentImpl
+    ["--chap09_control", script] -> readFile' script >>= treeWalkInterpreter
+    [script] -> readFile' script >>= treeWalkInterpreter
     _ -> do
       hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"
       exitWith (ExitFailure 64)
@@ -39,19 +40,11 @@ runPrompt = do
   eof <- isEOF -- Was EOF entered?
   if eof
     then putStrLn "Goodbye!"
-    else getLine >>= currentImpl >> runPrompt
-
-currentImpl :: String -> IO ()
-currentImpl = handleChap08Out . runChapter08 . runChapter04
+    else getLine >>= treeWalkInterpreter >> runPrompt
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
-runChapter04 script =
-  let tokenResult = (toList . scanTokens) script
-      errors = lefts tokenResult
-   in if null errors
-        then Right $ rights tokenResult
-        else Left $ Syntax errors
+runChapter04 = string2tokens
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
@@ -70,19 +63,34 @@ runChapter07 = runNoIOInterpreter . evaluateExpr
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . printValue)
 
--- Chapter 08 operations
+-- Chapter 08+ operations
 -- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: Either InterpreterError [Token] -> Interpreter ()
-runChapter08 (Left err) = interpreterFailure err
-runChapter08 (Right tokens) = do
-  case parseProgram tokens of
-    Left errs -> interpreterFailure (Parse errs)
-    Right prog -> programInterpreter prog
+runChapter08 = buildInterpreter
 
--- handleChap08Out :: Either InterpreterError Program -> IO ()
-handleChap08Out :: Interpreter a -> IO ()
-handleChap08Out interpreter = do
-  result <- runInterpreter interpreter
-  case result of
+handleChap08Out :: Interpreter () -> IO ()
+handleChap08Out = run
+
+-- Actual functions that will run from now on
+treeWalkInterpreter :: String -> IO ()
+treeWalkInterpreter = run . buildInterpreter . string2tokens
+
+string2tokens :: String -> Either InterpreterError [Token]
+string2tokens script =
+  let tokenResult = (toList . scanTokens) script
+      errors = lefts tokenResult
+   in if null errors
+        then Right $ rights tokenResult
+        else Left $ Syntax errors
+
+buildInterpreter :: Either InterpreterError [Token] -> Interpreter ()
+buildInterpreter (Left err) = interpreterFailure err
+buildInterpreter (Right tokens) = case parseProgram tokens of
+  Left errs -> interpreterFailure (Parse errs)
+  Right prog -> programInterpreter prog
+
+run :: Interpreter () -> IO ()
+run =
+  runInterpreter >=> \case
     Left err -> handleErr err
-    Right _ -> pure ()
+    Right v -> pure v

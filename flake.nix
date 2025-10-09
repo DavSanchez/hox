@@ -91,6 +91,11 @@
               test-chapter06 = mkTestApp "chap06_parsing";
               test-chapter07 = mkTestApp "chap07_evaluating";
               test-chapter08 = mkTestApp "chap08_statements";
+              test-chapter09 = mkTestApp "chap09_control";
+              # test-chapter10 = mkTestApp "chap10_functions";
+              # test-chapter11 = mkTestApp "chap11_resolving";
+              # test-chapter12 = mkTestApp "chap12_classes";
+              # test-chapter13 = mkTestApp "chap13_inheritance";
             };
 
             devShells.default = pkgs.mkShell {

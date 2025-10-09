@@ -1,19 +1,47 @@
 module Environment
   ( Environment,
-    define,
-    get,
+    declareVar,
+    getVar,
+    pushFrame,
+    popFrame,
+    newEnv,
+    assignVar,
   )
 where
 
-import Data.Map.Strict qualified as M
+import Control.Monad (join)
+import Data.Foldable (find)
+import Data.List.NonEmpty (NonEmpty (..), (<|))
+import Data.Map qualified as M
+import Data.Maybe (isJust)
 import Value (Value)
 
-newtype Environment = Environment (M.Map String Value)
-  deriving stock (Show, Eq)
-  deriving newtype (Semigroup, Monoid)
+type Environment = NonEmpty Frame
 
-define :: String -> Value -> Environment -> Environment
-define name value (Environment env) = Environment (M.insert name value env)
+type Frame = M.Map String Value
 
-get :: String -> Environment -> Maybe Value
-get name (Environment env) = M.lookup name env
+newEnv :: Environment
+newEnv = M.empty :| []
+
+pushFrame :: Environment -> Environment
+pushFrame = (mempty <|) -- prepend a new empty frame
+
+popFrame :: Environment -> Environment
+popFrame single@(_ :| []) = single -- cannot pop the last frame
+popFrame (_ :| (x : xs)) = x :| xs
+
+-- Inserts the defined variable in the current environment frame (i.e. top of the stack)
+-- This is only for declarations
+declareVar :: String -> Value -> Environment -> Environment
+declareVar name value (frame :| rest) = M.insert name value frame :| rest
+
+assignVar :: String -> Value -> Environment -> Environment
+assignVar name value env = assignIfInFrame name value <$> env
+
+assignIfInFrame :: String -> Value -> Frame -> Frame
+assignIfInFrame name value frame
+  | M.member name frame = M.insert name value frame
+  | otherwise = frame
+
+getVar :: String -> Environment -> Maybe Value
+getVar name env = join $ find isJust (M.lookup name <$> env)

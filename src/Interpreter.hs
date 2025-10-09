@@ -11,10 +11,10 @@ where
 import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
+import Control.Monad.State (MonadState (get), MonadTrans (lift), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (void)
-import Environment qualified as Env
+import Environment
 import Error (InterpreterError (Eval))
 import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp, isTruthy)
 import Expression (Expression (..), LogicalOperator (..))
@@ -24,19 +24,19 @@ import Value (Value (VNil), printValue)
 type Interpreter = InterpreterT IO
 
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
-runInterpreter interpreter = evalStateT (runExceptT (runInterpreterT interpreter)) mempty
+runInterpreter interpreter = evalStateT (runExceptT (runInterpreterT interpreter)) newEnv
 
 interpreterFailure :: InterpreterError -> Interpreter a
 interpreterFailure = throwError
 
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: ExceptT InterpreterError (StateT Env.Environment m) a
+  { runInterpreterT :: ExceptT InterpreterError (StateT Environment m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState Env.Environment,
+      MonadState Environment,
       MonadError InterpreterError,
       MonadPrinter
     )
@@ -65,10 +65,10 @@ type NoIOInterpreter = InterpreterT Identity
 -- Returns either an interpreter error or the computed value.
 -- Used for evaluating expressions on previous chapters.
 runNoIOInterpreter :: NoIOInterpreter a -> Either InterpreterError a
-runNoIOInterpreter interpreter = runIdentity $ evalStateT (runExceptT (runInterpreterT interpreter)) mempty
+runNoIOInterpreter interpreter = runIdentity $ evalStateT (runExceptT (runInterpreterT interpreter)) newEnv
 
 programInterpreter ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
@@ -76,7 +76,7 @@ programInterpreter ::
 programInterpreter (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
@@ -85,7 +85,7 @@ interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareVariable ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m
   ) =>
   Variable -> m ()
@@ -93,10 +93,10 @@ declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
-  modify (Env.define varName value)
+  modify (declareVar varName value)
 
 interpretStatement ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
@@ -109,18 +109,16 @@ interpretStatement (IfStmt expr thenBranch elseBranch) = do
     then interpretStatement thenBranch
     else traverse_ interpretStatement elseBranch
 interpretStatement (BlockStmt decls) = do
-  -- Get parent environment
-  parentEnv <- get
+  modify pushFrame -- Add environment frame for new scope
   -- Run the actions (TODO: are blocks expressions that resolve to a value?)
   mapM_ interpretDecl decls
-  -- Restore the environment
-  put parentEnv
+  modify popFrame -- Remove the scoped environment frame
 interpretStatement while@(WhileStmt expr stmt) =
   evaluateExpr expr
     >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
 
 interpretPrint ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
@@ -129,7 +127,7 @@ interpretPrint expr = evaluateExpr expr >>= printLn . printValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m
   ) =>
   Expression -> m Value
@@ -144,7 +142,7 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
   env <- get
-  case Env.get name env of
+  case getVar name env of
     Nothing ->
       throwError $
         Eval $
@@ -153,12 +151,12 @@ evaluateExpr (VariableExpr line name) = do
 evaluateExpr (VariableAssignment line name expr) = do
   env <- get
   value <- evaluateExpr expr
-  case Env.get name env of
+  case getVar name env of
     Nothing ->
       throwError $
         Eval $
           EvalError line ("Undefined variable '" <> name <> "'.")
-    Just _ -> modify (Env.define name value) >> pure value
+    Just _ -> modify (assignVar name value) >> pure value
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2

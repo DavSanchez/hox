@@ -11,10 +11,18 @@ where
 import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State (MonadState (get), MonadTrans (lift), StateT, evalStateT, modify)
+import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (void)
 import Environment
+  ( Environment,
+    assignVar,
+    declareVar,
+    getVar,
+    newEnv,
+    popFrame,
+    pushFrame,
+  )
 import Error (InterpreterError (Eval))
 import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp, isTruthy)
 import Expression (Expression (..), LogicalOperator (..))
@@ -104,15 +112,14 @@ interpretStatement ::
 interpretStatement (PrintStmt expr) = interpretPrint expr
 interpretStatement (ExprStmt expr) = void $ evaluateExpr expr
 interpretStatement (IfStmt expr thenBranch elseBranch) = do
-  cond <- isTruthy <$> evaluateExpr expr -- if (isTruthy . evaluateExpr) expr then undefined else undefined
+  cond <- isTruthy <$> evaluateExpr expr
   if cond
     then interpretStatement thenBranch
     else traverse_ interpretStatement elseBranch
-interpretStatement (BlockStmt decls) = do
-  modify pushFrame -- Add environment frame for new scope
-  -- Run the actions (TODO: are blocks expressions that resolve to a value?)
-  mapM_ interpretDecl decls
-  modify popFrame -- Remove the scoped environment frame
+interpretStatement (BlockStmt decls) =
+  modify pushFrame
+    >> mapM_ interpretDecl decls -- TODO: are blocks expressions that resolve to a value?
+    >> modify popFrame
 interpretStatement while@(WhileStmt expr stmt) =
   evaluateExpr expr
     >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
@@ -149,14 +156,18 @@ evaluateExpr (VariableExpr line name) = do
           EvalError line ("Undefined variable '" <> name <> "'.")
     Just value -> pure value
 evaluateExpr (VariableAssignment line name expr) = do
-  env <- get
+  -- The variable expression needs to be evaluated *before* we retrieve the environment,
+  -- else the environment will not reflect the changes made by evaluating the expression, and
+  -- the right-associativity property of this operation will be broken.
+  -- It's broken because I will update the environment at the end without including the changes
+  -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
-  case getVar name env of
+  env <- get
+  case assignVar name value env of
     Nothing ->
-      throwError $
-        Eval $
-          EvalError line ("Undefined variable '" <> name <> "'.")
-    Just _ -> modify (assignVar name value) >> pure value
+      -- Variable is not defined in any scope
+      throwError $ Eval $ EvalError line ("Undefined variable '" <> name <> "'.")
+    Just env' -> put env' >> pure value
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2

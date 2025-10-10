@@ -1,6 +1,6 @@
 module Value
   ( Value (..),
-    printValue,
+    displayValue,
   )
 where
 
@@ -16,16 +16,16 @@ data Value
   deriving stock (Show, Eq)
 
 -- | Pretty prints a value according to the Crafting Interpreters book.
--- >>> printValue (VNumber (-0.0))
+-- >>> displayValue (VNumber (-0.0))
 -- "-0"
--- >>> printValue (VNumber 42.5)
+-- >>> displayValue (VNumber 42.5)
 -- "42.5"
-printValue :: Value -> String
-printValue (VNumber n) =
+displayValue :: Value -> String
+displayValue (VNumber n) =
   let (integer :: Integer, decimal) = properFraction n
    in if decimal == 0
         then if isNegativeZero n then "-0" else show integer
         else showFFloat Nothing n "" -- Otherwise, print as floating-point number
-printValue (VBool b) = (map toLower . show) b
-printValue (VString s) = s
-printValue VNil = "nil"
+displayValue (VBool b) = (map toLower . show) b
+displayValue (VString s) = s
+displayValue VNil = "nil"

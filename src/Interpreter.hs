@@ -19,7 +19,7 @@ import Error (InterpreterError (Eval))
 import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp, isTruthy)
 import Expression (Expression (..), LogicalOperator (..))
 import Program (Declaration (..), Program (..), Statement (..), Variable (..))
-import Value (Value (VNil), printValue)
+import Value (Value (VNil), displayValue)
 
 type Interpreter = InterpreterT IO
 
@@ -123,7 +123,7 @@ interpretPrint ::
     MonadPrinter m
   ) =>
   Expression -> m ()
-interpretPrint expr = evaluateExpr expr >>= printLn . printValue
+interpretPrint expr = evaluateExpr expr >>= printLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::

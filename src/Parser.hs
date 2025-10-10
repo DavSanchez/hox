@@ -2,7 +2,7 @@ module Parser
   ( TokenParser,
     Parser (Parser, runParser),
     ParseError (..),
-    prettyPrintParseErr,
+    displayParseErr,
     matchTokenType,
     satisfy,
     peekToken,
@@ -10,7 +10,7 @@ module Parser
 where
 
 import Control.Applicative (Alternative (..))
-import Scanner.Error (Error (..), prettyPrintErr)
+import Scanner.Error (Error (..), displayErr)
 import Token (Token (..), TokenType, toString)
 import Token qualified as T
 
@@ -33,10 +33,10 @@ data ParseError = ParseError
   }
   deriving stock (Show, Eq)
 
-prettyPrintParseErr :: ParseError -> String
-prettyPrintParseErr (ParseError (Just (Token T.EOF line)) msg) = prettyPrintErr (Error msg line " at end")
-prettyPrintParseErr (ParseError (Just (Token tType line)) msg) = prettyPrintErr (Error msg line (" at '" <> toString tType <> "'"))
-prettyPrintParseErr (ParseError Nothing msg) = prettyPrintErr (Error msg 0 " at unknown") -- catchall... should not happen
+displayParseErr :: ParseError -> String
+displayParseErr (ParseError (Just (Token T.EOF line)) msg) = displayErr (Error msg line " at end")
+displayParseErr (ParseError (Just (Token tType line)) msg) = displayErr (Error msg line (" at '" <> toString tType <> "'"))
+displayParseErr (ParseError Nothing msg) = displayErr (Error msg 0 " at unknown") -- catchall... should not happen
 
 -- | Concrete type for our program parser.
 --

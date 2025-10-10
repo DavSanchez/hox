@@ -1,13 +1,13 @@
 module Scanner
   ( scanTokens,
-    prettyPrintErr,
+    displayErr,
     Error (..),
   )
 where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
-import Scanner.Error (Error (..), prettyPrintErr)
+import Scanner.Error (Error (..), displayErr)
 import Scanner.Internal (TokenResult)
 import Scanner.Naive (naiveScanTokens)
 

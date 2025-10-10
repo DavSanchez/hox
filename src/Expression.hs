@@ -26,7 +26,7 @@ module Expression
     expression,
 
     -- * Pretty printing
-    prettyPrint,
+    displayExpr,
   )
 where
 
@@ -280,43 +280,43 @@ leftAssociative pOperand pOperator = do
   pure $ foldl' (\acc (op, next) -> op acc next) first rest
 
 -- | Prints and expression in the format expected by the Crafting Interpreters book.
--- >>> prettyPrint (BinaryOperation 1 Plus (Literal (Number 1)) (Literal (Number 2)))
+-- >>> displayExpr(BinaryOperation 1 Plus (Literal (Number 1)) (Literal (Number 2)))
 -- "(+ 1.0 2.0)"
--- >>> prettyPrint (BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Literal (Number 45.67)))
+-- >>> displayExpr(BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Literal (Number 45.67)))
 -- "(* (- 123.0) 45.67)"
--- >>> prettyPrint (BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Grouping (Literal (Number 45.67))))
+-- >>> displayExpr(BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Grouping (Literal (Number 45.67))))
 -- "(* (- 123.0) (group 45.67))"
-prettyPrint :: Expression -> String
-prettyPrint (Literal lit) = prettyPrintLit lit
-prettyPrint (UnaryOperation _ op expr) = "(" <> prettyPrintUnOp op <> " " <> prettyPrint expr <> ")"
-prettyPrint (BinaryOperation _ op e1 e2) = "(" <> prettyPrintBinOp op <> " " <> prettyPrint e1 <> " " <> prettyPrint e2 <> ")"
-prettyPrint (Grouping expr) = "(group " <> prettyPrint expr <> ")"
-prettyPrint (VariableExpr _ name) = name
-prettyPrint (VariableAssignment _ name expr) = "(= " <> name <> " " <> prettyPrint expr <> ")"
-prettyPrint (Logical _ op e1 e2) = "(" <> prettyPrintLogicOp op <> " " <> prettyPrint e1 <> prettyPrint e2 <> ")"
+displayExpr :: Expression -> String
+displayExpr (Literal lit) = displayLit lit
+displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> displayExpr expr <> ")"
+displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
+displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
+displayExpr (VariableExpr _ name) = name
+displayExpr (VariableAssignment _ name expr) = "(= " <> name <> " " <> displayExpr expr <> ")"
+displayExpr (Logical _ op e1 e2) = "(" <> displayLogicOp op <> " " <> displayExpr e1 <> displayExpr e2 <> ")"
 
-prettyPrintBinOp :: BinaryOperator -> String
-prettyPrintBinOp EqualEqual = "=="
-prettyPrintBinOp BangEqual = "!="
-prettyPrintBinOp Less = "<"
-prettyPrintBinOp LessEqual = "<="
-prettyPrintBinOp Greater = ">"
-prettyPrintBinOp GreaterEqual = ">="
-prettyPrintBinOp Plus = "+"
-prettyPrintBinOp BMinus = "-"
-prettyPrintBinOp Star = "*"
-prettyPrintBinOp Slash = "/"
+displayBinOp :: BinaryOperator -> String
+displayBinOp EqualEqual = "=="
+displayBinOp BangEqual = "!="
+displayBinOp Less = "<"
+displayBinOp LessEqual = "<="
+displayBinOp Greater = ">"
+displayBinOp GreaterEqual = ">="
+displayBinOp Plus = "+"
+displayBinOp BMinus = "-"
+displayBinOp Star = "*"
+displayBinOp Slash = "/"
 
-prettyPrintUnOp :: UnaryOperator -> String
-prettyPrintUnOp UMinus = "-"
-prettyPrintUnOp Bang = "!"
+displayUnOp :: UnaryOperator -> String
+displayUnOp UMinus = "-"
+displayUnOp Bang = "!"
 
-prettyPrintLogicOp :: LogicalOperator -> String
-prettyPrintLogicOp Or = "or"
-prettyPrintLogicOp And = "and"
+displayLogicOp :: LogicalOperator -> String
+displayLogicOp Or = "or"
+displayLogicOp And = "and"
 
-prettyPrintLit :: Literal -> String
-prettyPrintLit (Number n) = show n
-prettyPrintLit (String s) = "String " <> s
-prettyPrintLit (Bool b) = (map toLower . show) b
-prettyPrintLit Nil = "nil"
+displayLit :: Literal -> String
+displayLit (Number n) = show n
+displayLit (String s) = "String " <> s
+displayLit (Bool b) = (map toLower . show) b
+displayLit Nil = "nil"

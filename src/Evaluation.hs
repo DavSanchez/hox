@@ -3,7 +3,7 @@ module Evaluation
     evalUnaryOp,
     evalBinaryOp,
     EvalError (..),
-    prettyPrintEvalErr,
+    displayEvalErr,
     isTruthy,
     Value,
   )
@@ -22,8 +22,8 @@ data EvalError = EvalError
   }
   deriving stock (Show, Eq)
 
-prettyPrintEvalErr :: EvalError -> String
-prettyPrintEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
+displayEvalErr :: EvalError -> String
+displayEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)

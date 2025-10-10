@@ -7,7 +7,7 @@ import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
 import Evaluation (Value)
-import Expression (Expression, expression, prettyPrint)
+import Expression (Expression, displayExpr, expression)
 import Interpreter (Interpreter, evaluateExpr, interpreterFailure, programInterpreter, runInterpreter, runNoIOInterpreter)
 import Parser (runParser)
 import Program (parseProgram)
@@ -15,8 +15,8 @@ import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
-import Token (Token, prettyPrintToken)
-import Value (printValue)
+import Token (Token, displayToken)
+import Value (displayValue)
 
 main :: IO ()
 main = do
@@ -47,21 +47,21 @@ runChapter04 :: String -> Either InterpreterError [Token]
 runChapter04 = string2tokens
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
-handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
+handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
 
 -- Chapter 06 operations
 runChapter06 :: [Token] -> Either InterpreterError Expression
 runChapter06 = bimap (Parse . singleton) fst . runParser expression
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
-handleChap06Out = either handleErr (putStrLn . prettyPrint)
+handleChap06Out = either handleErr (putStrLn . displayExpr)
 
 -- Chapter 07 operations
 runChapter07 :: Expression -> Either InterpreterError Value
 runChapter07 = runNoIOInterpreter . evaluateExpr
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
-handleChap07Out = either handleErr (putStrLn . printValue)
+handleChap07Out = either handleErr (putStrLn . displayValue)
 
 -- Chapter 08+ operations
 -- The previous chapters where "but a hack". Now we have the real deal!

@@ -11,7 +11,7 @@ where
 
 import Control.Monad (join)
 import Data.Foldable (find)
-import Data.List.NonEmpty (NonEmpty (..), (<|))
+import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.Map qualified as M
 import Data.Maybe (isJust)
 import Value (Value)
@@ -21,7 +21,7 @@ type Environment = NonEmpty Frame
 type Frame = M.Map String Value
 
 newEnv :: Environment
-newEnv = M.empty :| []
+newEnv = mempty :| []
 
 pushFrame :: Environment -> Environment
 pushFrame = (mempty <|) -- prepend a new empty frame
@@ -35,13 +35,30 @@ popFrame (_ :| (x : xs)) = x :| xs
 declareVar :: String -> Value -> Environment -> Environment
 declareVar name value (frame :| rest) = M.insert name value frame :| rest
 
-assignVar :: String -> Value -> Environment -> Environment
-assignVar name value env = assignIfInFrame name value <$> env
+-- | Assigns a variable to the environment.
+--
+-- This function traverses down the stack until it finds a frame that contains the variable.
+--
+-- If no variable is found, the environment is unchanged.
+-- >>> import Data.List.NonEmpty qualified as NE
+-- >>> import Data.Map qualified as M
+-- >>> import Value(Value(..))
+-- >>> envList = [[("x", VNumber 1), ("y", VBool True)], [], [("x", VNumber 42)], [("z", VString "hello")], []]
+-- >>> env = NE.fromList $ fmap M.fromList $ envList
+-- >>> env = assignVar "x" (VNumber 2) env
+-- >>> (fmap M.toList . NE.toList) env
 
-assignIfInFrame :: String -> Value -> Frame -> Frame
-assignIfInFrame name value frame
-  | M.member name frame = M.insert name value frame
-  | otherwise = frame
+-- >>> envList = [[("x", VNumber 1), ("y", VBool True)], [], [("x", VNumber 42)], [("z", VString "hello")], []]
+-- >>> env = NE.fromList $ fmap M.fromList $ envList
+-- >>> env = assignVar "x" (VNumber 2) env
+-- >>> (fmap M.toList . NE.toList) env
+assignVar :: String -> Value -> Environment -> Environment
+assignVar name value (frame :| (r : rest))
+  | M.member name frame = M.insert name value frame :| (r : rest)
+  | otherwise = frame <| assignVar name value (r :| rest)
+assignVar name value (frame :| [])
+  | M.member name frame = M.insert name value frame :| []
+  | otherwise = frame :| []
 
 getVar :: String -> Environment -> Maybe Value
 getVar name env = join $ find isJust (M.lookup name <$> env)

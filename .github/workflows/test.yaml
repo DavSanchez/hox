@@ -45,6 +45,7 @@ jobs:
   crafting-interpreter-tests:
     runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false # for knowing the results of other matrix checks even if some fail
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
         test-chapter: ["04", "06", "07", "08", "09"]

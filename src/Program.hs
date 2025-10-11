@@ -135,10 +135,12 @@ parseForStmt = do
   pure body'''
 
 parseForInitializer :: TokenParser (Maybe Declaration)
-parseForInitializer =
-  (satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after for initializer." $> Nothing)
-    <|> satisfy ((T.VAR ==) . tokenType) ("Expect " <> displayTokenType T.VAR <> " or ';' after for initializer.") *> (Just . VarDecl <$> variable)
-    <|> Just . Statement <$> parseExprStmt
+parseForInitializer = do
+  t <- peek
+  case tokenType t of
+    T.SEMICOLON -> consume $> Nothing
+    T.VAR -> consume *> (Just . VarDecl <$> variable)
+    _ -> Just . Statement <$> parseExprStmt
 
 parseForCondition :: TokenParser (Maybe Expression)
 parseForCondition =

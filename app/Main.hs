@@ -2,21 +2,17 @@ module Main (main) where
 
 import Control.Monad ((>=>))
 import Data.Bifunctor (bimap)
-import Data.Either (lefts, rights)
 import Data.List (singleton)
-import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
-import Evaluation (Value)
 import Expression (Expression, displayExpr, expression)
-import Interpreter (Interpreter, evaluateExpr, interpreterFailure, programInterpreter, runInterpreter, runNoIOInterpreter)
+import Interpreter (Interpreter, buildTreeWalkInterpreter, evaluateExpr, runInterpreter, runNoIOInterpreter)
 import Parser (runParser)
-import Program (parseProgram)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
 import Token (Token, displayToken)
-import Value (displayValue)
+import Value (Value, displayValue)
 
 main :: IO ()
 main = do
@@ -44,7 +40,7 @@ runPrompt = do
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
-runChapter04 = string2tokens
+runChapter04 = scanTokens
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
@@ -66,28 +62,14 @@ handleChap07Out = either handleErr (putStrLn . displayValue)
 -- Chapter 08+ operations
 -- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: Either InterpreterError [Token] -> Interpreter ()
-runChapter08 = buildInterpreter
+runChapter08 = buildTreeWalkInterpreter
 
 handleChap08Out :: Interpreter () -> IO ()
 handleChap08Out = run
 
 -- Actual functions that will run from now on
 treeWalkInterpreter :: String -> IO ()
-treeWalkInterpreter = run . buildInterpreter . string2tokens
-
-string2tokens :: String -> Either InterpreterError [Token]
-string2tokens script =
-  let tokenResult = (toList . scanTokens) script
-      errors = lefts tokenResult
-   in if null errors
-        then Right $ rights tokenResult
-        else Left $ Syntax errors
-
-buildInterpreter :: Either InterpreterError [Token] -> Interpreter ()
-buildInterpreter (Left err) = interpreterFailure err
-buildInterpreter (Right tokens) = case parseProgram tokens of
-  Left errs -> interpreterFailure (Parse errs)
-  Right prog -> programInterpreter prog
+treeWalkInterpreter = run . buildTreeWalkInterpreter . scanTokens
 
 run :: Interpreter () -> IO ()
 run =

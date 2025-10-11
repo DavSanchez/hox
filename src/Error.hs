@@ -12,7 +12,7 @@ import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (stderr)
 
 -- Error handling
-data InterpreterError = Syntax [Error] | Parse [ParseError] | Eval EvalError deriving stock (Show)
+data InterpreterError = Syntax [Error] | Parse [ParseError] | Eval EvalError deriving stock (Show, Eq)
 
 handleErr :: InterpreterError -> IO ()
 handleErr = \case

@@ -1,5 +1,6 @@
 module Interpreter
   ( Interpreter,
+    buildTreeWalkInterpreter,
     runInterpreter,
     programInterpreter,
     interpreterFailure,
@@ -23,13 +24,20 @@ import Environment
     popFrame,
     pushFrame,
   )
-import Error (InterpreterError (Eval))
-import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp, isTruthy)
+import Error (InterpreterError (Eval, Parse))
+import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
 import Expression (Expression (..), LogicalOperator (..))
-import Program (Declaration (..), Program (..), Statement (..), Variable (..))
-import Value (Value (VNil), displayValue)
+import Program (Declaration (..), Program (..), Statement (..), Variable (..), parseProgram)
+import Token (Token)
+import Value (Value (VNil), displayValue, isTruthy)
 
 type Interpreter = InterpreterT IO
+
+buildTreeWalkInterpreter :: Either InterpreterError [Token] -> Interpreter ()
+buildTreeWalkInterpreter (Left err) = interpreterFailure err
+buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
+  Left errs -> interpreterFailure (Parse errs)
+  Right prog -> programInterpreter prog
 
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
 runInterpreter interpreter = evalStateT (runExceptT (runInterpreterT interpreter)) newEnv

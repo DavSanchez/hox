@@ -4,8 +4,6 @@ module Evaluation
     evalBinaryOp,
     EvalError (..),
     displayEvalErr,
-    isTruthy,
-    Value,
   )
 where
 
@@ -14,7 +12,7 @@ import Expression
     Literal (..),
     UnaryOperator (..),
   )
-import Value (Value (..))
+import Value (Value (..), isTruthy)
 
 data EvalError = EvalError
   { errorLine :: Int,
@@ -67,8 +65,3 @@ evalLiteral (Number n) = VNumber n
 evalLiteral (String s) = VString s
 evalLiteral (Bool b) = VBool b
 evalLiteral Nil = VNil
-
-isTruthy :: Value -> Bool
-isTruthy VNil = False
-isTruthy (VBool b) = b
-isTruthy _ = True

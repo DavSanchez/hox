@@ -1,6 +1,7 @@
 module Value
   ( Value (..),
     displayValue,
+    isTruthy,
   )
 where
 
@@ -14,6 +15,11 @@ data Value
   | VString String
   | VNil
   deriving stock (Show, Eq)
+
+isTruthy :: Value -> Bool
+isTruthy VNil = False
+isTruthy (VBool b) = b
+isTruthy _ = True
 
 -- | Pretty prints a value according to the Crafting Interpreters book.
 -- >>> displayValue (VNumber (-0.0))

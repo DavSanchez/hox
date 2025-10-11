@@ -164,7 +164,7 @@ parseIfStmt = do
   thenBranch <- statement
   t <- peek
   if tokenType t == T.ELSE
-    then IfStmt expr thenBranch . Just <$> statement
+    then IfStmt expr thenBranch . Just <$> (consume *> statement)
     else pure $ IfStmt expr thenBranch Nothing
 
 parsePrintStmt :: TokenParser Statement

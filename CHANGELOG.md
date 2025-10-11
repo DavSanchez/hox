@@ -1,6 +1,6 @@
 # Revision history for `hox`
 
-## 0.1.9.0 -- 2025-10-10
+## 0.1.9.0 -- 2025-10-11
 
 * Chapter 09: Control Flow.
 

@@ -9,4 +9,4 @@
 - [x] Chapter 06: Parsing Expressions
 - [x] Chapter 07: Evaluating Expressions
 - [x] Chapter 08: Statements and State
-- [ ] Chapter 09: Control Flow
+- [x] Chapter 09: Control Flow

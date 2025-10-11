@@ -139,17 +139,17 @@ parseForInitializer = do
   t <- peek
   case tokenType t of
     T.SEMICOLON -> consume $> Nothing
-    T.VAR -> consume *> (Just . VarDecl <$> variable)
-    _ -> Just . Statement <$> parseExprStmt
+    T.VAR -> Just . VarDecl <$> variable
+    _ -> Just . Statement . ExprStmt <$> expression
 
 parseForCondition :: TokenParser (Maybe Expression)
 parseForCondition =
-  satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after loop condition." $> Nothing
+  satisfy ((T.SEMICOLON ==) . tokenType) "" $> Nothing
     <|> Just <$> expression
 
 parseForIncrement :: TokenParser (Maybe Expression)
 parseForIncrement =
-  satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after for clauses." $> Nothing
+  satisfy ((T.RIGHT_PAREN ==) . tokenType) "" $> Nothing
     <|> Just <$> expression
 
 parseExprStmt :: TokenParser Statement

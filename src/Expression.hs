@@ -34,9 +34,7 @@ import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
 import Parser (TokenParser, peek, satisfy)
-import Token (Token (Token, tokenType), displayTokenType, isNumber, isString)
-import Token qualified as AST
-import Token qualified as T
+import Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 
 -- | Represents an expression in the AST.
 data Expression
@@ -136,7 +134,7 @@ assignment :: TokenParser Expression
 assignment = do
   expr <- orOp <|> fail "Expect expression."
   t <- peek
-  if tokenType t == T.EQUAL
+  if tokenType t == EQUAL
     then varAssign expr
     else pure expr
 
@@ -144,7 +142,7 @@ varAssign :: Expression -> TokenParser Expression
 varAssign expr = do
   case expr of
     VariableExpr lineNum name -> do
-      void $ satisfy ((T.EQUAL ==) . tokenType) ("Expect " <> displayTokenType T.EQUAL <> ".")
+      void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
       VariableAssignment lineNum name <$> assignment
     _ -> fail "Invalid assignment target."
 
@@ -153,10 +151,10 @@ orOp :: TokenParser Expression
 orOp = leftAssociative andOp parseOr
 
 parseOr :: TokenParser (Expression -> Expression -> Expression)
-parseOr = satisfy ((T.OR ==) . tokenType) ("Expect " <> displayTokenType T.OR <> ".") >>= \t -> pure (Logical (T.line t) Or)
+parseOr = satisfy ((OR ==) . tokenType) ("Expect " <> displayTokenType OR <> ".") >>= \t -> pure (Logical (line t) Or)
 
 parseAnd :: TokenParser (Expression -> Expression -> Expression)
-parseAnd = satisfy ((T.AND ==) . tokenType) ("Expect " <> displayTokenType T.AND <> ".") >>= \t -> pure (Logical (T.line t) And)
+parseAnd = satisfy ((AND ==) . tokenType) ("Expect " <> displayTokenType AND <> ".") >>= \t -> pure (Logical (line t) And)
 
 andOp :: TokenParser Expression
 andOp = leftAssociative equality parseAnd
@@ -166,56 +164,56 @@ equality :: TokenParser Expression
 equality = leftAssociative comparison (parseEq <|> parseNeq)
 
 parseEq :: TokenParser (Expression -> Expression -> Expression)
-parseEq = satisfy ((T.EQUAL_EQUAL ==) . tokenType) ("Expect " <> displayTokenType T.EQUAL_EQUAL <> ".") >>= \token -> pure (BinaryOperation (T.line token) EqualEqual)
+parseEq = satisfy ((EQUAL_EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) EqualEqual)
 
 parseNeq :: TokenParser (Expression -> Expression -> Expression)
-parseNeq = satisfy ((T.BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType T.BANG_EQUAL <> ".") >>= \token -> pure (BinaryOperation (T.line token) BangEqual)
+parseNeq = satisfy ((BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType BANG_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) BangEqual)
 
 -- Comparison
 comparison :: TokenParser Expression
 comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
 parseGT :: TokenParser (Expression -> Expression -> Expression)
-parseGT = satisfy ((T.GREATER ==) . tokenType) ("Expect " <> displayTokenType T.GREATER <> ".") >>= \token -> pure (BinaryOperation (T.line token) Greater)
+parseGT = satisfy ((GREATER ==) . tokenType) ("Expect " <> displayTokenType GREATER <> ".") >>= \token -> pure (BinaryOperation (line token) Greater)
 
 parseGTE :: TokenParser (Expression -> Expression -> Expression)
-parseGTE = satisfy ((T.GREATER_EQUAL ==) . tokenType) ("Expect " <> displayTokenType T.GREATER_EQUAL <> ".") >>= \token -> pure (BinaryOperation (T.line token) GreaterEqual)
+parseGTE = satisfy ((GREATER_EQUAL ==) . tokenType) ("Expect " <> displayTokenType GREATER_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) GreaterEqual)
 
 parseLT :: TokenParser (Expression -> Expression -> Expression)
-parseLT = satisfy ((T.LESS ==) . tokenType) ("Expect " <> displayTokenType T.LESS <> ".") >>= \token -> pure (BinaryOperation (T.line token) Less)
+parseLT = satisfy ((LESS ==) . tokenType) ("Expect " <> displayTokenType LESS <> ".") >>= \token -> pure (BinaryOperation (line token) Less)
 
 parseLTE :: TokenParser (Expression -> Expression -> Expression)
-parseLTE = satisfy ((T.LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType T.LESS_EQUAL <> ".") >>= \token -> pure (BinaryOperation (T.line token) LessEqual)
+parseLTE = satisfy ((LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType LESS_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) LessEqual)
 
 -- Terms
 term :: TokenParser Expression
 term = leftAssociative factor (parsePlus <|> parseMinus)
 
 parsePlus :: TokenParser (Expression -> Expression -> Expression)
-parsePlus = satisfy ((T.PLUS ==) . tokenType) ("Expect " <> displayTokenType T.PLUS <> ".") >>= \token -> pure (BinaryOperation (T.line token) Plus)
+parsePlus = satisfy ((PLUS ==) . tokenType) ("Expect " <> displayTokenType PLUS <> ".") >>= \token -> pure (BinaryOperation (line token) Plus)
 
 parseMinus :: TokenParser (Expression -> Expression -> Expression)
-parseMinus = satisfy ((T.MINUS ==) . tokenType) ("Expect " <> displayTokenType T.MINUS <> ".") >>= \token -> pure (BinaryOperation (T.line token) BMinus)
+parseMinus = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (BinaryOperation (line token) BMinus)
 
 -- Factors
 factor :: TokenParser Expression
 factor = leftAssociative unary (parseMul <|> parseDiv)
 
 parseMul :: TokenParser (Expression -> Expression -> Expression)
-parseMul = satisfy ((T.STAR ==) . tokenType) ("Expect " <> displayTokenType T.STAR <> ".") >>= \token -> pure (BinaryOperation (T.line token) Star)
+parseMul = satisfy ((STAR ==) . tokenType) ("Expect " <> displayTokenType STAR <> ".") >>= \token -> pure (BinaryOperation (line token) Star)
 
 parseDiv :: TokenParser (Expression -> Expression -> Expression)
-parseDiv = satisfy ((T.SLASH ==) . tokenType) ("Expect " <> displayTokenType T.SLASH <> ".") >>= \token -> pure (BinaryOperation (T.line token) Slash)
+parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH <> ".") >>= \token -> pure (BinaryOperation (line token) Slash)
 
 -- Unary expressions
 unary :: TokenParser Expression
 unary = (parseBang <|> parseMinusUnary) <*> unary <|> primary
 
 parseBang :: TokenParser (Expression -> Expression)
-parseBang = satisfy ((T.BANG ==) . tokenType) ("Expect " <> displayTokenType T.BANG <> ".") >>= \token -> pure (UnaryOperation (T.line token) Bang)
+parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)
 
 parseMinusUnary :: TokenParser (Expression -> Expression)
-parseMinusUnary = satisfy ((T.MINUS ==) . tokenType) ("Expect " <> displayTokenType T.MINUS <> ".") >>= \token -> pure (UnaryOperation (T.line token) UMinus)
+parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (UnaryOperation (line token) UMinus)
 
 -- Primary expressions
 primary :: TokenParser Expression
@@ -229,22 +227,22 @@ primary =
     <|> parseVarName
 
 parseFalse :: TokenParser Expression
-parseFalse = satisfy ((T.FALSE ==) . tokenType) ("Expect " <> displayTokenType T.FALSE <> ".") >> pure (Literal (Bool False))
+parseFalse = satisfy ((FALSE ==) . tokenType) ("Expect " <> displayTokenType FALSE <> ".") >> pure (Literal (Bool False))
 
 parseTrue :: TokenParser Expression
-parseTrue = satisfy ((T.TRUE ==) . tokenType) ("Expect " <> displayTokenType T.TRUE <> ".") >> pure (Literal (Bool True))
+parseTrue = satisfy ((TRUE ==) . tokenType) ("Expect " <> displayTokenType TRUE <> ".") >> pure (Literal (Bool True))
 
 parseNil :: TokenParser Expression
-parseNil = satisfy ((T.NIL ==) . tokenType) ("Expect " <> displayTokenType T.NIL <> ".") >> pure (Literal Nil)
+parseNil = satisfy ((NIL ==) . tokenType) ("Expect " <> displayTokenType NIL <> ".") >> pure (Literal Nil)
 
 parseNumber :: TokenParser Expression
 parseNumber = do
-  Token (T.NUMBER _ n) _ <- satisfy (isNumber . tokenType) "a number"
+  Token (NUMBER _ n) _ <- satisfy (isNumber . tokenType) "a number"
   pure (Literal (Number n))
 
 parseString :: TokenParser Expression
 parseString = do
-  Token (T.STRING _ s) _ <- satisfy (isString . tokenType) "a string"
+  Token (STRING _ s) _ <- satisfy (isString . tokenType) "a string"
   pure (Literal (String s))
 
 parseGrouping :: TokenParser Expression
@@ -252,16 +250,16 @@ parseGrouping = Grouping <$> parens expression
 
 parseVarName :: TokenParser Expression
 parseVarName = do
-  Token {tokenType = T.IDENTIFIER name, line = lineNum} <- satisfy (T.isIdentifier . tokenType) "variable"
+  Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "variable"
   pure (VariableExpr lineNum name)
 
 -- Helpers
 
 parens :: TokenParser a -> TokenParser a
 parens p = do
-  void $ satisfy ((T.LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType T.LEFT_PAREN <> ".")
+  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
   result <- p
-  void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType T.RIGHT_PAREN <> ".")
+  void $ satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> ".")
   pure result
 
 leftAssociative ::

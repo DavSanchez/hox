@@ -12,8 +12,7 @@ where
 import Control.Applicative (Alternative (..))
 import Data.Functor (void)
 import Scanner.Error (Error (..), displayErr)
-import Token (Token (..), displayTokenType)
-import Token qualified as T
+import Token (Token (..), TokenType (..), displayTokenType)
 
 -- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.
 -- A rough equivalent to this in Rust would be:
@@ -35,7 +34,7 @@ data ParseError = ParseError
   deriving stock (Show, Eq)
 
 displayParseErr :: ParseError -> String
-displayParseErr (ParseError (Just (Token T.EOF line)) msg) = displayErr (Error msg line " at end")
+displayParseErr (ParseError (Just (Token EOF line)) msg) = displayErr (Error msg line " at end")
 displayParseErr (ParseError (Just (Token tType line)) msg) = displayErr (Error msg line (" at '" <> displayTokenType tType <> "'"))
 displayParseErr (ParseError Nothing msg) = displayErr (Error msg 0 " at unknown") -- catchall... should not happen
 

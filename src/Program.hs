@@ -9,7 +9,7 @@ where
 
 import Control.Applicative (Alternative ((<|>)))
 import Data.Either (lefts, rights)
-import Data.Functor (void)
+import Data.Functor (void, ($>))
 import Expression (Expression (Literal), Literal (Bool), expression)
 import Parser (ParseError, Parser (..), TokenParser, peekToken, satisfy)
 import Token (Token (..), displayTokenType)
@@ -136,31 +136,19 @@ parseForStmt = do
 
 parseForInitializer :: TokenParser (Maybe Declaration)
 parseForInitializer =
-  satisfy (const True) "" -- always succeed
-    >>= ( \case
-            T.SEMICOLON -> pure Nothing -- No initializer
-            T.VAR -> Just . VarDecl <$> variable
-            _ -> Just . Statement <$> parseExprStmt
-        )
-      . tokenType
+  (satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after for initializer." $> Nothing)
+    <|> satisfy ((T.VAR ==) . tokenType) ("Expect " <> displayTokenType T.VAR <> " or ';' after for initializer.") *> (Just . VarDecl <$> variable)
+    <|> Just . Statement <$> parseExprStmt
 
 parseForCondition :: TokenParser (Maybe Expression)
 parseForCondition =
-  satisfy (const True) "" -- always succeed
-    >>= ( \case
-            T.SEMICOLON -> pure Nothing -- No condition
-            _ -> Just <$> expression
-        )
-      . tokenType
+  satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after loop condition." $> Nothing
+    <|> Just <$> expression
 
 parseForIncrement :: TokenParser (Maybe Expression)
 parseForIncrement =
-  satisfy (const True) "" -- always succeed
-    >>= ( \case
-            T.RIGHT_PAREN -> pure Nothing -- No increment
-            _ -> Just <$> expression
-        )
-      . tokenType
+  satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after for clauses." $> Nothing
+    <|> Just <$> expression
 
 parseExprStmt :: TokenParser Statement
 parseExprStmt = ExprStmt <$> expression <* satisfy ((T.SEMICOLON ==) . tokenType) ("Expect " <> displayTokenType T.SEMICOLON <> ".")

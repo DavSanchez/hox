@@ -1,6 +1,6 @@
 module Main (main) where
 
-import RepresentingCode (prettyPrintExprUnitTests)
+import RepresentingCode (displayExprUnitTests)
 import Scanner.Props (scannerProperties)
 import Test.Tasty (TestTree, defaultMain, testGroup)
 
@@ -9,7 +9,7 @@ tests =
   testGroup
     "Lox Tests"
     [ scannerProperties,
-      prettyPrintExprUnitTests
+      displayExprUnitTests
     ]
 
 main :: IO ()

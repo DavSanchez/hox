@@ -1,4 +1,4 @@
-module Scanner.Error (Error (..), prettyPrintErr) where
+module Scanner.Error (Error (..), displayErr) where
 
 data Error = Error
   { errorMessage :: String,
@@ -7,5 +7,5 @@ data Error = Error
   }
   deriving stock (Show, Eq)
 
-prettyPrintErr :: Error -> String
-prettyPrintErr (Error msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg
+displayErr :: Error -> String
+displayErr (Error msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg

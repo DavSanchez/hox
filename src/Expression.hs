@@ -18,6 +18,7 @@ module Expression
   ( -- * Data types
     Expression (..),
     Literal (..),
+    LogicalOperator (..),
     UnaryOperator (..),
     BinaryOperator (..),
 
@@ -25,21 +26,22 @@ module Expression
     expression,
 
     -- * Pretty printing
-    prettyPrint,
+    displayExpr,
   )
 where
 
 import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
-import Parser (TokenParser, matchTokenType, peekToken, satisfy)
-import Token (Token (Token, tokenType), isNumber, isString)
-import Token qualified as T
+import Parser (TokenParser, peek, satisfy)
+import Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 
 -- | Represents an expression in the AST.
 data Expression
   = -- | A literal value.
     Literal Literal
+  | -- | Logical expression
+    Logical Int LogicalOperator Expression Expression
   | -- | A unary operation.
     UnaryOperation
       -- | Line number where the operator appears.
@@ -77,6 +79,12 @@ data Expression
 
 -- | Represents a literal value in the AST.
 data Literal = Number Double | String String | Bool Bool | Nil
+  deriving stock (Show, Eq)
+
+-- | Represents a logical operator in the AST.
+data LogicalOperator
+  = Or
+  | And
   deriving stock (Show, Eq)
 
 -- | Represents a unary operator in the AST.
@@ -124,71 +132,88 @@ expression = assignment
 
 assignment :: TokenParser Expression
 assignment = do
-  expr <- equality <|> fail "Expect expression."
-  t <- peekToken
-  if tokenType t /= T.EQUAL
-    then pure expr
-    else case expr of
-      VariableExpr lineNum name -> do
-        void $ matchTokenType T.EQUAL
-        VariableAssignment lineNum name <$> assignment
-      _ -> fail "Invalid assignment target."
+  expr <- orOp <|> fail "Expect expression."
+  t <- peek
+  if tokenType t == EQUAL
+    then varAssign expr
+    else pure expr
+
+varAssign :: Expression -> TokenParser Expression
+varAssign expr = do
+  case expr of
+    VariableExpr lineNum name -> do
+      void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
+      VariableAssignment lineNum name <$> assignment
+    _ -> fail "Invalid assignment target."
+
+-- Logic
+orOp :: TokenParser Expression
+orOp = leftAssociative andOp parseOr
+
+parseOr :: TokenParser (Expression -> Expression -> Expression)
+parseOr = satisfy ((OR ==) . tokenType) ("Expect " <> displayTokenType OR <> ".") >>= \t -> pure (Logical (line t) Or)
+
+parseAnd :: TokenParser (Expression -> Expression -> Expression)
+parseAnd = satisfy ((AND ==) . tokenType) ("Expect " <> displayTokenType AND <> ".") >>= \t -> pure (Logical (line t) And)
+
+andOp :: TokenParser Expression
+andOp = leftAssociative equality parseAnd
 
 -- Equality
 equality :: TokenParser Expression
 equality = leftAssociative comparison (parseEq <|> parseNeq)
 
 parseEq :: TokenParser (Expression -> Expression -> Expression)
-parseEq = matchTokenType T.EQUAL_EQUAL >>= \token -> pure (BinaryOperation (T.line token) EqualEqual)
+parseEq = satisfy ((EQUAL_EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) EqualEqual)
 
 parseNeq :: TokenParser (Expression -> Expression -> Expression)
-parseNeq = matchTokenType T.BANG_EQUAL >>= \token -> pure (BinaryOperation (T.line token) BangEqual)
+parseNeq = satisfy ((BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType BANG_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) BangEqual)
 
 -- Comparison
 comparison :: TokenParser Expression
 comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
 parseGT :: TokenParser (Expression -> Expression -> Expression)
-parseGT = matchTokenType T.GREATER >>= \token -> pure (BinaryOperation (T.line token) Greater)
+parseGT = satisfy ((GREATER ==) . tokenType) ("Expect " <> displayTokenType GREATER <> ".") >>= \token -> pure (BinaryOperation (line token) Greater)
 
 parseGTE :: TokenParser (Expression -> Expression -> Expression)
-parseGTE = matchTokenType T.GREATER_EQUAL >>= \token -> pure (BinaryOperation (T.line token) GreaterEqual)
+parseGTE = satisfy ((GREATER_EQUAL ==) . tokenType) ("Expect " <> displayTokenType GREATER_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) GreaterEqual)
 
 parseLT :: TokenParser (Expression -> Expression -> Expression)
-parseLT = matchTokenType T.LESS >>= \token -> pure (BinaryOperation (T.line token) Less)
+parseLT = satisfy ((LESS ==) . tokenType) ("Expect " <> displayTokenType LESS <> ".") >>= \token -> pure (BinaryOperation (line token) Less)
 
 parseLTE :: TokenParser (Expression -> Expression -> Expression)
-parseLTE = matchTokenType T.LESS_EQUAL >>= \token -> pure (BinaryOperation (T.line token) LessEqual)
+parseLTE = satisfy ((LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType LESS_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) LessEqual)
 
 -- Terms
 term :: TokenParser Expression
 term = leftAssociative factor (parsePlus <|> parseMinus)
 
 parsePlus :: TokenParser (Expression -> Expression -> Expression)
-parsePlus = matchTokenType T.PLUS >>= \token -> pure (BinaryOperation (T.line token) Plus)
+parsePlus = satisfy ((PLUS ==) . tokenType) ("Expect " <> displayTokenType PLUS <> ".") >>= \token -> pure (BinaryOperation (line token) Plus)
 
 parseMinus :: TokenParser (Expression -> Expression -> Expression)
-parseMinus = matchTokenType T.MINUS >>= \token -> pure (BinaryOperation (T.line token) BMinus)
+parseMinus = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (BinaryOperation (line token) BMinus)
 
 -- Factors
 factor :: TokenParser Expression
 factor = leftAssociative unary (parseMul <|> parseDiv)
 
 parseMul :: TokenParser (Expression -> Expression -> Expression)
-parseMul = matchTokenType T.STAR >>= \token -> pure (BinaryOperation (T.line token) Star)
+parseMul = satisfy ((STAR ==) . tokenType) ("Expect " <> displayTokenType STAR <> ".") >>= \token -> pure (BinaryOperation (line token) Star)
 
 parseDiv :: TokenParser (Expression -> Expression -> Expression)
-parseDiv = matchTokenType T.SLASH >>= \token -> pure (BinaryOperation (T.line token) Slash)
+parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH <> ".") >>= \token -> pure (BinaryOperation (line token) Slash)
 
 -- Unary expressions
 unary :: TokenParser Expression
 unary = (parseBang <|> parseMinusUnary) <*> unary <|> primary
 
 parseBang :: TokenParser (Expression -> Expression)
-parseBang = matchTokenType T.BANG >>= \token -> pure (UnaryOperation (T.line token) Bang)
+parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)
 
 parseMinusUnary :: TokenParser (Expression -> Expression)
-parseMinusUnary = matchTokenType T.MINUS >>= \token -> pure (UnaryOperation (T.line token) UMinus)
+parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (UnaryOperation (line token) UMinus)
 
 -- Primary expressions
 primary :: TokenParser Expression
@@ -202,22 +227,22 @@ primary =
     <|> parseVarName
 
 parseFalse :: TokenParser Expression
-parseFalse = matchTokenType T.FALSE >> pure (Literal (Bool False))
+parseFalse = satisfy ((FALSE ==) . tokenType) ("Expect " <> displayTokenType FALSE <> ".") >> pure (Literal (Bool False))
 
 parseTrue :: TokenParser Expression
-parseTrue = matchTokenType T.TRUE >> pure (Literal (Bool True))
+parseTrue = satisfy ((TRUE ==) . tokenType) ("Expect " <> displayTokenType TRUE <> ".") >> pure (Literal (Bool True))
 
 parseNil :: TokenParser Expression
-parseNil = matchTokenType T.NIL >> pure (Literal Nil)
+parseNil = satisfy ((NIL ==) . tokenType) ("Expect " <> displayTokenType NIL <> ".") >> pure (Literal Nil)
 
 parseNumber :: TokenParser Expression
 parseNumber = do
-  Token (T.NUMBER _ n) _ <- satisfy (isNumber . tokenType) "a number"
+  Token (NUMBER _ n) _ <- satisfy (isNumber . tokenType) "a number"
   pure (Literal (Number n))
 
 parseString :: TokenParser Expression
 parseString = do
-  Token (T.STRING _ s) _ <- satisfy (isString . tokenType) "a string"
+  Token (STRING _ s) _ <- satisfy (isString . tokenType) "a string"
   pure (Literal (String s))
 
 parseGrouping :: TokenParser Expression
@@ -225,16 +250,16 @@ parseGrouping = Grouping <$> parens expression
 
 parseVarName :: TokenParser Expression
 parseVarName = do
-  Token {tokenType = T.IDENTIFIER name, line = lineNum} <- satisfy (T.isIdentifier . tokenType) "variable"
+  Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "variable"
   pure (VariableExpr lineNum name)
 
 -- Helpers
 
 parens :: TokenParser a -> TokenParser a
 parens p = do
-  void $ matchTokenType T.LEFT_PAREN
+  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
   result <- p
-  void $ matchTokenType T.RIGHT_PAREN
+  void $ satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> ".")
   pure result
 
 leftAssociative ::
@@ -253,38 +278,43 @@ leftAssociative pOperand pOperator = do
   pure $ foldl' (\acc (op, next) -> op acc next) first rest
 
 -- | Prints and expression in the format expected by the Crafting Interpreters book.
--- >>> prettyPrint (BinaryOperation 1 Plus (Literal (Number 1)) (Literal (Number 2)))
+-- >>> displayExpr(BinaryOperation 1 Plus (Literal (Number 1)) (Literal (Number 2)))
 -- "(+ 1.0 2.0)"
--- >>> prettyPrint (BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Literal (Number 45.67)))
+-- >>> displayExpr(BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Literal (Number 45.67)))
 -- "(* (- 123.0) 45.67)"
--- >>> prettyPrint (BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Grouping (Literal (Number 45.67))))
+-- >>> displayExpr(BinaryOperation 1 Star (UnaryOperation 1 UMinus (Literal (Number 123))) (Grouping (Literal (Number 45.67))))
 -- "(* (- 123.0) (group 45.67))"
-prettyPrint :: Expression -> String
-prettyPrint (Literal lit) = prettyPrintLit lit
-prettyPrint (UnaryOperation _ op expr) = "(" <> prettyPrintUnOp op <> " " <> prettyPrint expr <> ")"
-prettyPrint (BinaryOperation _ op e1 e2) = "(" <> prettyPrintBinOp op <> " " <> prettyPrint e1 <> " " <> prettyPrint e2 <> ")"
-prettyPrint (Grouping expr) = "(group " <> prettyPrint expr <> ")"
-prettyPrint (VariableExpr _ name) = name
-prettyPrint (VariableAssignment _ name expr) = "(= " <> name <> " " <> prettyPrint expr <> ")"
+displayExpr :: Expression -> String
+displayExpr (Literal lit) = displayLit lit
+displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> displayExpr expr <> ")"
+displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
+displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
+displayExpr (VariableExpr _ name) = name
+displayExpr (VariableAssignment _ name expr) = "(= " <> name <> " " <> displayExpr expr <> ")"
+displayExpr (Logical _ op e1 e2) = "(" <> displayLogicOp op <> " " <> displayExpr e1 <> displayExpr e2 <> ")"
 
-prettyPrintBinOp :: BinaryOperator -> String
-prettyPrintBinOp EqualEqual = "=="
-prettyPrintBinOp BangEqual = "!="
-prettyPrintBinOp Less = "<"
-prettyPrintBinOp LessEqual = "<="
-prettyPrintBinOp Greater = ">"
-prettyPrintBinOp GreaterEqual = ">="
-prettyPrintBinOp Plus = "+"
-prettyPrintBinOp BMinus = "-"
-prettyPrintBinOp Star = "*"
-prettyPrintBinOp Slash = "/"
+displayBinOp :: BinaryOperator -> String
+displayBinOp EqualEqual = "=="
+displayBinOp BangEqual = "!="
+displayBinOp Less = "<"
+displayBinOp LessEqual = "<="
+displayBinOp Greater = ">"
+displayBinOp GreaterEqual = ">="
+displayBinOp Plus = "+"
+displayBinOp BMinus = "-"
+displayBinOp Star = "*"
+displayBinOp Slash = "/"
 
-prettyPrintUnOp :: UnaryOperator -> String
-prettyPrintUnOp UMinus = "-"
-prettyPrintUnOp Bang = "!"
+displayUnOp :: UnaryOperator -> String
+displayUnOp UMinus = "-"
+displayUnOp Bang = "!"
 
-prettyPrintLit :: Literal -> String
-prettyPrintLit (Number n) = show n
-prettyPrintLit (String s) = "String " <> s
-prettyPrintLit (Bool b) = (map toLower . show) b
-prettyPrintLit Nil = "nil"
+displayLogicOp :: LogicalOperator -> String
+displayLogicOp Or = "or"
+displayLogicOp And = "and"
+
+displayLit :: Literal -> String
+displayLit (Number n) = show n
+displayLit (String s) = "String " <> s
+displayLit (Bool b) = (map toLower . show) b
+displayLit Nil = "nil"

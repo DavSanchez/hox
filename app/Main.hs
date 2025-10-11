@@ -1,22 +1,17 @@
 module Main (main) where
 
 import Control.Monad ((>=>))
-import Data.Bifunctor (bimap)
-import Data.Either (lefts, rights)
 import Data.List (singleton)
-import Data.List.NonEmpty (toList)
 import Error (InterpreterError (..), handleErr)
-import Evaluation (Value)
-import Expression (Expression, expression, prettyPrint)
-import Interpreter (Interpreter, evaluateExpr, interpreterFailure, programInterpreter, runInterpreter, runNoIOInterpreter)
+import Expression (Expression, displayExpr, expression)
+import Interpreter (Interpreter, buildTreeWalkInterpreter, evaluateExpr, runInterpreter, runNoIOInterpreter)
 import Parser (runParser)
-import Program (parseProgram)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
-import Token (Token, prettyPrintToken)
-import Value (printValue)
+import Token (Token, displayToken)
+import Value (Value, displayValue)
 
 main :: IO ()
 main = do
@@ -27,7 +22,8 @@ main = do
     ["--chap06_parsing", script] -> readFile' script >>= handleChap06Out . (runChapter04 >=> runChapter06)
     ["--chap07_evaluating", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
     ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . runChapter08 . runChapter04
-    [script] -> readFile' script >>= currentImpl
+    ["--chap09_control", script] -> readFile' script >>= treeWalkInterpreter
+    [script] -> readFile' script >>= treeWalkInterpreter
     _ -> do
       hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"
       exitWith (ExitFailure 64)
@@ -39,50 +35,47 @@ runPrompt = do
   eof <- isEOF -- Was EOF entered?
   if eof
     then putStrLn "Goodbye!"
-    else getLine >>= currentImpl >> runPrompt
-
-currentImpl :: String -> IO ()
-currentImpl = handleChap08Out . runChapter08 . runChapter04
+    else getLine >>= treeWalkInterpreter >> runPrompt
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
-runChapter04 script =
-  let tokenResult = (toList . scanTokens) script
-      errors = lefts tokenResult
-   in if null errors
-        then Right $ rights tokenResult
-        else Left $ Syntax errors
+runChapter04 = scanTokens
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
-handleChap04Out = either handleErr (mapM_ (putStrLn . prettyPrintToken))
+handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
 
 -- Chapter 06 operations
 runChapter06 :: [Token] -> Either InterpreterError Expression
-runChapter06 = bimap (Parse . singleton) fst . runParser expression
+runChapter06 s =
+  let (result, _) = runParser expression s
+   in case result of
+        Left parseErr -> Left (Parse $ singleton parseErr)
+        Right expr -> Right expr
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
-handleChap06Out = either handleErr (putStrLn . prettyPrint)
+handleChap06Out = either handleErr (putStrLn . displayExpr)
 
 -- Chapter 07 operations
 runChapter07 :: Expression -> Either InterpreterError Value
 runChapter07 = runNoIOInterpreter . evaluateExpr
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
-handleChap07Out = either handleErr (putStrLn . printValue)
+handleChap07Out = either handleErr (putStrLn . displayValue)
 
--- Chapter 08 operations
+-- Chapter 08+ operations
 -- The previous chapters where "but a hack". Now we have the real deal!
 runChapter08 :: Either InterpreterError [Token] -> Interpreter ()
-runChapter08 (Left err) = interpreterFailure err
-runChapter08 (Right tokens) = do
-  case parseProgram tokens of
-    Left errs -> interpreterFailure (Parse errs)
-    Right prog -> programInterpreter prog
+runChapter08 = buildTreeWalkInterpreter
 
--- handleChap08Out :: Either InterpreterError Program -> IO ()
-handleChap08Out :: Interpreter a -> IO ()
-handleChap08Out interpreter = do
-  result <- runInterpreter interpreter
-  case result of
+handleChap08Out :: Interpreter () -> IO ()
+handleChap08Out = run
+
+-- Actual functions that will run from now on
+treeWalkInterpreter :: String -> IO ()
+treeWalkInterpreter = run . buildTreeWalkInterpreter . scanTokens
+
+run :: Interpreter () -> IO ()
+run =
+  runInterpreter >=> \case
     Left err -> handleErr err
-    Right _ -> pure ()
+    Right v -> pure v

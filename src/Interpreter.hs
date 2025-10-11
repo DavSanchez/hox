@@ -1,5 +1,6 @@
 module Interpreter
   ( Interpreter,
+    buildTreeWalkInterpreter,
     runInterpreter,
     programInterpreter,
     interpreterFailure,
@@ -8,33 +9,50 @@ module Interpreter
   )
 where
 
+import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
+import Data.Foldable (traverse_)
 import Data.Functor (void)
-import Environment qualified as Env
-import Error (InterpreterError (Eval))
+import Environment
+  ( Environment,
+    assignVar,
+    declareVar,
+    getVar,
+    newEnv,
+    popFrame,
+    pushFrame,
+  )
+import Error (InterpreterError (Eval, Parse))
 import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
-import Expression (Expression (..))
-import Program (Declaration (..), Program (..), Statement (..), Variable (..))
-import Value (Value (VNil), printValue)
+import Expression (Expression (..), LogicalOperator (..))
+import Program (Declaration (..), Program (..), Statement (..), Variable (..), parseProgram)
+import Token (Token)
+import Value (Value (VNil), displayValue, isTruthy)
 
 type Interpreter = InterpreterT IO
 
+buildTreeWalkInterpreter :: Either InterpreterError [Token] -> Interpreter ()
+buildTreeWalkInterpreter (Left err) = interpreterFailure err
+buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
+  Left errs -> interpreterFailure (Parse errs)
+  Right prog -> programInterpreter prog
+
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
-runInterpreter interpreter = evalStateT (runExceptT (runInterpreterT interpreter)) mempty
+runInterpreter interpreter = evalStateT (runExceptT (runInterpreterT interpreter)) newEnv
 
 interpreterFailure :: InterpreterError -> Interpreter a
 interpreterFailure = throwError
 
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: ExceptT InterpreterError (StateT Env.Environment m) a
+  { runInterpreterT :: ExceptT InterpreterError (StateT Environment m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState Env.Environment,
+      MonadState Environment,
       MonadError InterpreterError,
       MonadPrinter
     )
@@ -63,10 +81,10 @@ type NoIOInterpreter = InterpreterT Identity
 -- Returns either an interpreter error or the computed value.
 -- Used for evaluating expressions on previous chapters.
 runNoIOInterpreter :: NoIOInterpreter a -> Either InterpreterError a
-runNoIOInterpreter interpreter = runIdentity $ evalStateT (runExceptT (runInterpreterT interpreter)) mempty
+runNoIOInterpreter interpreter = runIdentity $ evalStateT (runExceptT (runInterpreterT interpreter)) newEnv
 
 programInterpreter ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
@@ -74,7 +92,7 @@ programInterpreter ::
 programInterpreter (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
@@ -83,7 +101,7 @@ interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareVariable ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m
   ) =>
   Variable -> m ()
@@ -91,36 +109,40 @@ declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
-  modify (Env.define varName value)
+  modify (declareVar varName value)
 
 interpretStatement ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
   Statement -> m ()
 interpretStatement (PrintStmt expr) = interpretPrint expr
 interpretStatement (ExprStmt expr) = void $ evaluateExpr expr
--- How does this receive a copy of the environment that does not clash with the parent one?
-interpretStatement (BlockStmt decls) = do
-  -- Get parent environment
-  parentEnv <- get
-  -- Run the actions (TODO: are blocks expressions that resolve to a value?)
-  mapM_ interpretDecl decls
-  -- Restore the environment
-  put parentEnv
+interpretStatement (IfStmt expr thenBranch elseBranch) = do
+  cond <- isTruthy <$> evaluateExpr expr
+  if cond
+    then interpretStatement thenBranch
+    else traverse_ interpretStatement elseBranch
+interpretStatement (BlockStmt decls) =
+  modify pushFrame
+    >> mapM_ interpretDecl decls -- TODO: are blocks expressions that resolve to a value?
+    >> modify popFrame
+interpretStatement while@(WhileStmt expr stmt) =
+  evaluateExpr expr
+    >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
 
 interpretPrint ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m,
     MonadPrinter m
   ) =>
   Expression -> m ()
-interpretPrint expr = evaluateExpr expr >>= printLn . printValue
+interpretPrint expr = evaluateExpr expr >>= printLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
-  ( MonadState Env.Environment m,
+  ( MonadState Environment m,
     MonadError InterpreterError m
   ) =>
   Expression -> m Value
@@ -135,18 +157,28 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
   env <- get
-  case Env.get name env of
+  case getVar name env of
     Nothing ->
       throwError $
         Eval $
           EvalError line ("Undefined variable '" <> name <> "'.")
     Just value -> pure value
 evaluateExpr (VariableAssignment line name expr) = do
-  env <- get
+  -- The variable expression needs to be evaluated *before* we retrieve the environment,
+  -- else the environment will not reflect the changes made by evaluating the expression, and
+  -- the right-associativity property of this operation will be broken.
+  -- It's broken because I will update the environment at the end without including the changes
+  -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
-  case Env.get name env of
+  env <- get
+  case assignVar name value env of
     Nothing ->
-      throwError $
-        Eval $
-          EvalError line ("Undefined variable '" <> name <> "'.")
-    Just _ -> modify (Env.define name value) >> pure value
+      -- Variable is not defined in any scope
+      throwError $ Eval $ EvalError line ("Undefined variable '" <> name <> "'.")
+    Just env' -> put env' >> pure value
+evaluateExpr (Logical _ op e1 e2) =
+  evaluateExpr e1
+    >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
+  where
+    shortCircuits Or expr = isTruthy expr
+    shortCircuits And expr = (not . isTruthy) expr

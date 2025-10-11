@@ -3,8 +3,7 @@ module Evaluation
     evalUnaryOp,
     evalBinaryOp,
     EvalError (..),
-    prettyPrintEvalErr,
-    Value,
+    displayEvalErr,
   )
 where
 
@@ -13,7 +12,7 @@ import Expression
     Literal (..),
     UnaryOperator (..),
   )
-import Value (Value (..))
+import Value (Value (..), isTruthy)
 
 data EvalError = EvalError
   { errorLine :: Int,
@@ -21,8 +20,8 @@ data EvalError = EvalError
   }
   deriving stock (Show, Eq)
 
-prettyPrintEvalErr :: EvalError -> String
-prettyPrintEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
+displayEvalErr :: EvalError -> String
+displayEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)
@@ -66,8 +65,3 @@ evalLiteral (Number n) = VNumber n
 evalLiteral (String s) = VString s
 evalLiteral (Bool b) = VBool b
 evalLiteral Nil = VNil
-
-isTruthy :: Value -> Bool
-isTruthy VNil = False
-isTruthy (VBool b) = b
-isTruthy _ = True

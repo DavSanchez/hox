@@ -136,7 +136,7 @@ parseForStmt = do
 
 parseForInitializer :: TokenParser (Maybe Declaration)
 parseForInitializer =
-  peekToken
+  satisfy (const True) "" -- always succeed
     >>= ( \case
             T.SEMICOLON -> pure Nothing -- No initializer
             T.VAR -> Just . VarDecl <$> variable
@@ -146,7 +146,7 @@ parseForInitializer =
 
 parseForCondition :: TokenParser (Maybe Expression)
 parseForCondition =
-  peekToken
+  satisfy (const True) "" -- always succeed
     >>= ( \case
             T.SEMICOLON -> pure Nothing -- No condition
             _ -> Just <$> expression
@@ -155,7 +155,7 @@ parseForCondition =
 
 parseForIncrement :: TokenParser (Maybe Expression)
 parseForIncrement =
-  peekToken
+  satisfy (const True) "" -- always succeed
     >>= ( \case
             T.RIGHT_PAREN -> pure Nothing -- No increment
             _ -> Just <$> expression

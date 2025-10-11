@@ -1,7 +1,6 @@
 module Main (main) where
 
 import Control.Monad ((>=>))
-import Data.Bifunctor (bimap)
 import Data.List (singleton)
 import Error (InterpreterError (..), handleErr)
 import Expression (Expression, displayExpr, expression)
@@ -47,7 +46,11 @@ handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
 
 -- Chapter 06 operations
 runChapter06 :: [Token] -> Either InterpreterError Expression
-runChapter06 = bimap (Parse . singleton) fst . runParser expression
+runChapter06 s =
+  let (result, _) = runParser expression s
+   in case result of
+        Left parseErr -> Left (Parse $ singleton parseErr)
+        Right expr -> Right expr
 
 handleChap06Out :: Either InterpreterError Expression -> IO ()
 handleChap06Out = either handleErr (putStrLn . displayExpr)

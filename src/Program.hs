@@ -51,8 +51,8 @@ parseProgram' :: [Token] -> [Either ParseError Declaration]
 parseProgram' [] = []
 parseProgram' [Token {tokenType = EOF}] = []
 parseProgram' tokens = case runParser declaration tokens of
-  Left err -> Left err : parseProgram' (synchronize tokens)
-  Right (stmt, rest) -> Right stmt : parseProgram' rest
+  (Left err, rest) -> Left err : parseProgram' (synchronize rest)
+  (Right stmt, rest) -> Right stmt : parseProgram' rest
 
 -- | Drop the current token and keep going until we find a statement start
 synchronize :: [Token] -> [Token]
@@ -62,8 +62,8 @@ synchronize (_ : Token {tokenType = EOF} : _) = [] -- EOF found, stop
 synchronize (Token {tokenType = SEMICOLON} : tt) = tt -- Statement boundary after semicolon, stop
 synchronize (_ : t : tt) =
   if tokenType t `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN]
-    then t : tt -- Statement boundary start, stop
-    else synchronize tt
+    then t : tt -- Statement boundary start, return it
+    else synchronize (t : tt)
 
 declaration :: TokenParser Declaration
 declaration = do
@@ -167,7 +167,7 @@ parseForIncrement =
       . tokenType
 
 parseExprStmt :: TokenParser Statement
-parseExprStmt = ExprStmt <$> expression <* satisfy ((SEMICOLON ==) . tokenType) ("Expect " <> displayTokenType SEMICOLON <> ".")
+parseExprStmt = ExprStmt <$> expression <* satisfy ((SEMICOLON ==) . tokenType) ("Expect '" <> displayTokenType SEMICOLON <> "' after expression.")
 
 parseIfStmt :: TokenParser Statement
 parseIfStmt = do
@@ -199,9 +199,9 @@ parseBlockStmt = satisfy ((LEFT_BRACE ==) . tokenType) ("Expect " <> displayToke
 parseScopedProgram :: TokenParser [Declaration]
 parseScopedProgram = Parser $ \tokens -> go tokens []
   where
-    go :: [Token] -> [Declaration] -> Either ParseError ([Declaration], [Token])
-    go [] decls = Right (reverse decls, [])
-    go (Token {tokenType = RIGHT_BRACE} : rest) decls = Right (reverse decls, rest)
+    go :: [Token] -> [Declaration] -> (Either ParseError [Declaration], [Token])
+    go [] decls = (Right (reverse decls), [])
+    go (Token {tokenType = RIGHT_BRACE} : rest) decls = (Right (reverse decls), rest)
     go ts decls = case runParser declaration ts of
-      Left err -> Left err
-      Right (decl, rest) -> go rest (decl : decls)
+      (Left err, rest) -> (Left err, rest)
+      (Right decl, rest) -> go rest (decl : decls)

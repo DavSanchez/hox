@@ -23,7 +23,7 @@ import Token (Token (..), TokenType (..), displayTokenType)
 -- }
 -- @
 newtype Parser e s a = Parser
-  { runParser :: s -> Either e (a, s)
+  { runParser :: s -> (Either e a, s)
   }
 
 -- | A parse error, containing the token where the error happened (if any) and a message.
@@ -46,54 +46,57 @@ type TokenParser = Parser ParseError [Token]
 
 instance Functor TokenParser where
   fmap :: (a -> b) -> TokenParser a -> TokenParser b
-  fmap f p = Parser $ \input -> do
-    (parsedValue, rest) <- runParser p input
-    pure (f parsedValue, rest)
+  fmap f p = Parser $ \input ->
+    let (parsedValue, rest) = runParser p input
+     in (f <$> parsedValue, rest)
 
 instance Applicative TokenParser where
   pure :: a -> TokenParser a
-  pure a = Parser $ \s -> pure (a, s)
+  pure a = Parser (Right a,)
 
   (<*>) :: TokenParser (a -> b) -> TokenParser a -> TokenParser b
-  fP <*> pP = Parser $ \input -> do
-    (parsedFun, fRest) <- runParser fP input
-    (parsedValue, pRest) <- runParser pP fRest
-    pure (parsedFun parsedValue, pRest)
+  fP <*> pP = Parser $ \input ->
+    let (parsedFun, fRest) = runParser fP input
+        (parsedValue, pRest) = runParser pP fRest
+     in (parsedFun <*> parsedValue, pRest)
 
 instance Monad TokenParser where
   (>>=) :: TokenParser a -> (a -> TokenParser b) -> TokenParser b
   p >>= f = Parser $ \input -> do
-    (parsedValue, rest) <- runParser p input
-    runParser (f parsedValue) rest
+    let (parsedValue, rest) = runParser p input
+    case parsedValue of
+      Left err -> (Left err, rest)
+      Right v -> runParser (f v) rest
 
 instance Alternative TokenParser where
   empty :: TokenParser a
   empty = fail "empty parser"
 
+  -- Try the first parser, if it fails try the second one without consuming input.
   (<|>) :: TokenParser a -> TokenParser a -> TokenParser a
   parserA <|> parserB = Parser $ \input ->
     case runParser parserA input of
-      Right result -> Right result
-      Left _ -> runParser parserB input
+      (Right result, rest) -> (Right result, rest)
+      (Left _, _) -> runParser parserB input
 
 instance MonadFail TokenParser where
   fail :: String -> TokenParser a
   fail msg = Parser $ \case
-    (t : _) -> Left (ParseError (Just t) msg)
-    [] -> Left (ParseError Nothing msg)
+    (t : tt) -> (Left $ ParseError (Just t) msg, tt)
+    [] -> (Left $ ParseError Nothing msg, [])
 
 -- Helpers
 
 peek :: TokenParser Token
 peek = Parser $ \case
-  (t : tt) -> Right (t, t : tt)
-  [] -> Left (ParseError Nothing "Unexpected end of input.")
+  (t : tt) -> (Right t, t : tt)
+  [] -> (Left $ ParseError Nothing "Unexpected end of input.", [])
 
 satisfy :: (Token -> Bool) -> String -> TokenParser Token
 satisfy predicate failMsg = Parser $ \case
-  (t : tt) | predicate t -> Right (t, tt)
-  (t : _) -> Left (ParseError (Just t) failMsg)
-  [] -> Left (ParseError Nothing failMsg)
+  (t : tt) | predicate t -> (Right t, tt)
+  (t : tt) -> (Left $ ParseError (Just t) failMsg, tt)
+  [] -> (Left $ ParseError Nothing failMsg, [])
 
 consume :: TokenParser ()
 consume = void $ satisfy (const True) "Unexpected end of input."

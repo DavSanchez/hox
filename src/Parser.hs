@@ -3,7 +3,6 @@ module Parser
     Parser (Parser, runParser),
     ParseError (..),
     displayParseErr,
-    matchTokenType,
     satisfy,
     peekToken,
   )
@@ -11,7 +10,7 @@ where
 
 import Control.Applicative (Alternative (..))
 import Scanner.Error (Error (..), displayErr)
-import Token (Token (..), TokenType, toString)
+import Token (Token (..), toString)
 import Token qualified as T
 
 -- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.
@@ -94,6 +93,3 @@ satisfy predicate failMsg = Parser $ \case
   (t : tt) | predicate t -> Right (t, tt)
   (t : _) -> Left (ParseError (Just t) failMsg)
   [] -> Left (ParseError Nothing failMsg)
-
-matchTokenType :: TokenType -> TokenParser Token
-matchTokenType tType = satisfy (\t -> tokenType t == tType) ("Expect " <> toString tType <> ".")

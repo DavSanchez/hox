@@ -11,8 +11,8 @@ import Control.Applicative (Alternative ((<|>)))
 import Data.Either (lefts, rights)
 import Data.Functor (void)
 import Expression (Expression, expression)
-import Parser (ParseError, Parser (..), TokenParser, matchTokenType, peekToken, satisfy)
-import Token (Token (..))
+import Parser (ParseError, Parser (..), TokenParser, peekToken, satisfy)
+import Token (Token (..), toString)
 import Token qualified as T
 
 newtype Program = Program [Declaration] deriving stock (Show)
@@ -78,10 +78,13 @@ declaration = do
     _ -> Statement <$> statement
 
 variable :: TokenParser Variable
-variable = matchTokenType T.VAR *> (Variable <$> variableName <*> (withInitializer <|> noInitializer)) <* varDeclEnd
+variable =
+  satisfy ((T.VAR ==) . tokenType) ("Expect " <> toString T.VAR <> ".")
+    *> (Variable <$> variableName <*> (withInitializer <|> noInitializer))
+    <* varDeclEnd
 
 withInitializer :: TokenParser (Maybe Expression)
-withInitializer = Just <$> (matchTokenType T.EQUAL *> expression)
+withInitializer = Just <$> (satisfy ((T.EQUAL ==) . tokenType) ("Expect " <> toString T.EQUAL <> ".") *> expression)
 
 noInitializer :: TokenParser (Maybe Expression)
 noInitializer = pure Nothing
@@ -92,7 +95,7 @@ variableName = do
   pure name
 
 varDeclEnd :: TokenParser Token
-varDeclEnd = satisfy (\t -> tokenType t == T.SEMICOLON) "Expect ';' after variable declaration"
+varDeclEnd = satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after variable declaration"
 
 statement :: TokenParser Statement
 statement = do
@@ -105,13 +108,13 @@ statement = do
     _ -> parseExprStmt
 
 parseExprStmt :: TokenParser Statement
-parseExprStmt = ExprStmt <$> expression <* matchTokenType T.SEMICOLON
+parseExprStmt = ExprStmt <$> expression <* satisfy ((T.SEMICOLON ==) . tokenType) ("Expect " <> toString T.SEMICOLON <> ".")
 
 parseIfStmt :: TokenParser Statement
 parseIfStmt = do
-  void $ matchTokenType T.LEFT_PAREN <|> fail "Expect '(' after 'if'."
+  void $ satisfy ((T.LEFT_PAREN ==) . tokenType) "Expect '(' after 'if'."
   expr <- expression
-  void $ matchTokenType T.RIGHT_PAREN <|> fail "Expect ')' after if condition."
+  void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after if condition."
   thenBranch <- statement
   t <- peekToken
   if tokenType t == T.ELSE
@@ -119,17 +122,17 @@ parseIfStmt = do
     else pure $ IfStmt expr thenBranch Nothing
 
 parsePrintStmt :: TokenParser Statement
-parsePrintStmt = matchTokenType T.PRINT *> (PrintStmt <$> expression) <* matchTokenType T.SEMICOLON
+parsePrintStmt = satisfy ((T.PRINT ==) . tokenType) ("Expect " <> toString T.PRINT <> ".") *> (PrintStmt <$> expression) <* satisfy ((T.SEMICOLON ==) . tokenType) ("Expect " <> toString T.SEMICOLON <> ".")
 
 parseWhileStmt :: TokenParser Statement
 parseWhileStmt = do
-  void $ matchTokenType T.LEFT_PAREN <|> fail "Expect '(' after 'while'."
+  void $ satisfy ((T.LEFT_PAREN ==) . tokenType) "Expect '(' after 'while'."
   expr <- expression
-  void $ matchTokenType T.RIGHT_PAREN <|> fail "Expect ')' after condition."
+  void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after condition."
   WhileStmt expr <$> statement
 
 parseBlockStmt :: TokenParser Statement
-parseBlockStmt = matchTokenType T.LEFT_BRACE *> (BlockStmt <$> parseScopedProgram)
+parseBlockStmt = satisfy ((T.LEFT_BRACE ==) . tokenType) ("Expect " <> toString T.LEFT_BRACE <> ".") *> (BlockStmt <$> parseScopedProgram)
 
 -- TODO review
 parseScopedProgram :: TokenParser [Declaration]

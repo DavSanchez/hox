@@ -11,7 +11,7 @@ import Control.Applicative (Alternative ((<|>)))
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
 import Expression (Expression (Literal), Literal (Bool), expression)
-import Parser (ParseError, Parser (..), TokenParser, peekToken, satisfy)
+import Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
 import Token (Token (..), displayTokenType)
 import Token qualified as T
 
@@ -72,7 +72,7 @@ synchronize s = dropWhile (not . isStmtStart) (drop 1 s)
 
 declaration :: TokenParser Declaration
 declaration = do
-  t <- peekToken
+  t <- peek
   case tokenType t of
     T.VAR -> VarDecl <$> variable
     _ -> Statement <$> statement
@@ -99,7 +99,7 @@ varDeclEnd = satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after variable d
 
 statement :: TokenParser Statement
 statement = do
-  t <- peekToken
+  t <- peek
   case tokenType t of
     T.IF -> parseIfStmt
     T.FOR -> parseForStmt
@@ -160,7 +160,7 @@ parseIfStmt = do
   expr <- expression
   void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after if condition."
   thenBranch <- statement
-  t <- peekToken
+  t <- peek
   if tokenType t == T.ELSE
     then IfStmt expr thenBranch . Just <$> statement
     else pure $ IfStmt expr thenBranch Nothing

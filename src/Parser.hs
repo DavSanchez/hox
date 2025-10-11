@@ -4,11 +4,13 @@ module Parser
     ParseError (..),
     displayParseErr,
     satisfy,
-    peekToken,
+    peek,
+    consume,
   )
 where
 
 import Control.Applicative (Alternative (..))
+import Data.Functor (void)
 import Scanner.Error (Error (..), displayErr)
 import Token (Token (..), displayTokenType)
 import Token qualified as T
@@ -83,8 +85,8 @@ instance MonadFail TokenParser where
 
 -- Helpers
 
-peekToken :: TokenParser Token
-peekToken = Parser $ \case
+peek :: TokenParser Token
+peek = Parser $ \case
   (t : tt) -> Right (t, t : tt)
   [] -> Left (ParseError Nothing "Unexpected end of input.")
 
@@ -93,3 +95,6 @@ satisfy predicate failMsg = Parser $ \case
   (t : tt) | predicate t -> Right (t, tt)
   (t : _) -> Left (ParseError (Just t) failMsg)
   [] -> Left (ParseError Nothing failMsg)
+
+consume :: TokenParser ()
+consume = void $ satisfy (const True) "Unexpected end of input."

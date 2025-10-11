@@ -33,7 +33,7 @@ where
 import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
-import Parser (TokenParser, peekToken, satisfy)
+import Parser (TokenParser, peek, satisfy)
 import Token (Token (Token, tokenType), displayTokenType, isNumber, isString)
 import Token qualified as AST
 import Token qualified as T
@@ -135,7 +135,7 @@ expression = assignment
 assignment :: TokenParser Expression
 assignment = do
   expr <- orOp <|> fail "Expect expression."
-  t <- peekToken
+  t <- peek
   if tokenType t == T.EQUAL
     then varAssign expr
     else pure expr

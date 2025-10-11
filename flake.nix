@@ -47,7 +47,7 @@
           let
             dart2 = inputs.oldDartNixpkgs.legacyPackages.${system}.dart;
             crafting-interpreters-script =
-              testCase:
+              testCase: interpreter:
               pkgs.writers.writeHaskellBin "crafting-interpreters-script"
                 {
                   libraries = [
@@ -76,42 +76,45 @@
                     dart "pub" "get"
                     cd tmpDir
                     -- Run the tests!
-                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${self'.packages.hox}/bin/hox" "--arguments" "--${testCase}"
+                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${pkgs.lib.getExe interpreter}" "--arguments" "--${testCase}"
                 '';
-            mkTestApp = testCase: {
+            mkTestApp = testCase: interpreter: {
               type = "app";
-              program = "${crafting-interpreters-script testCase}/bin/crafting-interpreters-script";
-              meta.description = "Run the Crafting Interpreters test suite for ${testCase}";
+              program = "${crafting-interpreters-script testCase interpreter}/bin/crafting-interpreters-script";
+              meta.description = "Run the Crafting Interpreters test suite for ${testCase}, using the '${interpreter.meta.mainProgram}' interpreter.";
             };
             haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
           in
           {
             apps = {
-              test-chapter04 = mkTestApp "chap04_scanning";
-              test-chapter06 = mkTestApp "chap06_parsing";
-              test-chapter07 = mkTestApp "chap07_evaluating";
-              test-chapter08 = mkTestApp "chap08_statements";
-              test-chapter09 = mkTestApp "chap09_control";
-              # test-chapter10 = mkTestApp "chap10_functions";
-              # test-chapter11 = mkTestApp "chap11_resolving";
-              # test-chapter12 = mkTestApp "chap12_classes";
-              # test-chapter13 = mkTestApp "chap13_inheritance";
+              test-chapter04 = mkTestApp "chap04_scanning" self'.packages.hox;
+              test-chapter06 = mkTestApp "chap06_parsing" self'.packages.hox;
+              test-chapter07 = mkTestApp "chap07_evaluating" self'.packages.hox;
+              test-chapter08 = mkTestApp "chap08_statements" self'.packages.hox;
+              test-chapter09 = mkTestApp "chap09_control" self'.packages.hox;
+              # test-chapter10 = mkTestApp "chap10_functions" self'.packages.hox;
+              # test-chapter11 = mkTestApp "chap11_resolving" self'.packages.hox;
+              # test-chapter12 = mkTestApp "chap12_classes" self'.packages.hox;
+              # test-chapter13 = mkTestApp "chap13_inheritance" self'.packages.hox;
             };
 
-            devShells.default = pkgs.mkShell {
-              shellHook = ''
-                ${config.pre-commit.installationScript}
-              '';
-              packages =
-                (with haskellPackages; [
-                  haskell-language-server
-                  cabal-install
-                  doctest
-                ])
-                ++ [
-                  pkgs.gnumake
-                  dart2
-                ];
+            devShells = rec {
+              default = hox;
+              hox = pkgs.mkShell {
+                shellHook = ''
+                  ${config.pre-commit.installationScript}
+                '';
+                packages =
+                  (with haskellPackages; [
+                    haskell-language-server
+                    cabal-install
+                    doctest
+                  ])
+                  ++ [
+                    pkgs.gnumake
+                    dart2
+                  ];
+              };
             };
 
             packages = rec {

@@ -110,6 +110,7 @@ statement = do
 
 parseForStmt :: TokenParser Statement
 parseForStmt = do
+  void $ satisfy ((T.FOR ==) . tokenType) ("Expect " <> toString T.FOR <> ".")
   void $ satisfy ((T.LEFT_PAREN ==) . tokenType) "Expect '(' after 'for'."
   initializer <- parseForInitializer
   condition <- parseForCondition
@@ -166,6 +167,7 @@ parseExprStmt = ExprStmt <$> expression <* satisfy ((T.SEMICOLON ==) . tokenType
 
 parseIfStmt :: TokenParser Statement
 parseIfStmt = do
+  void $ satisfy ((T.IF ==) . tokenType) ("Expect " <> toString T.IF <> ".")
   void $ satisfy ((T.LEFT_PAREN ==) . tokenType) "Expect '(' after 'if'."
   expr <- expression
   void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after if condition."
@@ -180,6 +182,7 @@ parsePrintStmt = satisfy ((T.PRINT ==) . tokenType) ("Expect " <> toString T.PRI
 
 parseWhileStmt :: TokenParser Statement
 parseWhileStmt = do
+  void $ satisfy ((T.WHILE ==) . tokenType) ("Expect " <> toString T.WHILE <> ".")
   void $ satisfy ((T.LEFT_PAREN ==) . tokenType) "Expect '(' after 'while'."
   expr <- expression
   void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after condition."

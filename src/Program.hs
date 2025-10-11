@@ -9,7 +9,7 @@ where
 
 import Control.Applicative (Alternative ((<|>)))
 import Data.Either (lefts, rights)
-import Data.Functor (void, ($>))
+import Data.Functor (void)
 import Expression (Expression (Literal), Literal (Bool), expression)
 import Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
 import Token (Token (..), displayTokenType)
@@ -83,6 +83,9 @@ variable =
     *> (Variable <$> variableName <*> (withInitializer <|> noInitializer))
     <* varDeclEnd
 
+variable' :: TokenParser Variable
+variable' = Variable <$> variableName <*> (withInitializer <|> noInitializer)
+
 withInitializer :: TokenParser (Maybe Expression)
 withInitializer = Just <$> (satisfy ((T.EQUAL ==) . tokenType) ("Expect " <> displayTokenType T.EQUAL <> ".") *> expression)
 
@@ -113,8 +116,9 @@ parseForStmt = do
   void $ satisfy ((T.FOR ==) . tokenType) ("Expect " <> displayTokenType T.FOR <> ".")
   void $ satisfy ((T.LEFT_PAREN ==) . tokenType) "Expect '(' after 'for'."
   initializer <- parseForInitializer
+  void $ satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after for initializer."
   condition <- parseForCondition
-  void $ satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after loop condition."
+  void $ satisfy ((T.SEMICOLON ==) . tokenType) "Expect ';' after for condition."
   increment <- parseForIncrement
   void $ satisfy ((T.RIGHT_PAREN ==) . tokenType) "Expect ')' after for clauses."
   body <- statement
@@ -138,19 +142,27 @@ parseForInitializer :: TokenParser (Maybe Declaration)
 parseForInitializer = do
   t <- peek
   case tokenType t of
-    T.SEMICOLON -> consume $> Nothing
-    T.VAR -> Just . VarDecl <$> variable
+    T.SEMICOLON -> pure Nothing
+    T.VAR -> consume *> (Just . VarDecl <$> variable')
     _ -> Just . Statement . ExprStmt <$> expression
 
 parseForCondition :: TokenParser (Maybe Expression)
-parseForCondition =
-  satisfy ((T.SEMICOLON ==) . tokenType) "" $> Nothing
-    <|> Just <$> expression
+parseForCondition = do
+  peek
+    >>= ( \case
+            T.SEMICOLON -> pure Nothing
+            _ -> Just <$> expression
+        )
+      . tokenType
 
 parseForIncrement :: TokenParser (Maybe Expression)
 parseForIncrement =
-  satisfy ((T.RIGHT_PAREN ==) . tokenType) "" $> Nothing
-    <|> Just <$> expression
+  peek
+    >>= ( \case
+            T.RIGHT_PAREN -> pure Nothing
+            _ -> Just <$> expression
+        )
+      . tokenType
 
 parseExprStmt :: TokenParser Statement
 parseExprStmt = ExprStmt <$> expression <* satisfy ((T.SEMICOLON ==) . tokenType) ("Expect " <> displayTokenType T.SEMICOLON <> ".")

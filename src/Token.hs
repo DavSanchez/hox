@@ -5,7 +5,7 @@ module Token
     isNumber,
     isString,
     isIdentifier,
-    toString,
+    displayTokenType,
   )
 where
 
@@ -121,43 +121,43 @@ displayToken (Token VAR _) = "VAR var null"
 displayToken (Token WHILE _) = "WHILE while null"
 displayToken (Token EOF _) = "EOF  null"
 
-toString :: TokenType -> String
-toString (IDENTIFIER s) = s
-toString (STRING _ s) = s
-toString (NUMBER _ n) = show n
-toString LEFT_PAREN = "("
-toString RIGHT_PAREN = ")"
-toString LEFT_BRACE = "{"
-toString RIGHT_BRACE = "}"
-toString COMMA = ","
-toString DOT = "."
-toString MINUS = "-"
-toString PLUS = "+"
-toString SEMICOLON = ";"
-toString SLASH = "/"
-toString STAR = "*"
-toString BANG = "!"
-toString BANG_EQUAL = "!="
-toString EQUAL = "="
-toString EQUAL_EQUAL = "=="
-toString GREATER = ">"
-toString GREATER_EQUAL = ">="
-toString LESS = "<"
-toString LESS_EQUAL = "<="
-toString AND = "and"
-toString CLASS = "class"
-toString ELSE = "else"
-toString FALSE = "false"
-toString TRUE = "true"
-toString FUN = "fun"
-toString FOR = "for"
-toString IF = "if"
-toString NIL = "nil"
-toString OR = "or"
-toString PRINT = "print"
-toString RETURN = "return"
-toString SUPER = "super"
-toString THIS = "this"
-toString VAR = "var"
-toString WHILE = "while"
-toString EOF = "EOF"
+displayTokenType :: TokenType -> String
+displayTokenType (IDENTIFIER s) = s
+displayTokenType (STRING _ s) = s
+displayTokenType (NUMBER _ n) = show n
+displayTokenType LEFT_PAREN = "("
+displayTokenType RIGHT_PAREN = ")"
+displayTokenType LEFT_BRACE = "{"
+displayTokenType RIGHT_BRACE = "}"
+displayTokenType COMMA = ","
+displayTokenType DOT = "."
+displayTokenType MINUS = "-"
+displayTokenType PLUS = "+"
+displayTokenType SEMICOLON = ";"
+displayTokenType SLASH = "/"
+displayTokenType STAR = "*"
+displayTokenType BANG = "!"
+displayTokenType BANG_EQUAL = "!="
+displayTokenType EQUAL = "="
+displayTokenType EQUAL_EQUAL = "=="
+displayTokenType GREATER = ">"
+displayTokenType GREATER_EQUAL = ">="
+displayTokenType LESS = "<"
+displayTokenType LESS_EQUAL = "<="
+displayTokenType AND = "and"
+displayTokenType CLASS = "class"
+displayTokenType ELSE = "else"
+displayTokenType FALSE = "false"
+displayTokenType TRUE = "true"
+displayTokenType FUN = "fun"
+displayTokenType FOR = "for"
+displayTokenType IF = "if"
+displayTokenType NIL = "nil"
+displayTokenType OR = "or"
+displayTokenType PRINT = "print"
+displayTokenType RETURN = "return"
+displayTokenType SUPER = "super"
+displayTokenType THIS = "this"
+displayTokenType VAR = "var"
+displayTokenType WHILE = "while"
+displayTokenType EOF = "EOF"

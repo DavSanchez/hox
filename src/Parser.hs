@@ -10,7 +10,7 @@ where
 
 import Control.Applicative (Alternative (..))
 import Scanner.Error (Error (..), displayErr)
-import Token (Token (..), toString)
+import Token (Token (..), displayTokenType)
 import Token qualified as T
 
 -- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.
@@ -34,7 +34,7 @@ data ParseError = ParseError
 
 displayParseErr :: ParseError -> String
 displayParseErr (ParseError (Just (Token T.EOF line)) msg) = displayErr (Error msg line " at end")
-displayParseErr (ParseError (Just (Token tType line)) msg) = displayErr (Error msg line (" at '" <> toString tType <> "'"))
+displayParseErr (ParseError (Just (Token tType line)) msg) = displayErr (Error msg line (" at '" <> displayTokenType tType <> "'"))
 displayParseErr (ParseError Nothing msg) = displayErr (Error msg 0 " at unknown") -- catchall... should not happen
 
 -- | Concrete type for our program parser.

@@ -40,13 +40,13 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
   Right prog -> programInterpreter prog
 
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
-runInterpreter interpreter = evalStateT (runExceptT (runInterpreterT interpreter)) newEnv
+runInterpreter interpreter = runExceptT (evalStateT (runInterpreterT interpreter) newEnv)
 
 interpreterFailure :: InterpreterError -> Interpreter a
 interpreterFailure = throwError
 
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: ExceptT InterpreterError (StateT Environment m) a
+  { runInterpreterT :: StateT Environment (ExceptT InterpreterError m) a
   }
   deriving newtype
     ( Functor,
@@ -81,7 +81,7 @@ type NoIOInterpreter = InterpreterT Identity
 -- Returns either an interpreter error or the computed value.
 -- Used for evaluating expressions on previous chapters.
 runNoIOInterpreter :: NoIOInterpreter a -> Either InterpreterError a
-runNoIOInterpreter interpreter = runIdentity $ evalStateT (runExceptT (runInterpreterT interpreter)) newEnv
+runNoIOInterpreter interpreter = runIdentity $ runExceptT (evalStateT (runInterpreterT interpreter) newEnv)
 
 programInterpreter ::
   ( MonadState Environment m,

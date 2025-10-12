@@ -10,7 +10,7 @@ module Interpreter
 where
 
 import Control.Monad (when)
-import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
+import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
 import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
@@ -126,7 +126,8 @@ interpretStatement (IfStmt expr thenBranch elseBranch) = do
     else traverse_ interpretStatement elseBranch
 interpretStatement (BlockStmt decls) =
   modify pushFrame
-    >> mapM_ interpretDecl decls -- TODO: are blocks expressions that resolve to a value?
+    -- TODO: are blocks expressions that resolve to a value?
+    >> mapM_ interpretDecl decls `catchError` (\e -> modify popFrame >> throwError e)
     >> modify popFrame
 interpretStatement while@(WhileStmt expr stmt) =
   evaluateExpr expr

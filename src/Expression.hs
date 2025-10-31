@@ -60,6 +60,14 @@ data Expression
       Expression
       -- | Right operand expression.
       Expression
+  | -- | A function call
+    Call
+      -- | The line number where the call happens.
+      Int
+      -- | The callee expression.
+      Expression
+      -- | The list of argument expressions.
+      [Expression]
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping Expression
   | -- | A variable (identifier).
@@ -207,7 +215,31 @@ parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH
 
 -- Unary expressions
 unary :: TokenParser Expression
-unary = (parseBang <|> parseMinusUnary) <*> unary <|> primary
+unary = (parseBang <|> parseMinusUnary) <*> unary <|> call
+
+call :: TokenParser Expression
+call = do
+  expr <- primary
+  t <- peek
+  if tokenType t == LEFT_PAREN
+    then Call (line t) expr <$> functionArgs
+    else pure expr
+
+functionArgs :: TokenParser [Expression]
+functionArgs =
+  satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
+    *> argumentList
+    <* satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> ".")
+
+argumentList :: TokenParser [Expression]
+argumentList = do
+  t <- peek
+  if tokenType t == RIGHT_PAREN
+    then pure []
+    else do
+      firstArg <- expression
+      restArgs <- many (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".") *> expression)
+      pure (firstArg : restArgs)
 
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)
@@ -288,6 +320,7 @@ displayExpr :: Expression -> String
 displayExpr (Literal lit) = displayLit lit
 displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> displayExpr expr <> ")"
 displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
+displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name) = name
 displayExpr (VariableAssignment _ name expr) = "(= " <> name <> " " <> displayExpr expr <> ")"

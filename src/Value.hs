@@ -2,9 +2,11 @@ module Value
   ( Value (..),
     displayValue,
     isTruthy,
+    Callable (..),
   )
 where
 
+import Control.Monad.IO.Class (MonadIO)
 import Data.Char (toLower)
 import Numeric (showFFloat)
 
@@ -14,7 +16,18 @@ data Value
   | VBool Bool
   | VString String
   | VNil
-  deriving stock (Show, Eq)
+  | VCallable Callable
+  deriving stock (Eq)
+
+data Callable = Callable
+  { arity :: Int,
+    name :: String,
+    call :: forall m. (MonadIO m) => [Value] -> m Value
+  }
+
+instance Eq Callable where
+  (==) :: Callable -> Callable -> Bool
+  (Callable a1 n1 _) == (Callable a2 n2 _) = a1 == a2 && n1 == n2
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False
@@ -35,3 +48,4 @@ displayValue (VNumber n) =
 displayValue (VBool b) = (map toLower . show) b
 displayValue (VString s) = s
 displayValue VNil = "nil"
+displayValue (VCallable callable) = "<fn " ++ name callable ++ ">"

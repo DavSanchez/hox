@@ -238,8 +238,17 @@ argumentList = do
     then pure []
     else do
       firstArg <- expression
-      restArgs <- many (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".") *> expression)
-      pure (firstArg : restArgs)
+      restArgs <- sepBy expression (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> "."))
+      let args = firstArg : restArgs
+      if length args >= 255
+        then fail "Cannot have more than 255 arguments."
+        else pure args
+
+sepBy :: TokenParser a -> TokenParser b -> TokenParser [a]
+sepBy p sep = do
+  first <- p
+  rest <- many (sep *> p)
+  pure (first : rest)
 
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)

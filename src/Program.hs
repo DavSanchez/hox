@@ -4,10 +4,12 @@ module Program
     Declaration (..),
     Statement (..),
     Variable (..),
+    Function (..),
   )
 where
 
 import Control.Applicative (Alternative ((<|>)))
+import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void)
 import Expression (Expression (Literal), Literal (Bool), expression)
@@ -16,7 +18,16 @@ import Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
 
 newtype Program = Program [Declaration] deriving stock (Show)
 
-data Declaration = VarDecl Variable | Statement Statement deriving stock (Show, Eq)
+data Declaration = Fun Function | VarDecl Variable | Statement Statement deriving stock (Show, Eq)
+
+type Block = [Declaration]
+
+data Function = Function
+  { funcName :: String,
+    funcParams :: [String],
+    funcBody :: Block
+  }
+  deriving stock (Show, Eq)
 
 data Variable = Variable
   { varName :: String,
@@ -35,7 +46,7 @@ data Statement
       (Maybe Statement)
   | PrintStmt Expression
   | WhileStmt Expression Statement
-  | BlockStmt [Declaration]
+  | BlockStmt Block
   deriving stock (Show, Eq)
 
 parseProgram :: [Token] -> Either [ParseError] Program
@@ -69,8 +80,37 @@ declaration :: TokenParser Declaration
 declaration = do
   t <- peek
   case tokenType t of
+    FUN -> Fun <$> function "function"
     VAR -> VarDecl <$> variable
     _ -> Statement <$> statement
+
+function :: String -> TokenParser Function
+function kind = do
+  void $ satisfy ((FUN ==) . tokenType) ("Expect " <> displayTokenType FUN <> ".")
+  Token {tokenType = IDENTIFIER name} <- satisfy (isIdentifier . tokenType) ("Expect " <> kind <> " name.")
+  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect '(' after " <> kind <> " name.")
+  params <- parseFunctionParameters
+  when (length params >= 255) $ fail "Can't have more than 255 parameters."
+  void $ satisfy ((RIGHT_PAREN ==) . tokenType) "Expect ')' after parameters."
+  void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> kind <> " body.") -- start function body
+  Function name params <$> parseScopedProgram
+
+parseFunctionParameters :: TokenParser [String]
+parseFunctionParameters = go []
+  where
+    go :: [String] -> TokenParser [String]
+    go acc = do
+      t <- peek
+      case tokenType t of
+        RIGHT_PAREN -> pure (reverse acc)
+        _ -> do
+          Token {tokenType = IDENTIFIER paramName} <- satisfy (isIdentifier . tokenType) "Expect parameter name."
+          let acc' = paramName : acc
+          t' <- peek
+          case tokenType t' of
+            COMMA -> consume *> go acc'
+            RIGHT_PAREN -> pure (reverse acc')
+            _ -> fail "Expect ',' or ')' after parameter name."
 
 variable :: TokenParser Variable
 variable =

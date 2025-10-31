@@ -4,7 +4,6 @@ module Interpreter
     runInterpreter,
     programInterpreter,
     interpreterFailure,
-    runNoIOInterpreter,
     evaluateExpr,
   )
 where
@@ -12,7 +11,6 @@ where
 import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.Identity (Identity (runIdentity))
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (void, ($>))
@@ -64,16 +62,6 @@ newtype InterpreterT m a = Interpreter
       MonadError InterpreterError,
       MonadIO
     )
-
--- | A version of the interpreter that runs without any IO capabilities, useful for testing.
--- Used for evaluating expressions on previous chapters.
-type NoIOInterpreter = InterpreterT Identity
-
--- | Runs a no-IO interpreter with an initial empty environment.
--- Returns either an interpreter error or the computed value.
--- Used for evaluating expressions on previous chapters.
-runNoIOInterpreter :: NoIOInterpreter a -> Either InterpreterError a
-runNoIOInterpreter interpreter = runIdentity $ runExceptT (evalStateT (runInterpreterT interpreter) newEnv)
 
 programInterpreter ::
   ( MonadState Environment m,

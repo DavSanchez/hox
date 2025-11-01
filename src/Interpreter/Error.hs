@@ -4,7 +4,7 @@ module Interpreter.Error
   )
 where
 
-import Evaluation (EvalError, displayEvalErr)
+import Evaluation.Error (EvalError, displayEvalErr)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Parser (ParseError, displayParseErr)
 import Scanner.Error (SyntaxError, displayErr)

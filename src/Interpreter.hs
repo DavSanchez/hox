@@ -5,6 +5,8 @@ module Interpreter
     programInterpreter,
     interpreterFailure,
     evaluateExpr,
+    InterpreterError (..),
+    handleErr,
   )
 where
 
@@ -23,9 +25,9 @@ import Environment
     popFrame,
     pushFrame,
   )
-import Error (InterpreterError (Eval, Parse))
 import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
 import Expression (Expression (..), LogicalOperator (..))
+import Interpreter.Error (InterpreterError (..), handleErr)
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
 import StdEnv (stdEnv)
 import Token (Token)

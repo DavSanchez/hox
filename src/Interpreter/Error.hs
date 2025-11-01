@@ -1,4 +1,4 @@
-module Error
+module Interpreter.Error
   ( InterpreterError (..),
     handleErr,
   )
@@ -7,12 +7,12 @@ where
 import Evaluation (EvalError, displayEvalErr)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Parser (ParseError, displayParseErr)
-import Scanner.Error (Error, displayErr)
+import Scanner.Error (SyntaxError, displayErr)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (stderr)
 
 -- Error handling
-data InterpreterError = Syntax [Error] | Parse [ParseError] | Eval EvalError deriving stock (Show, Eq)
+data InterpreterError = Syntax [SyntaxError] | Parse [ParseError] | Eval EvalError deriving stock (Show, Eq)
 
 handleErr :: InterpreterError -> IO ()
 handleErr = \case

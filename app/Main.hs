@@ -1,10 +1,17 @@
 module Main (main) where
 
 import Control.Monad ((>=>))
+import Data.Bifunctor (Bifunctor (first))
 import Data.List (singleton)
-import Error (InterpreterError (..), handleErr)
 import Expression (Expression, displayExpr, expression)
-import Interpreter (Interpreter, buildTreeWalkInterpreter, evaluateExpr, runInterpreter)
+import Interpreter
+  ( Interpreter,
+    InterpreterError (..),
+    buildTreeWalkInterpreter,
+    evaluateExpr,
+    handleErr,
+    runInterpreter,
+  )
 import Parser (runParser)
 import Scanner (scanTokens)
 import System.Environment (getArgs)
@@ -44,7 +51,7 @@ runPrompt = do
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
-runChapter04 = scanTokens
+runChapter04 = first Syntax . scanTokens
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
@@ -77,7 +84,7 @@ handleChap08Out = run
 
 -- Actual functions that will run from now on
 treeWalkInterpreter :: String -> IO ()
-treeWalkInterpreter = run . buildTreeWalkInterpreter . scanTokens
+treeWalkInterpreter = run . buildTreeWalkInterpreter . first Syntax . scanTokens
 
 run :: Interpreter () -> IO ()
 run =

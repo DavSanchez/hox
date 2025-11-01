@@ -11,7 +11,7 @@ where
 
 import Control.Applicative (Alternative (..))
 import Data.Functor (void)
-import Scanner.Error (Error (..), displayErr)
+import Scanner.Error (SyntaxError (..), displayErr)
 import Token (Token (..), TokenType (..), displayTokenType)
 
 -- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.

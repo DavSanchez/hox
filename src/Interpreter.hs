@@ -129,6 +129,12 @@ interpretStatement (BlockStmt decls) =
 interpretStatement while@(WhileStmt expr stmt) =
   evaluateExpr expr
     >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
+interpretStatement (ReturnStmt maybeExpr) = do
+  value <- case maybeExpr of
+    Just expr -> evaluateExpr expr
+    Nothing -> pure VNil
+  -- Using EvalError with line number 0 to indicate a return value.
+  throwError (Eval (EvalError 0 ("Return " <> displayValue value))) -- TODO REMOVE
 
 interpretPrint ::
   ( MonadState Environment m,

@@ -11,7 +11,7 @@ where
 import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (when)
 import Data.Either (lefts, rights)
-import Data.Functor (void)
+import Data.Functor (void, ($>))
 import Expression (Expression (Literal), Literal (Bool), expression)
 import Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
 import Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
@@ -45,6 +45,7 @@ data Statement
       -- | else
       (Maybe Statement)
   | PrintStmt Expression
+  | ReturnStmt (Maybe Expression)
   | WhileStmt Expression Statement
   | BlockStmt Block
   deriving stock (Show, Eq)
@@ -142,9 +143,21 @@ statement = do
     IF -> parseIfStmt
     FOR -> parseForStmt
     PRINT -> parsePrintStmt
+    RETURN -> parseReturnStmt
     WHILE -> parseWhileStmt
     LEFT_BRACE -> parseBlockStmt
     _ -> parseExprStmt
+
+parseReturnStmt :: TokenParser Statement
+parseReturnStmt = do
+  void $ satisfy ((RETURN ==) . tokenType) ("Expect " <> displayTokenType RETURN <> ".")
+  t <- peek
+  case tokenType t of
+    SEMICOLON -> consume $> ReturnStmt Nothing
+    _ -> do
+      expr <- expression
+      void $ satisfy ((SEMICOLON ==) . tokenType) ("Expect '" <> displayTokenType SEMICOLON <> "' after return value.")
+      pure (ReturnStmt (Just expr))
 
 parseForStmt :: TokenParser Statement
 parseForStmt = do

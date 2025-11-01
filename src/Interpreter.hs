@@ -88,7 +88,7 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
           { arity = length funcParams,
             name = funcName,
             call = \args -> do
-              let paramBindings = zip funcParams args
+              let paramBindings = zip funcParams args -- assume param length and arg positions match
               let funcEnv = foldr (uncurry declareVar) stdEnv paramBindings
               runInterpreter' funcEnv (mapM_ interpretDecl funcBody) $> VNil
           }

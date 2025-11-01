@@ -222,7 +222,14 @@ call = do
   expr <- primary
   t <- peek
   if tokenType t == LEFT_PAREN
-    then Call (line t) expr <$> functionArgs
+    then finishCall expr
+    else pure expr
+
+finishCall :: Expression -> TokenParser Expression
+finishCall expr = do
+  t <- peek
+  if tokenType t == LEFT_PAREN
+    then functionArgs >>= finishCall . Call (line t) expr
     else pure expr
 
 functionArgs :: TokenParser [Expression]
@@ -238,17 +245,11 @@ argumentList = do
     then pure []
     else do
       firstArg <- expression
-      restArgs <- sepBy expression (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> "."))
+      restArgs <- many (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".") *> expression)
       let args = firstArg : restArgs
       if length args >= 255
         then fail "Cannot have more than 255 arguments."
         else pure args
-
-sepBy :: TokenParser a -> TokenParser b -> TokenParser [a]
-sepBy p sep = do
-  first <- p
-  rest <- many (sep *> p)
-  pure (first : rest)
 
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)

@@ -6,8 +6,12 @@ module Value
   )
 where
 
+import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
+import Environment (Environment)
+import Interpreter.Error (InterpreterError)
 import Numeric (showFFloat)
 
 -- | Represents the values that can be produced by evaluating an expression.
@@ -22,7 +26,13 @@ data Value
 data Callable = Callable
   { arity :: Int,
     name :: String,
-    call :: forall m. (MonadIO m) => [Value] -> m Value
+    call ::
+      forall m.
+      ( MonadState (Environment Value) m,
+        MonadError InterpreterError m,
+        MonadIO m
+      ) =>
+      [Value] -> m Value
   }
 
 instance Eq Callable where

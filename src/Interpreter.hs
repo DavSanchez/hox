@@ -25,11 +25,13 @@ import Environment
     popFrame,
     pushFrame,
   )
-import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
+import Environment.StdEnv (stdEnv)
+import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
+import Evaluation.Error (EvalError (EvalError))
 import Expression (Expression (..), LogicalOperator (..))
+import Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Interpreter.Error (InterpreterError (..), handleErr)
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
-import StdEnv (stdEnv)
 import Token (Token)
 import Value (Callable (..), Value (VCallable, VNil), displayValue, isTruthy)
 
@@ -44,7 +46,7 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
 runInterpreter = runInterpreter' newEnv
 
-runInterpreter' :: (Monad m) => Environment -> InterpreterT m a -> m (Either InterpreterError a)
+runInterpreter' :: (Monad m) => Environment Value -> InterpreterT m a -> m (Either InterpreterError a)
 runInterpreter' env interpreter = runExceptT (evalStateT (runInterpreterT interpreter) env)
 
 interpreterFailure :: InterpreterError -> Interpreter a
@@ -54,19 +56,19 @@ evalError :: (MonadError InterpreterError m) => Int -> String -> m a
 evalError line msg = throwError (Eval (EvalError line msg))
 
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: StateT Environment (ExceptT InterpreterError m) a
+  { runInterpreterT :: StateT (Environment Value) (ExceptT InterpreterError m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState Environment,
+      MonadState (Environment Value),
       MonadError InterpreterError,
       MonadIO
     )
 
 programInterpreter ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -74,7 +76,7 @@ programInterpreter ::
 programInterpreter (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -83,7 +85,9 @@ interpretDecl (Fun function) = declareFunction function
 interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
-declareFunction :: (MonadState Environment m) => Function -> m ()
+declareFunction ::
+  (MonadState (Environment Value) m) =>
+  Function -> m ()
 declareFunction (Function {funcName, funcParams, funcBody}) = do
   let callable =
         Callable
@@ -92,12 +96,36 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
             call = \args -> do
               let paramBindings = zip funcParams args -- assume param length and arg positions match
               let funcEnv = foldr (uncurry declareVar) stdEnv paramBindings
-              runInterpreter' funcEnv (mapM_ interpretDecl funcBody) $> VNil
+              runInterpreter' funcEnv (runFunctionBody funcBody)
+                >>= \case
+                  Left err -> throwError err
+                  Right value -> pure value
           }
   modify (declareVar funcName (VCallable callable))
 
+runFunctionBody ::
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  [Declaration] -> m Value
+runFunctionBody [] = pure VNil
+runFunctionBody (d : ds) =
+  interpretDeclF d >>= \case
+    Break v -> pure v
+    Continue () -> runFunctionBody ds
+
+interpretDeclF ::
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Declaration -> m (ControlFlow Value ())
+interpretDeclF (Statement (ReturnStmt maybeExpr)) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
+interpretDeclF decl = interpretDecl decl $> Continue ()
+
 declareVariable ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -109,7 +137,7 @@ declareVariable (Variable {varName, varInitializer}) = do
   modify (declareVar varName value)
 
 interpretStatement ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -129,15 +157,10 @@ interpretStatement (BlockStmt decls) =
 interpretStatement while@(WhileStmt expr stmt) =
   evaluateExpr expr
     >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
-interpretStatement (ReturnStmt maybeExpr) = do
-  value <- case maybeExpr of
-    Just expr -> evaluateExpr expr
-    Nothing -> pure VNil
-  -- Using EvalError with line number 0 to indicate a return value.
-  throwError (Eval (EvalError 0 ("Return " <> displayValue value))) -- TODO REMOVE
+interpretStatement (ReturnStmt _) = evalError 0 "Return statement outside of function."
 
 interpretPrint ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -146,7 +169,7 @@ interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -191,6 +214,7 @@ evaluateExpr (Call line calleeExpr argExprs) = do
 
 callCallable ::
   ( MonadError InterpreterError m,
+    MonadState (Environment Value) m,
     MonadIO m
   ) =>
   Int ->

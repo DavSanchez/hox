@@ -117,12 +117,14 @@ library
     Parser
     Program
     Scanner
-    StdEnv
     Token
     Value
 
   -- Modules included in this library but not exported.
   other-modules:
+    Environment.StdEnv
+    Evaluation.Error
+    Interpreter.ControlFlow
     Interpreter.Error
     Scanner.Error
     Scanner.Internal

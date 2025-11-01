@@ -14,25 +14,24 @@ import Data.Foldable (find)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.Map qualified as M
 import Data.Maybe (isJust)
-import Value (Value)
 
-type Environment = NonEmpty Frame
+type Environment a = NonEmpty (Frame a)
 
-type Frame = M.Map String Value
+type Frame a = M.Map String a
 
-newEnv :: Environment
+newEnv :: Environment a
 newEnv = mempty :| []
 
-pushFrame :: Environment -> Environment
+pushFrame :: Environment a -> Environment a
 pushFrame = (mempty <|) -- prepend a new empty frame
 
-popFrame :: Environment -> Environment
+popFrame :: Environment a -> Environment a
 popFrame single@(_ :| []) = single -- cannot pop the last frame
 popFrame (_ :| (x : xs)) = x :| xs
 
 -- Inserts the defined variable in the current environment frame (i.e. top of the stack)
 -- This is only for declarations
-declareVar :: String -> Value -> Environment -> Environment
+declareVar :: String -> a -> Environment a -> Environment a
 declareVar name value (frame :| rest) = M.insert name value frame :| rest
 
 -- | Assigns a variable to the environment.
@@ -59,7 +58,7 @@ declareVar name value (frame :| rest) = M.insert name value frame :| rest
 -- >>> env' = assignVar "x" (VNumber 2) env
 -- >>> fmap (fmap M.toList . NE.toList) env'
 -- Nothing
-assignVar :: String -> Value -> Environment -> Maybe Environment
+assignVar :: String -> a -> Environment a -> Maybe (Environment a)
 assignVar name value (frame :| (r : rest))
   | M.member name frame = Just $ M.insert name value frame :| (r : rest)
   | otherwise = (frame <|) <$> assignVar name value (r :| rest)
@@ -67,5 +66,5 @@ assignVar name value (frame :| [])
   | M.member name frame = Just $ M.insert name value frame :| []
   | otherwise = Nothing
 
-getVar :: String -> Environment -> Maybe Value
+getVar :: String -> Environment a -> Maybe a
 getVar name env = join $ find isJust (M.lookup name <$> env)

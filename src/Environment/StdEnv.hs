@@ -1,4 +1,4 @@
-module StdEnv (stdEnv) where
+module Environment.StdEnv (stdEnv) where
 
 import Control.Monad.IO.Class (liftIO)
 import Data.Functor ((<&>))
@@ -10,7 +10,7 @@ import Environment (Environment)
 import Value (Callable (..), Value (..))
 
 -- | The standard environment with built-in functions and variables.
-stdEnv :: Environment
+stdEnv :: Environment Value
 stdEnv = NE.singleton $ M.fromList [("clock", VCallable clock)]
 
 clock :: Callable

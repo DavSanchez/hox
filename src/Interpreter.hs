@@ -10,18 +10,16 @@ module Interpreter
   )
 where
 
-import Control.Monad (when)
-import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
+import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
-import Data.Functor (void, ($>))
+import Data.Functor (($>))
 import Environment
   ( Environment,
     assignVar,
     declareVar,
     getVar,
-    newEnv,
     popFrame,
     pushFrame,
   )
@@ -44,7 +42,7 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
   Right prog -> programInterpreter prog
 
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
-runInterpreter = runInterpreter' newEnv
+runInterpreter = runInterpreter' stdEnv
 
 runInterpreter' :: (Monad m) => Environment Value -> InterpreterT m a -> m (Either InterpreterError a)
 runInterpreter' env interpreter = runExceptT (evalStateT (runInterpreterT interpreter) env)
@@ -94,12 +92,13 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
           { arity = length funcParams,
             name = funcName,
             call = \args -> do
-              let paramBindings = zip funcParams args -- assume param length and arg positions match
-              let funcEnv = foldr (uncurry declareVar) stdEnv paramBindings
-              runInterpreter' funcEnv (runFunctionBody funcBody)
-                >>= \case
-                  Left err -> throwError err
-                  Right value -> pure value
+              callerEnv <- get
+              modify pushFrame
+              traverse_ (modify . uncurry declareVar) (zip funcParams args) -- assume param length and arg positions match
+              r <- runFunctionBody funcBody
+              modify popFrame
+              put callerEnv
+              pure r
           }
   modify (declareVar funcName (VCallable callable))
 
@@ -121,8 +120,9 @@ interpretDeclF ::
     MonadIO m
   ) =>
   Declaration -> m (ControlFlow Value ())
-interpretDeclF (Statement (ReturnStmt maybeExpr)) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
-interpretDeclF decl = interpretDecl decl $> Continue ()
+interpretDeclF (Statement s) = interpretStatementCF s
+interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
+interpretDeclF (Fun f) = declareFunction f $> Continue ()
 
 declareVariable ::
   ( MonadState (Environment Value) m,
@@ -142,22 +142,48 @@ interpretStatement ::
     MonadIO m
   ) =>
   Statement -> m ()
-interpretStatement (PrintStmt expr) = interpretPrint expr
-interpretStatement (ExprStmt expr) = void $ evaluateExpr expr
-interpretStatement (IfStmt expr thenBranch elseBranch) = do
+interpretStatement s =
+  interpretStatementCF s >>= \case
+    Continue () -> pure ()
+    Break _ -> evalError 0 "Return statement outside of function."
+
+interpretStatementCF ::
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Statement -> m (ControlFlow Value ())
+interpretStatementCF (PrintStmt expr) = interpretPrint expr $> Continue ()
+interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
+interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
   cond <- isTruthy <$> evaluateExpr expr
   if cond
-    then interpretStatement thenBranch
-    else traverse_ interpretStatement elseBranch
-interpretStatement (BlockStmt decls) =
+    then interpretStatementCF thenBranch
+    else maybe (pure (Continue ())) interpretStatementCF elseBranch
+interpretStatementCF (BlockStmt decls) = do
   modify pushFrame
-    -- TODO: are blocks expressions that resolve to a value?
-    >> mapM_ interpretDecl decls `catchError` (\e -> modify popFrame >> throwError e)
-    >> modify popFrame
-interpretStatement while@(WhileStmt expr stmt) =
-  evaluateExpr expr
-    >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
-interpretStatement (ReturnStmt _) = evalError 0 "Return statement outside of function."
+  r <- go decls
+  modify popFrame
+  pure r
+  where
+    go [] = pure (Continue ())
+    go (d : ds) = do
+      cf <- interpretDeclF d
+      case cf of
+        Break v -> pure (Break v)
+        Continue () -> go ds
+interpretStatementCF (WhileStmt expr stmt) = loop
+  where
+    loop = do
+      c <- isTruthy <$> evaluateExpr expr
+      if not c
+        then pure (Continue ())
+        else do
+          cf <- interpretStatementCF stmt
+          case cf of
+            Break v -> pure (Break v)
+            Continue () -> loop
+interpretStatementCF (ReturnStmt maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
 
 interpretPrint ::
   ( MonadState (Environment Value) m,

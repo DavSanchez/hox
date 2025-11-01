@@ -111,7 +111,6 @@ library
   -- Modules exported by the library.
   exposed-modules:
     Environment
-    Error
     Evaluation
     Expression
     Interpreter
@@ -124,6 +123,7 @@ library
 
   -- Modules included in this library but not exported.
   other-modules:
+    Interpreter.Error
     Scanner.Error
     Scanner.Internal
     Scanner.Naive

@@ -230,7 +230,7 @@ evaluateExpr (Logical _ op e1 e2) =
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
   where
     shortCircuits Or expr = isTruthy expr
-    shortCircuits And expr = (not . isTruthy) expr
+    shortCircuits And expr = not $ isTruthy expr
 evaluateExpr (Call line calleeExpr argExprs) = do
   callee <- evaluateExpr calleeExpr
   args <- mapM evaluateExpr argExprs

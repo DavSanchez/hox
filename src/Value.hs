@@ -2,10 +2,16 @@ module Value
   ( Value (..),
     displayValue,
     isTruthy,
+    Callable (..),
   )
 where
 
+import Control.Monad.Error.Class (MonadError)
+import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
+import Environment (Environment)
+import Interpreter.Error (InterpreterError)
 import Numeric (showFFloat)
 
 -- | Represents the values that can be produced by evaluating an expression.
@@ -14,7 +20,28 @@ data Value
   | VBool Bool
   | VString String
   | VNil
-  deriving stock (Show, Eq)
+  | VCallable Callable
+  deriving stock (Eq, Show)
+
+data Callable = Callable
+  { arity :: Int,
+    name :: String,
+    call ::
+      forall m.
+      ( MonadState (Environment Value) m,
+        MonadError InterpreterError m,
+        MonadIO m
+      ) =>
+      [Value] -> m Value
+  }
+
+instance Eq Callable where
+  (==) :: Callable -> Callable -> Bool
+  (Callable a1 n1 _) == (Callable a2 n2 _) = a1 == a2 && n1 == n2
+
+instance Show Callable where
+  show :: Callable -> String
+  show (Callable _ name _) = "<fn " ++ name ++ ">"
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False
@@ -35,3 +62,4 @@ displayValue (VNumber n) =
 displayValue (VBool b) = (map toLower . show) b
 displayValue (VString s) = s
 displayValue VNil = "nil"
+displayValue (VCallable callable) = show callable

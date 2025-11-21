@@ -2,26 +2,25 @@ module Scanner
   ( scanTokens,
     scanTokens',
     displayErr,
-    Error (..),
+    SyntaxError (..),
   )
 where
 
 import Data.Either (lefts, rights)
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
-import Error (InterpreterError (Syntax))
-import Scanner.Error (Error (..), displayErr)
+import Scanner.Error (SyntaxError (..), displayErr)
 import Scanner.Internal (TokenResult)
 import Scanner.Naive (naiveScanTokens)
-import Token
+import Token (Token)
 
-scanTokens :: String -> Either InterpreterError [Token]
+scanTokens :: String -> Either [SyntaxError] [Token]
 scanTokens script =
   let tokenResult = (NE.toList . scanTokens') script
       errors = lefts tokenResult
    in if null errors
         then Right $ rights tokenResult
-        else Left $ Syntax errors
+        else Left errors
 
 -- | Scans the input string and returns a list of tokens.
 -- >>> scanTokens' "hello world"

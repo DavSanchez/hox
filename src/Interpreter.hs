@@ -4,32 +4,34 @@ module Interpreter
     runInterpreter,
     programInterpreter,
     interpreterFailure,
-    runNoIOInterpreter,
     evaluateExpr,
+    InterpreterError (..),
+    handleErr,
   )
 where
 
-import Control.Monad (when)
-import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
-import Control.Monad.Identity (Identity (runIdentity))
-import Control.Monad.State (MonadState (get, put), MonadTrans (lift), StateT, evalStateT, modify)
+import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
+import Control.Monad.IO.Class (MonadIO (liftIO))
+import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
-import Data.Functor (void)
+import Data.Functor (($>))
 import Environment
   ( Environment,
     assignVar,
     declareVar,
     getVar,
-    newEnv,
     popFrame,
     pushFrame,
   )
-import Error (InterpreterError (Eval, Parse))
-import Evaluation (EvalError (EvalError), evalBinaryOp, evalLiteral, evalUnaryOp)
+import Environment.StdEnv (stdEnv)
+import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
+import Evaluation.Error (EvalError (EvalError))
 import Expression (Expression (..), LogicalOperator (..))
-import Program (Declaration (..), Program (..), Statement (..), Variable (..), parseProgram)
+import Interpreter.ControlFlow (ControlFlow (Break, Continue))
+import Interpreter.Error (InterpreterError (..), handleErr)
+import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
 import Token (Token)
-import Value (Value (VNil), displayValue, isTruthy)
+import Value (Callable (..), Value (VCallable, VNil), displayValue, isTruthy)
 
 type Interpreter = InterpreterT IO
 
@@ -40,69 +42,92 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
   Right prog -> programInterpreter prog
 
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
-runInterpreter interpreter = runExceptT (evalStateT (runInterpreterT interpreter) newEnv)
+runInterpreter = runInterpreter' stdEnv
+
+runInterpreter' :: (Monad m) => Environment Value -> InterpreterT m a -> m (Either InterpreterError a)
+runInterpreter' env interpreter = runExceptT (evalStateT (runInterpreterT interpreter) env)
 
 interpreterFailure :: InterpreterError -> Interpreter a
 interpreterFailure = throwError
 
+evalError :: (MonadError InterpreterError m) => Int -> String -> m a
+evalError line msg = throwError (Eval (EvalError line msg))
+
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: StateT Environment (ExceptT InterpreterError m) a
+  { runInterpreterT :: StateT (Environment Value) (ExceptT InterpreterError m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState Environment,
+      MonadState (Environment Value),
       MonadError InterpreterError,
-      MonadPrinter
+      MonadIO
     )
 
-class (Monad m) => MonadPrinter m where
-  printLn :: String -> m ()
-
--- Real world
-instance MonadPrinter IO where
-  printLn :: String -> IO ()
-  printLn = putStrLn
-
-instance (MonadPrinter m) => MonadPrinter (StateT s m) where
-  printLn :: String -> StateT s m ()
-  printLn = lift . printLn
-
-instance (MonadPrinter m) => MonadPrinter (ExceptT e m) where
-  printLn :: String -> ExceptT e m ()
-  printLn = lift . printLn
-
--- | A version of the interpreter that runs without any IO capabilities, useful for testing.
--- Used for evaluating expressions on previous chapters.
-type NoIOInterpreter = InterpreterT Identity
-
--- | Runs a no-IO interpreter with an initial empty environment.
--- Returns either an interpreter error or the computed value.
--- Used for evaluating expressions on previous chapters.
-runNoIOInterpreter :: NoIOInterpreter a -> Either InterpreterError a
-runNoIOInterpreter interpreter = runIdentity $ runExceptT (evalStateT (runInterpreterT interpreter) newEnv)
-
 programInterpreter ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
-    MonadPrinter m
+    MonadIO m
   ) =>
   Program -> m ()
 programInterpreter (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
-    MonadPrinter m
+    MonadIO m
   ) =>
   Declaration -> m ()
+interpretDecl (Fun function) = declareFunction function
 interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
+declareFunction ::
+  (MonadState (Environment Value) m) =>
+  Function -> m ()
+declareFunction (Function {funcName, funcParams, funcBody}) = do
+  let callable =
+        Callable
+          { arity = length funcParams,
+            name = funcName,
+            call = \args -> do
+              callerEnv <- get
+              modify pushFrame
+              traverse_ (modify . uncurry declareVar) (zip funcParams args) -- assume param length and arg positions match
+              r <- runFunctionBody funcBody
+              modify popFrame
+              put callerEnv
+              pure r
+          }
+  modify (declareVar funcName (VCallable callable))
+
+runFunctionBody ::
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  [Declaration] -> m Value
+runFunctionBody [] = pure VNil
+runFunctionBody (d : ds) =
+  interpretDeclF d >>= \case
+    Break v -> pure v
+    Continue () -> runFunctionBody ds
+
+interpretDeclF ::
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Declaration -> m (ControlFlow Value ())
+interpretDeclF (Statement s) = interpretStatementCF s
+interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
+interpretDeclF (Fun f) = declareFunction f $> Continue ()
+
 declareVariable ::
-  ( MonadState Environment m,
-    MonadError InterpreterError m
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
   ) =>
   Variable -> m ()
 declareVariable (Variable {varName, varInitializer}) = do
@@ -112,39 +137,67 @@ declareVariable (Variable {varName, varInitializer}) = do
   modify (declareVar varName value)
 
 interpretStatement ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
-    MonadPrinter m
+    MonadIO m
   ) =>
   Statement -> m ()
-interpretStatement (PrintStmt expr) = interpretPrint expr
-interpretStatement (ExprStmt expr) = void $ evaluateExpr expr
-interpretStatement (IfStmt expr thenBranch elseBranch) = do
+interpretStatement s =
+  interpretStatementCF s >>= \case
+    Continue () -> pure ()
+    Break _ -> evalError 0 "Return statement outside of function."
+
+interpretStatementCF ::
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Statement -> m (ControlFlow Value ())
+interpretStatementCF (PrintStmt expr) = interpretPrint expr $> Continue ()
+interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
+interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
   cond <- isTruthy <$> evaluateExpr expr
   if cond
-    then interpretStatement thenBranch
-    else traverse_ interpretStatement elseBranch
-interpretStatement (BlockStmt decls) =
+    then interpretStatementCF thenBranch
+    else maybe (pure (Continue ())) interpretStatementCF elseBranch
+interpretStatementCF (BlockStmt decls) = do
   modify pushFrame
-    -- TODO: are blocks expressions that resolve to a value?
-    >> mapM_ interpretDecl decls `catchError` (\e -> modify popFrame >> throwError e)
-    >> modify popFrame
-interpretStatement while@(WhileStmt expr stmt) =
-  evaluateExpr expr
-    >>= flip when (interpretStatement stmt >> interpretStatement while) . isTruthy
+  r <- go decls
+  modify popFrame
+  pure r
+  where
+    go [] = pure (Continue ())
+    go (d : ds) = do
+      cf <- interpretDeclF d
+      case cf of
+        Break v -> pure (Break v)
+        Continue () -> go ds
+interpretStatementCF (WhileStmt expr stmt) = loop
+  where
+    loop = do
+      c <- isTruthy <$> evaluateExpr expr
+      if not c
+        then pure (Continue ())
+        else do
+          cf <- interpretStatementCF stmt
+          case cf of
+            Break v -> pure (Break v)
+            Continue () -> loop
+interpretStatementCF (ReturnStmt maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
 
 interpretPrint ::
-  ( MonadState Environment m,
+  ( MonadState (Environment Value) m,
     MonadError InterpreterError m,
-    MonadPrinter m
+    MonadIO m
   ) =>
   Expression -> m ()
-interpretPrint expr = evaluateExpr expr >>= printLn . displayValue
+interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
-  ( MonadState Environment m,
-    MonadError InterpreterError m
+  ( MonadState (Environment Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
   ) =>
   Expression -> m Value
 evaluateExpr (Literal lit) = pure $ evalLiteral lit
@@ -159,10 +212,7 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
 evaluateExpr (VariableExpr line name) = do
   env <- get
   case getVar name env of
-    Nothing ->
-      throwError $
-        Eval $
-          EvalError line ("Undefined variable '" <> name <> "'.")
+    Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
     Just value -> pure value
 evaluateExpr (VariableAssignment line name expr) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
@@ -173,13 +223,33 @@ evaluateExpr (VariableAssignment line name expr) = do
   value <- evaluateExpr expr
   env <- get
   case assignVar name value env of
-    Nothing ->
-      -- Variable is not defined in any scope
-      throwError $ Eval $ EvalError line ("Undefined variable '" <> name <> "'.")
+    Nothing -> evalError line ("Undefined variable '" <> name <> "'.") -- Variable not defined in any scope
     Just env' -> put env' >> pure value
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
   where
     shortCircuits Or expr = isTruthy expr
-    shortCircuits And expr = (not . isTruthy) expr
+    shortCircuits And expr = not $ isTruthy expr
+evaluateExpr (Call line calleeExpr argExprs) = do
+  callee <- evaluateExpr calleeExpr
+  args <- mapM evaluateExpr argExprs
+  case callee of
+    VCallable callable -> callCallable line callable args
+    _ -> evalError line "Can only call functions and classes."
+
+callCallable ::
+  ( MonadError InterpreterError m,
+    MonadState (Environment Value) m,
+    MonadIO m
+  ) =>
+  Int ->
+  Callable ->
+  [Value] ->
+  m Value
+callCallable line callable args = do
+  let expectedArity = arity callable
+      actualArity = length args
+   in if actualArity /= expectedArity
+        then evalError line ("Expected " <> show expectedArity <> " arguments but got " <> show (length args) <> ".")
+        else call callable args

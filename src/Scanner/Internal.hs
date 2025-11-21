@@ -1,5 +1,5 @@
 module Scanner.Internal
-  ( Error (..),
+  ( SyntaxError (..),
     TokenResult,
     isAlpha,
     isAlphaNum,
@@ -10,10 +10,10 @@ module Scanner.Internal
 where
 
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
-import Scanner.Error (Error (..))
+import Scanner.Error (SyntaxError (..))
 import Token (Token (..), TokenType (..))
 
-type TokenResult = Either Error Token
+type TokenResult = Either SyntaxError Token
 
 validToken :: TokenType -> Int -> TokenResult
 validToken tokenType line =

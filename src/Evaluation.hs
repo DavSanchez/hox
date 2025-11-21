@@ -2,26 +2,16 @@ module Evaluation
   ( evalLiteral,
     evalUnaryOp,
     evalBinaryOp,
-    EvalError (..),
-    displayEvalErr,
   )
 where
 
+import Evaluation.Error (EvalError (..))
 import Expression
   ( BinaryOperator (..),
     Literal (..),
     UnaryOperator (..),
   )
 import Value (Value (..), isTruthy)
-
-data EvalError = EvalError
-  { errorLine :: Int,
-    errorMessage :: String
-  }
-  deriving stock (Show, Eq)
-
-displayEvalErr :: EvalError -> String
-displayEvalErr (EvalError line msg) = msg <> "\n[line " <> show line <> "]"
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)

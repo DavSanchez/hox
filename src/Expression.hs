@@ -236,7 +236,7 @@ functionArgs :: TokenParser [Expression]
 functionArgs =
   satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
     *> argumentList
-    <* satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> " after arguments.")
+    <* satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect '" <> displayTokenType RIGHT_PAREN <> "' after arguments.")
 
 argumentList :: TokenParser [Expression]
 argumentList = do
@@ -255,13 +255,12 @@ argumentList = do
           arg <- expression
           t <- peek
           case tokenType t of
-            -- Finished parsing arguments
-            RIGHT_PAREN -> pure (reverse (arg : acc))
             -- More arguments to parse
             COMMA -> do
               void $ satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".")
               go (n + 1) (arg : acc)
-            _ -> fail ("Expect " <> displayTokenType RIGHT_PAREN <> " after arguments.")
+            -- Finished parsing arguments (correctly or will fail next on closing paren check)
+            _ -> pure (reverse (arg : acc))
 
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)

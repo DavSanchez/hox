@@ -67,10 +67,10 @@
                   main :: IO ()
                   main = withSystemTempDirectory "crafting-interpreters-tests" $ \tmpDir -> do
                     -- Copy repository to temporary directory
+                    echo $ "Copying ${inputs.crafting-interpreters} to temporary directory " <> tmpDir <> "..."
                     cp "--no-preserve=all" "-r" "${inputs.crafting-interpreters}/." tmpDir
                     -- Change to it
                     cd tmpDir
-                    pwd
                     cd "./tool"
                     -- Pull dependencies
                     dart "pub" "get"

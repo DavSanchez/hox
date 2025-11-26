@@ -10,6 +10,7 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
+import Data.IORef (IORef)
 import Environment (Environment)
 import Interpreter.Error (InterpreterError)
 import Numeric (showFFloat)
@@ -26,6 +27,7 @@ data Value
 data Callable = Callable
   { arity :: Int,
     name :: String,
+    closure :: Maybe (IORef (Environment Value)),
     call ::
       forall m.
       ( MonadState (Environment Value) m,
@@ -37,11 +39,11 @@ data Callable = Callable
 
 instance Eq Callable where
   (==) :: Callable -> Callable -> Bool
-  (Callable a1 n1 _) == (Callable a2 n2 _) = a1 == a2 && n1 == n2
+  (Callable a1 n1 _ _) == (Callable a2 n2 _ _) = a1 == a2 && n1 == n2
 
 instance Show Callable where
   show :: Callable -> String
-  show (Callable _ name _) = "<fn " ++ name ++ ">"
+  show (Callable _ name _ _) = "<fn " ++ name ++ ">"
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False

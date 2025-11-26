@@ -15,6 +15,7 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
+import Data.IORef (newIORef, readIORef, writeIORef)
 import Environment
   ( Environment,
     assignVar,
@@ -84,23 +85,37 @@ interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareFunction ::
-  (MonadState (Environment Value) m) =>
+  (MonadState (Environment Value) m, MonadIO m) =>
   Function -> m ()
 declareFunction (Function {funcName, funcParams, funcBody}) = do
+  envAtDecl <- get
+  closureRef <- liftIO (newIORef envAtDecl)
   let callable =
         Callable
           { arity = length funcParams,
             name = funcName,
+            closure = Just closureRef,
             call = \args -> do
               callerEnv <- get
+              -- Switch to the function's closure environment
+              env0 <- liftIO (readIORef closureRef)
+              put env0
               modify pushFrame
               traverse_ (modify . uncurry declareVar) (zip funcParams args) -- assume param length and arg positions match
               r <- runFunctionBody funcBody
               modify popFrame
+              -- Persist changes to the closure environment
+              envAfter <- get
+              _ <- liftIO (writeIORef closureRef envAfter)
+              -- Restore caller environment
               put callerEnv
               pure r
           }
+  -- Declare the function in the current environment, then update the closure to include it
   modify (declareVar funcName (VCallable callable))
+  envWithSelf <- get
+  _ <- liftIO (writeIORef closureRef envWithSelf)
+  pure ()
 
 runFunctionBody ::
   ( MonadState (Environment Value) m,

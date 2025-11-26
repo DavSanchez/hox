@@ -18,5 +18,6 @@ clock =
   Callable
     { arity = 0,
       name = "clock",
+      closure = Nothing,
       call = const $ liftIO getPOSIXTime <&> (VNumber . (fromRational . toRational . nominalDiffTimeToSeconds))
     }

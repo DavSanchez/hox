@@ -111,7 +111,7 @@ parseFunctionParameters = go []
           case tokenType t' of
             COMMA -> consume *> go acc'
             RIGHT_PAREN -> pure (reverse acc')
-            _ -> fail "Expect ',' or ')' after parameter name."
+            _ -> fail "Expect ')' after parameters."
 
 variable :: TokenParser Variable
 variable =

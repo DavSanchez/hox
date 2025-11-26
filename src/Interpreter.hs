@@ -16,6 +16,8 @@ import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.List.NonEmpty (toList)
+import Data.Map qualified as M
 import Environment
   ( Environment,
     assignVar,
@@ -239,7 +241,11 @@ evaluateExpr (VariableAssignment line name expr) = do
   env <- get
   case assignVar name value env of
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.") -- Variable not defined in any scope
-    Just env' -> put env' >> pure value
+    Just env' -> do
+      put env'
+      -- Propagate assignment into any captured closure environments so they see updated value.
+      propagateToClosures name value env'
+      pure value
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
@@ -252,6 +258,18 @@ evaluateExpr (Call line calleeExpr argExprs) = do
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
+
+-- Propagate a variable assignment into captured closure environments.
+propagateToClosures :: (MonadIO m) => String -> Value -> Environment Value -> m ()
+propagateToClosures varName value env = liftIO $ traverse_ updateCallable callableRefs
+  where
+    frames = toList env
+    callableRefs = [ref | frame <- frames, (_, VCallable (Callable _ _ (Just ref) _)) <- M.toList frame]
+    updateCallable ref = do
+      closureEnv <- readIORef ref
+      case assignVar varName value closureEnv of
+        Nothing -> pure () -- Variable not captured in this closure
+        Just closureEnv' -> writeIORef ref closureEnv'
 
 callCallable ::
   ( MonadError InterpreterError m,

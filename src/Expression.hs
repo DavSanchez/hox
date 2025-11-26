@@ -140,7 +140,7 @@ expression = assignment
 
 assignment :: TokenParser Expression
 assignment = do
-  expr <- orOp <|> fail "Expect expression."
+  expr <- orOp
   t <- peek
   if tokenType t == EQUAL
     then varAssign expr
@@ -292,7 +292,7 @@ parseGrouping = Grouping <$> parens expression
 
 parseVarName :: TokenParser Expression
 parseVarName = do
-  Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "variable"
+  Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "Expect expression."
   pure (VariableExpr lineNum name)
 
 -- Helpers

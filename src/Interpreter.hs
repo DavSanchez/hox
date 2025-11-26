@@ -16,17 +16,15 @@ import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.IORef (newIORef, readIORef, writeIORef)
-import Data.List.NonEmpty (toList)
-import Data.Map qualified as M
 import Environment
   ( Environment,
-    assignVar,
-    declareVar,
-    getVar,
+    declareVarRef,
+    findVarRef,
+    getVarRef,
     popFrame,
     pushFrame,
   )
-import Environment.StdEnv (stdEnv)
+import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
 import Expression (Expression (..), LogicalOperator (..))
@@ -45,7 +43,9 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
   Right prog -> programInterpreter prog
 
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
-runInterpreter = runInterpreter' stdEnv
+runInterpreter interpreter = do
+  env <- mkStdEnv
+  runInterpreter' env interpreter
 
 runInterpreter' :: (Monad m) => Environment Value -> InterpreterT m a -> m (Either InterpreterError a)
 runInterpreter' env interpreter = runExceptT (evalStateT (runInterpreterT interpreter) env)
@@ -103,18 +103,24 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
               env0 <- liftIO (readIORef closureRef)
               put env0
               modify pushFrame
-              traverse_ (modify . uncurry declareVar) (zip funcParams args) -- assume param length and arg positions match
+              -- Bind parameters as new refs in the function frame
+              refs <- mapM (const (liftIO (newIORef VNil))) funcParams
+              traverse_ (modify . uncurry declareVarRef) (zip funcParams refs)
+              -- Assign passed argument values into parameter refs
+              traverse_ (\(ref, val) -> liftIO (writeIORef ref val)) (zip refs args)
               r <- runFunctionBody funcBody
               modify popFrame
               -- Persist changes to the closure environment
               envAfter <- get
               _ <- liftIO (writeIORef closureRef envAfter)
-              -- Restore caller environment
+              -- Restore caller environment (refs share state, no merge needed)
               put callerEnv
               pure r
           }
   -- Declare the function in the current environment, then update the closure to include it
-  modify (declareVar funcName (VCallable callable))
+  -- Function value must be stored as a ref in the environment
+  fnRef <- liftIO (newIORef (VCallable callable))
+  modify (declareVarRef funcName fnRef)
   envWithSelf <- get
   _ <- liftIO (writeIORef closureRef envWithSelf)
   pure ()
@@ -151,7 +157,8 @@ declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
-  modify (declareVar varName value)
+  ref <- liftIO (newIORef value)
+  modify (declareVarRef varName ref)
 
 interpretStatement ::
   ( MonadState (Environment Value) m,
@@ -228,9 +235,9 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
   env <- get
-  case getVar name env of
+  case getVarRef name env of
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
-    Just value -> pure value
+    Just ref -> liftIO (readIORef ref)
 evaluateExpr (VariableAssignment line name expr) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
   -- else the environment will not reflect the changes made by evaluating the expression, and
@@ -239,13 +246,9 @@ evaluateExpr (VariableAssignment line name expr) = do
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
   env <- get
-  case assignVar name value env of
-    Nothing -> evalError line ("Undefined variable '" <> name <> "'.") -- Variable not defined in any scope
-    Just env' -> do
-      put env'
-      -- Propagate assignment into any captured closure environments so they see updated value.
-      propagateToClosures name value env'
-      pure value
+  case findVarRef name env of
+    Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
+    Just ref -> liftIO (writeIORef ref value) >> pure value
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
@@ -258,18 +261,6 @@ evaluateExpr (Call line calleeExpr argExprs) = do
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
-
--- Propagate a variable assignment into captured closure environments.
-propagateToClosures :: (MonadIO m) => String -> Value -> Environment Value -> m ()
-propagateToClosures varName value env = liftIO $ traverse_ updateCallable callableRefs
-  where
-    frames = toList env
-    callableRefs = [ref | frame <- frames, (_, VCallable (Callable _ _ (Just ref) _)) <- M.toList frame]
-    updateCallable ref = do
-      closureEnv <- readIORef ref
-      case assignVar varName value closureEnv of
-        Nothing -> pure () -- Variable not captured in this closure
-        Just closureEnv' -> writeIORef ref closureEnv'
 
 callCallable ::
   ( MonadError InterpreterError m,

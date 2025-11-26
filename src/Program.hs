@@ -97,20 +97,26 @@ function kind = do
   Function name params <$> parseScopedProgram
 
 parseFunctionParameters :: TokenParser [String]
-parseFunctionParameters = go []
+parseFunctionParameters = do
+  t <- peek
+  if tokenType t == RIGHT_PAREN
+    then pure []
+    else go 0 []
   where
-    go :: [String] -> TokenParser [String]
-    go acc = do
-      t <- peek
-      case tokenType t of
-        RIGHT_PAREN -> pure (reverse acc)
-        _ -> do
+    go :: Int -> [String] -> TokenParser [String]
+    go n acc = do
+      -- Check limit before consuming the next parameter so the error is emitted
+      -- for the offending identifier token.
+      if n >= 255
+        then fail "Can't have more than 255 parameters."
+        else do
           Token {tokenType = IDENTIFIER paramName} <- satisfy (isIdentifier . tokenType) "Expect parameter name."
-          let acc' = paramName : acc
-          t' <- peek
-          case tokenType t' of
-            COMMA -> consume *> go acc'
-            RIGHT_PAREN -> pure (reverse acc')
+          t <- peek
+          case tokenType t of
+            RIGHT_PAREN -> pure (reverse (paramName : acc))
+            COMMA -> do
+              void $ satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".")
+              go (n + 1) (paramName : acc)
             _ -> fail "Expect ')' after parameters."
 
 variable :: TokenParser Variable

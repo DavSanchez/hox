@@ -243,13 +243,25 @@ argumentList = do
   t <- peek
   if tokenType t == RIGHT_PAREN
     then pure []
-    else do
-      firstArg <- expression
-      restArgs <- many (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".") *> expression)
-      let args = firstArg : restArgs
-      if length args >= 255
+    else go 0 []
+  where
+    go :: Int -> [Expression] -> TokenParser [Expression]
+    go n acc = do
+      -- Enforce limit before consuming the next argument so the error
+      -- is emitted for the offending identifier token.
+      if n >= 255
         then fail "Can't have more than 255 arguments."
-        else pure args
+        else do
+          arg <- expression
+          t <- peek
+          case tokenType t of
+            -- Finished parsing arguments
+            RIGHT_PAREN -> pure (reverse (arg : acc))
+            -- More arguments to parse
+            COMMA -> do
+              void $ satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".")
+              go (n + 1) (arg : acc)
+            _ -> fail ("Expect " <> displayTokenType RIGHT_PAREN <> " after arguments.")
 
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)

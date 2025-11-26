@@ -1,8 +1,9 @@
 module Main (main) where
 
 import Control.Monad ((>=>))
-import Data.Bifunctor (Bifunctor (first))
+import Data.Either (partitionEithers)
 import Data.List (singleton)
+import Data.List.NonEmpty (toList)
 import Expression (Expression, displayExpr, expression)
 import Interpreter
   ( Interpreter,
@@ -13,7 +14,7 @@ import Interpreter
     runInterpreter,
   )
 import Parser (runParser)
-import Scanner (scanTokens)
+import Scanner (displayErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
@@ -51,7 +52,11 @@ runPrompt = do
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
-runChapter04 = first Syntax . scanTokens
+runChapter04 s =
+  let (errs, toks) = partitionEithers $ toList $ scanTokens s
+   in if null errs
+        then Right toks
+        else Left (Syntax errs)
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
@@ -84,7 +89,15 @@ handleChap08Out = run
 
 -- Actual functions that will run from now on
 treeWalkInterpreter :: String -> IO ()
-treeWalkInterpreter = run . buildTreeWalkInterpreter . first Syntax . scanTokens
+treeWalkInterpreter src = do
+  let (errs, toks) = partitionEithers $ toList $ scanTokens src
+  mapM_ (hPutStrLn stderr . displayErr) errs
+  run (buildTreeWalkInterpreter (Right toks))
+  -- If there were scanner errors, exit with 65 after running,
+  -- so both scanner and parser errors can be emitted.
+  if null errs
+    then pure ()
+    else exitWith (ExitFailure 65)
 
 run :: Interpreter () -> IO ()
 run =

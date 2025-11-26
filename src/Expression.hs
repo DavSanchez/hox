@@ -248,7 +248,7 @@ argumentList = do
       restArgs <- many (satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".") *> expression)
       let args = firstArg : restArgs
       if length args >= 255
-        then fail "Cannot have more than 255 arguments."
+        then fail "Can't have more than 255 arguments."
         else pure args
 
 parseBang :: TokenParser (Expression -> Expression)

@@ -236,7 +236,7 @@ functionArgs :: TokenParser [Expression]
 functionArgs =
   satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
     *> argumentList
-    <* satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> ".")
+    <* satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> " after arguments.")
 
 argumentList :: TokenParser [Expression]
 argumentList = do

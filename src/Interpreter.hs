@@ -16,11 +16,12 @@ import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.IORef (newIORef, readIORef, writeIORef)
+import Data.List.NonEmpty (NonEmpty ((:|)))
+import Data.List.NonEmpty qualified as NE
 import Environment
   ( Environment,
     declareVarRef,
     findVarRef,
-    getVarRef,
     popFrame,
     pushFrame,
   )
@@ -101,7 +102,15 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
               callerEnv <- get
               -- Switch to the function's closure environment
               env0 <- liftIO (readIORef closureRef)
-              put env0
+              -- If the function was declared at global scope (single frame),
+              -- refresh its frame from the current caller's global frame
+              -- so mutually recursive globals are visible.
+              -- TODO does this mean that mutually recursive functions declared in nested scopes won't work?
+              let envForCall =
+                    if NE.length env0 == 1
+                      then NE.last callerEnv :| []
+                      else env0
+              put envForCall
               modify pushFrame
               -- Bind parameters as new refs in the function frame
               refs <- mapM (const (liftIO (newIORef VNil))) funcParams
@@ -235,7 +244,7 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
   env <- get
-  case getVarRef name env of
+  case findVarRef name env of
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
     Just ref -> liftIO (readIORef ref)
 evaluateExpr (VariableAssignment line name expr) = do

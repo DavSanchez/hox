@@ -64,4 +64,5 @@ displayValue (VNumber n) =
 displayValue (VBool b) = (map toLower . show) b
 displayValue (VString s) = s
 displayValue VNil = "nil"
+displayValue (VCallable (Callable _ _ Nothing _)) = "<native fn>"
 displayValue (VCallable callable) = show callable

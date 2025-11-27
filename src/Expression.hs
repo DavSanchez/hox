@@ -36,6 +36,13 @@ import Data.Functor (void)
 import Parser (TokenParser, peek, satisfy)
 import Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 
+-- $setup
+-- >>> import Parser (runParser)
+-- >>> import Scanner (scanTokens)
+-- >>> import Token (Token (..), TokenType (..))
+-- >>> import Data.List.NonEmpty qualified as NE
+-- >>> let tokensOf src = [t | Right t <- NE.toList (scanTokens src)]
+
 -- | Represents an expression in the AST.
 data Expression
   = -- | A literal value.
@@ -127,17 +134,46 @@ data BinaryOperator
     Slash
   deriving stock (Show, Eq)
 
--- >>> import Token (Token (..), TokenType (..))
--- >>> import Parser
+-- (Token constructors imported once in $setup for doctests.)
+
 -- >>> tokenList = [Token {tokenType = NUMBER "1" 1.0, line = 1},Token {tokenType = EQUAL_EQUAL, line = 1},Token {tokenType = NUMBER "2" 2.0, line = 1},Token {tokenType = EQUAL_EQUAL, line = 1},Token {tokenType = NUMBER "3" 3.0, line = 1},Token {tokenType = EQUAL_EQUAL, line = 1},Token {tokenType = NUMBER "4" 4.0, line = 1},Token {tokenType = EOF, line = 1}]
 -- >>> runParser expression tokenList
 -- Right (BinaryOperation 1 EqualEqual (BinaryOperation 1 EqualEqual (BinaryOperation 1 EqualEqual (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))) (Literal (Number 4.0)),[Token {tokenType = EOF, line = 1}])
 -- >>> tokenList = [Token {tokenType = LEFT_PAREN, line = 1},Token {tokenType = NUMBER "1" 1.0, line = 1},Token {tokenType = PLUS, line = 1},Token {tokenType = NUMBER "2" 2.0, line = 1},Token {tokenType = RIGHT_PAREN, line = 1},Token {tokenType = PLUS, line = 1},Token {tokenType = LEFT_PAREN, line = 1},Token {tokenType = NUMBER "3" 3.0, line = 1},Token {tokenType = PLUS, line = 1},Token {tokenType = NUMBER "4" 4.0, line = 1},Token {tokenType = RIGHT_PAREN, line = 1},Token {tokenType = EOF, line = 1}]
 -- >>> runParser expression tokenList
 -- Right (BinaryOperation 1 Plus (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (BinaryOperation 1 Plus (Literal (Number 3.0)) (Literal (Number 4.0)))),[Token {tokenType = EOF, line = 1}])
+--
+-- Additional doctests using the scanner directly for readability:
+--
+-- >>> let Right toks = scanTokens "1 + 2 == 3 == 4"
+-- >>> runParser expression toks
+-- (Right (BinaryOperation 1 EqualEqual (BinaryOperation 1 EqualEqual (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))) (Literal (Number 4.0))),[])
+--
+-- >>> let Right toks = scanTokens "(1 + 2) + (3 + 4)"
+-- >>> runParser expression toks
+-- (Right (BinaryOperation 1 Plus (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))) (Grouping (BinaryOperation 1 Plus (Literal (Number 3.0)) (Literal (Number 4.0))))),[])
+--
+-- >>> let Right toks = scanTokens "foo(1, 2, 3)"
+-- >>> runParser expression toks
+-- (Right (Call 1 (VariableExpr 1 "foo") [Literal (Number 1.0),Literal (Number 2.0),Literal (Number 3.0)]),[])
+--
+-- >>> let Right toks = scanTokens "a = b = c"
+-- >>> runParser expression toks
+-- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (VariableExpr 1 "c"))),[])
+
+-- | Top-level expression parser.
+-- >>> runParser expression (tokensOf "1 + 2 * 3")
+-- (Right (BinaryOperation 1 Plus (Literal (Number 1.0)) (BinaryOperation 1 Star (Literal (Number 2.0)) (Literal (Number 3.0)))),[Token {tokenType = EOF, line = 1}])
+-- >>> runParser expression (tokensOf "a = b = 1")
+-- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (Literal (Number 1.0)))),[Token {tokenType = EOF, line = 1}])
+-- >>> runParser expression (tokensOf "foo(1)(2)(3)")
+-- (Right (Call 1 (Call 1 (Call 1 (VariableExpr 1 "foo") [Literal (Number 1.0)]) [Literal (Number 2.0)]) [Literal (Number 3.0)]),[Token {tokenType = EOF, line = 1}])
 expression :: TokenParser Expression
 expression = assignment
 
+-- | Assignment parser (handles right-associative '=' after an l-value).
+-- >>> runParser assignment (tokensOf "a = b = c")
+-- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (VariableExpr 1 "c"))),[Token {tokenType = EOF, line = 1}])
 assignment :: TokenParser Expression
 assignment = do
   expr <- orOp
@@ -146,6 +182,8 @@ assignment = do
     then varAssign expr
     else pure expr
 
+-- | Variable assignment helper (assumes left side already parsed as variable).
+-- (Internal helper; prefer using 'assignment')
 varAssign :: Expression -> TokenParser Expression
 varAssign expr = do
   case expr of
@@ -155,68 +193,146 @@ varAssign expr = do
     _ -> fail "Invalid assignment target."
 
 -- Logic
+
+-- | Logical OR parser.
+-- >>> runParser orOp (tokensOf "true or false or true")
+-- (Right (Logical 1 Or (Logical 1 Or (Literal (Bool True)) (Literal (Bool False))) (Literal (Bool True))),[Token {tokenType = EOF, line = 1}])
 orOp :: TokenParser Expression
 orOp = leftAssociative andOp parseOr
 
+-- | Consumes a single 'or' operator.
+-- >>> let (Right f, _) = runParser parseOr (tokensOf "or")
+-- >>> displayExpr (f (Literal (Bool True)) (Literal (Bool False)))
+-- "(or true false)"
 parseOr :: TokenParser (Expression -> Expression -> Expression)
 parseOr = satisfy ((OR ==) . tokenType) ("Expect " <> displayTokenType OR <> ".") >>= \t -> pure (Logical (line t) Or)
 
+-- | Consumes a single 'and' operator.
+-- >>> let (Right f, _) = runParser parseAnd (tokensOf "and")
+-- >>> displayExpr (f (Literal (Bool True)) (Literal (Bool False)))
+-- "(and true false)"
 parseAnd :: TokenParser (Expression -> Expression -> Expression)
 parseAnd = satisfy ((AND ==) . tokenType) ("Expect " <> displayTokenType AND <> ".") >>= \t -> pure (Logical (line t) And)
 
+-- | Logical AND parser.
+-- >>> runParser andOp (tokensOf "true and false and true")
+-- (Right (Logical 1 And (Logical 1 And (Literal (Bool True)) (Literal (Bool False))) (Literal (Bool True))),[Token {tokenType = EOF, line = 1}])
 andOp :: TokenParser Expression
 andOp = leftAssociative equality parseAnd
 
 -- Equality
+
+-- | Equality / inequality chain parser.
+-- >>> runParser equality (tokensOf "1 == 2 != 3")
+-- (Right (BinaryOperation 1 BangEqual (BinaryOperation 1 EqualEqual (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))),[Token {tokenType = EOF, line = 1}])
 equality :: TokenParser Expression
 equality = leftAssociative comparison (parseEq <|> parseNeq)
 
+-- | Parses '==' operator.
+-- >>> let (Right f, _) = runParser parseEq (tokensOf "==")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(== 1.0 2.0)"
 parseEq :: TokenParser (Expression -> Expression -> Expression)
 parseEq = satisfy ((EQUAL_EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) EqualEqual)
 
+-- | Parses '!=' operator.
+-- >>> let (Right f, _) = runParser parseNeq (tokensOf "!=")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(!= 1.0 2.0)"
 parseNeq :: TokenParser (Expression -> Expression -> Expression)
 parseNeq = satisfy ((BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType BANG_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) BangEqual)
 
 -- Comparison
+
+-- | Comparison chain parser (<, <=, >, >=).
+-- >>> runParser comparison (tokensOf "1 < 2 <= 3")
+-- (Right (BinaryOperation 1 LessEqual (BinaryOperation 1 Less (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))),[Token {tokenType = EOF, line = 1}])
 comparison :: TokenParser Expression
 comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
+-- | Parses '>' operator.
+-- >>> let (Right f, _) = runParser parseGT (tokensOf ">")
+-- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 1)))
+-- "(> 2.0 1.0)"
 parseGT :: TokenParser (Expression -> Expression -> Expression)
 parseGT = satisfy ((GREATER ==) . tokenType) ("Expect " <> displayTokenType GREATER <> ".") >>= \token -> pure (BinaryOperation (line token) Greater)
 
+-- | Parses '>=' operator.
+-- >>> let (Right f, _) = runParser parseGTE (tokensOf ">=")
+-- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 1)))
+-- "(>= 2.0 1.0)"
 parseGTE :: TokenParser (Expression -> Expression -> Expression)
 parseGTE = satisfy ((GREATER_EQUAL ==) . tokenType) ("Expect " <> displayTokenType GREATER_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) GreaterEqual)
 
+-- | Parses '<' operator.
+-- >>> let (Right f, _) = runParser parseLT (tokensOf "<")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(< 1.0 2.0)"
 parseLT :: TokenParser (Expression -> Expression -> Expression)
 parseLT = satisfy ((LESS ==) . tokenType) ("Expect " <> displayTokenType LESS <> ".") >>= \token -> pure (BinaryOperation (line token) Less)
 
+-- | Parses '<=' operator.
+-- >>> let (Right f, _) = runParser parseLTE (tokensOf "<=")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(<= 1.0 2.0)"
 parseLTE :: TokenParser (Expression -> Expression -> Expression)
 parseLTE = satisfy ((LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType LESS_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) LessEqual)
 
 -- Terms
+
+-- | Addition / subtraction left-associative chain.
+-- >>> runParser term (tokensOf "1 + 2 - 3 + 4")
+-- (Right (BinaryOperation 1 Plus (BinaryOperation 1 BMinus (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))) (Literal (Number 4.0))),[Token {tokenType = EOF, line = 1}])
 term :: TokenParser Expression
 term = leftAssociative factor (parsePlus <|> parseMinus)
 
+-- | Parses '+' operator.
+-- >>> let (Right f, _) = runParser parsePlus (tokensOf "+")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(+ 1.0 2.0)"
 parsePlus :: TokenParser (Expression -> Expression -> Expression)
 parsePlus = satisfy ((PLUS ==) . tokenType) ("Expect " <> displayTokenType PLUS <> ".") >>= \token -> pure (BinaryOperation (line token) Plus)
 
+-- | Parses '-' operator (binary minus).
+-- >>> let (Right f, _) = runParser parseMinus (tokensOf "-")
+-- >>> displayExpr (f (Literal (Number 3)) (Literal (Number 1)))
+-- "(- 3.0 1.0)"
 parseMinus :: TokenParser (Expression -> Expression -> Expression)
 parseMinus = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (BinaryOperation (line token) BMinus)
 
 -- Factors
+
+-- | Multiplication / division left-associative chain.
+-- >>> runParser factor (tokensOf "2 * 3 / 4")
+-- (Right (BinaryOperation 1 Slash (BinaryOperation 1 Star (Literal (Number 2.0)) (Literal (Number 3.0))) (Literal (Number 4.0))),[Token {tokenType = EOF, line = 1}])
 factor :: TokenParser Expression
 factor = leftAssociative unary (parseMul <|> parseDiv)
 
+-- | Parses '*' operator.
+-- >>> let (Right f, _) = runParser parseMul (tokensOf "*")
+-- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 3)))
+-- "(* 2.0 3.0)"
 parseMul :: TokenParser (Expression -> Expression -> Expression)
 parseMul = satisfy ((STAR ==) . tokenType) ("Expect " <> displayTokenType STAR <> ".") >>= \token -> pure (BinaryOperation (line token) Star)
 
+-- | Parses '/' operator.
+-- >>> let (Right f, _) = runParser parseDiv (tokensOf "/")
+-- >>> displayExpr (f (Literal (Number 6)) (Literal (Number 2)))
+-- "(/ 6.0 2.0)"
 parseDiv :: TokenParser (Expression -> Expression -> Expression)
 parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH <> ".") >>= \token -> pure (BinaryOperation (line token) Slash)
 
 -- Unary expressions
+
+-- | Unary prefix parser for '!' and '-'.
+-- >>> runParser unary (tokensOf "!-5")
+-- (Right (UnaryOperation 1 Bang (UnaryOperation 1 UMinus (Literal (Number 5.0)))),[Token {tokenType = EOF, line = 1}])
 unary :: TokenParser Expression
 unary = (parseBang <|> parseMinusUnary) <*> unary <|> call
 
+-- | Function call (handles nested calls).
+-- >>> runParser call (tokensOf "foo(1)(2)(3)")
+-- (Right (Call 1 (Call 1 (Call 1 (VariableExpr 1 "foo") [Literal (Number 1.0)]) [Literal (Number 2.0)]) [Literal (Number 3.0)]),[Token {tokenType = EOF, line = 1}])
 call :: TokenParser Expression
 call = do
   expr <- primary
@@ -225,6 +341,8 @@ call = do
     then finishCall expr
     else pure expr
 
+-- | Tail-recursive call finisher (continues parsing chained calls).
+-- (Internal helper; prefer using 'call')
 finishCall :: Expression -> TokenParser Expression
 finishCall expr = do
   t <- peek
@@ -232,12 +350,15 @@ finishCall expr = do
     then functionArgs >>= finishCall . Call (line t) expr
     else pure expr
 
+-- | Parses argument list including parentheses.
 functionArgs :: TokenParser [Expression]
 functionArgs =
   satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
     *> argumentList
     <* satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect '" <> displayTokenType RIGHT_PAREN <> "' after arguments.")
 
+-- | Parses arguments (comma separated) without consuming closing ')'.
+-- (Internal helper; prefer 'functionArgs')
 argumentList :: TokenParser [Expression]
 argumentList = do
   t <- peek
@@ -262,13 +383,27 @@ argumentList = do
             -- Finished parsing arguments (correctly or will fail next on closing paren check)
             _ -> pure (reverse (arg : acc))
 
+-- | Parses unary '!'.
+-- >>> let (Right f, _) = runParser parseBang (tokensOf "!")
+-- >>> displayExpr (f (Literal (Bool True)))
+-- "(! true)"
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)
 
+-- | Parses unary '-'.
+-- >>> let (Right f, _) = runParser parseMinusUnary (tokensOf "-")
+-- >>> displayExpr (f (Literal (Number 5)))
+-- "(- 5.0)"
 parseMinusUnary :: TokenParser (Expression -> Expression)
 parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (UnaryOperation (line token) UMinus)
 
 -- Primary expressions
+
+-- | Primary expression parser: literals, grouping, identifiers.
+-- >>> runParser primary (tokensOf "(1 + 2)")
+-- (Right (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))),[Token {tokenType = EOF, line = 1}])
+-- >>> runParser primary (tokensOf "identifier")
+-- (Right (VariableExpr 1 "identifier"),[Token {tokenType = EOF, line = 1}])
 primary :: TokenParser Expression
 primary =
   parseFalse
@@ -279,28 +414,49 @@ primary =
     <|> parseGrouping
     <|> parseVarName
 
+-- | Parses 'false'.
+-- >>> runParser parseFalse (tokensOf "false")
+-- (Right (Literal (Bool False)),[Token {tokenType = EOF, line = 1}])
 parseFalse :: TokenParser Expression
 parseFalse = satisfy ((FALSE ==) . tokenType) ("Expect " <> displayTokenType FALSE <> ".") >> pure (Literal (Bool False))
 
+-- | Parses 'true'.
+-- >>> runParser parseTrue (tokensOf "true")
+-- (Right (Literal (Bool True)),[Token {tokenType = EOF, line = 1}])
 parseTrue :: TokenParser Expression
 parseTrue = satisfy ((TRUE ==) . tokenType) ("Expect " <> displayTokenType TRUE <> ".") >> pure (Literal (Bool True))
 
+-- | Parses 'nil'.
+-- >>> runParser parseNil (tokensOf "nil")
+-- (Right (Literal Nil),[Token {tokenType = EOF, line = 1}])
 parseNil :: TokenParser Expression
 parseNil = satisfy ((NIL ==) . tokenType) ("Expect " <> displayTokenType NIL <> ".") >> pure (Literal Nil)
 
+-- | Parses numeric literal.
+-- >>> runParser parseNumber (tokensOf "42")
+-- (Right (Literal (Number 42.0)),[Token {tokenType = EOF, line = 1}])
 parseNumber :: TokenParser Expression
 parseNumber = do
   Token (NUMBER _ n) _ <- satisfy (isNumber . tokenType) "a number"
   pure (Literal (Number n))
 
+-- | Parses string literal.
+-- >>> runParser parseString (tokensOf "\"hello\"")
+-- (Right (Literal (String "hello")),[Token {tokenType = EOF, line = 1}])
 parseString :: TokenParser Expression
 parseString = do
   Token (STRING _ s) _ <- satisfy (isString . tokenType) "a string"
   pure (Literal (String s))
 
+-- | Parses parenthesized expression.
+-- >>> runParser parseGrouping (tokensOf "(1 + 2)")
+-- (Right (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))),[Token {tokenType = EOF, line = 1}])
 parseGrouping :: TokenParser Expression
 parseGrouping = Grouping <$> parens expression
 
+-- | Parses variable name as expression.
+-- >>> runParser parseVarName (tokensOf "foo")
+-- (Right (VariableExpr 1 "foo"),[Token {tokenType = EOF, line = 1}])
 parseVarName :: TokenParser Expression
 parseVarName = do
   Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "Expect expression."
@@ -308,6 +464,9 @@ parseVarName = do
 
 -- Helpers
 
+-- | Utility: parses '(' p ')'.
+-- >>> runParser (parens parseNumber) (tokensOf "(123)")
+-- (Right (Literal (Number 123.0)),[Token {tokenType = EOF, line = 1}])
 parens :: TokenParser a -> TokenParser a
 parens p = do
   void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
@@ -315,6 +474,9 @@ parens p = do
   void $ satisfy ((RIGHT_PAREN ==) . tokenType) ("Expect " <> displayTokenType RIGHT_PAREN <> ".")
   pure result
 
+-- | Folds a left-associative chain of (operand (op operand)*).
+-- >>> runParser (leftAssociative parseNumber parsePlus) (tokensOf "1 + 2 + 3")
+-- (Right (BinaryOperation 1 Plus (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))),[Token {tokenType = EOF, line = 1}])
 leftAssociative ::
   -- | Parser for the first operand (left-hand side)
   TokenParser a ->
@@ -345,7 +507,7 @@ displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwo
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name) = name
 displayExpr (VariableAssignment _ name expr) = "(= " <> name <> " " <> displayExpr expr <> ")"
-displayExpr (Logical _ op e1 e2) = "(" <> displayLogicOp op <> " " <> displayExpr e1 <> displayExpr e2 <> ")"
+displayExpr (Logical _ op e1 e2) = "(" <> displayLogicOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 
 displayBinOp :: BinaryOperator -> String
 displayBinOp EqualEqual = "=="

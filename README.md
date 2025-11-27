@@ -10,3 +10,7 @@
 - [x] Chapter 07: Evaluating Expressions
 - [x] Chapter 08: Statements and State
 - [x] Chapter 09: Control Flow
+- [x] Chapter 10: Functions
+- [ ] Chapter 11: Resolving and Binding
+- [ ] Chapter 12: Classes
+- [ ] Chapter 13: Inheritance

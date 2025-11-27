@@ -1,71 +1,48 @@
 module Environment
   ( Environment,
-    declareVar,
-    getVar,
+    declareVarRef,
+    getVarRef,
     pushFrame,
     popFrame,
     newEnv,
-    assignVar,
+    findVarRef,
   )
 where
 
 import Control.Monad (join)
 import Data.Foldable (find)
+import Data.IORef (IORef)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.Map qualified as M
 import Data.Maybe (isJust)
-import Value (Value)
 
-type Environment = NonEmpty Frame
+type Environment a = NonEmpty (Frame a)
 
-type Frame = M.Map String Value
+type Frame a = M.Map String (IORef a)
 
-newEnv :: Environment
+newEnv :: Environment a
 newEnv = mempty :| []
 
-pushFrame :: Environment -> Environment
+pushFrame :: Environment a -> Environment a
 pushFrame = (mempty <|) -- prepend a new empty frame
 
-popFrame :: Environment -> Environment
+popFrame :: Environment a -> Environment a
 popFrame single@(_ :| []) = single -- cannot pop the last frame
 popFrame (_ :| (x : xs)) = x :| xs
 
--- Inserts the defined variable in the current environment frame (i.e. top of the stack)
+-- Inserts the defined variable ref in the current environment frame (i.e. top of the stack)
 -- This is only for declarations
-declareVar :: String -> Value -> Environment -> Environment
-declareVar name value (frame :| rest) = M.insert name value frame :| rest
+declareVarRef :: String -> IORef a -> Environment a -> Environment a
+declareVarRef name ref (frame :| rest) = M.insert name ref frame :| rest
 
--- | Assigns a variable to the environment.
---
--- This function traverses down the stack until it finds a frame that contains the variable, then
--- updates the environment with the new value and returns it.
---
--- If the variable is not found, `Nothing` is returned as environment.
--- >>> import Data.List.NonEmpty qualified as NE
--- >>> import Data.Map qualified as M
--- >>> import Value(Value(..))
--- >>> envList = [[("x", VNumber 1), ("y", VBool True)], [], [("x", VNumber 42)], [("z", VString "hello")], []]
--- >>> env = NE.fromList $ fmap M.fromList $ envList
--- >>> env' = assignVar "x" (VNumber 2) env
--- >>> fmap (fmap M.toList . NE.toList) env'
--- Just [[("x",VNumber 2.0),("y",VBool True)],[],[("x",VNumber 42.0)],[("z",VString "hello")],[]]
--- >>> envList = [[("y", VBool True)], [], [("x", VNumber 42)], [("z", VString "hello")], []]
--- >>> env = NE.fromList $ fmap M.fromList $ envList
--- >>> env' = assignVar "x" (VNumber 2) env
--- >>> fmap (fmap M.toList . NE.toList) env'
--- Just [[("y",VBool True)],[],[("x",VNumber 2.0)],[("z",VString "hello")],[]]
--- >>> envList = [[("y", VBool True)], [], [("z", VString "hello")], []]
--- >>> env = NE.fromList $ fmap M.fromList $ envList
--- >>> env' = assignVar "x" (VNumber 2) env
--- >>> fmap (fmap M.toList . NE.toList) env'
--- Nothing
-assignVar :: String -> Value -> Environment -> Maybe Environment
-assignVar name value (frame :| (r : rest))
-  | M.member name frame = Just $ M.insert name value frame :| (r : rest)
-  | otherwise = (frame <|) <$> assignVar name value (r :| rest)
-assignVar name value (frame :| [])
-  | M.member name frame = Just $ M.insert name value frame :| []
-  | otherwise = Nothing
+-- | Finds the variable reference in the environment.
+-- Traverses down the stack until it finds a frame that contains the variable,
+-- and returns its IORef. If not found, returns Nothing.
+findVarRef :: String -> Environment a -> Maybe (IORef a)
+findVarRef name (frame :| (r : rest))
+  | M.member name frame = M.lookup name frame
+  | otherwise = findVarRef name (r :| rest)
+findVarRef name (frame :| []) = M.lookup name frame
 
-getVar :: String -> Environment -> Maybe Value
-getVar name env = join $ find isJust (M.lookup name <$> env)
+getVarRef :: String -> Environment a -> Maybe (IORef a)
+getVarRef name env = join $ find isJust (M.lookup name <$> env)

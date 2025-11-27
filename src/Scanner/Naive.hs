@@ -85,4 +85,4 @@ naiveScanTokens input@(c : ss) l tt
           tokenType = fromMaybe (IDENTIFIER identifier) (lookup identifier keywords)
        in naiveScanTokens (drop (length identifier) input) l (validToken tokenType l : tt)
 -- If we reach here, it means we encountered an unexpected character
-naiveScanTokens (c : ss) line tt = naiveScanTokens ss line (syntaxError ("Unexpected character: " ++ [c]) line "" : tt)
+naiveScanTokens (_ : ss) line tt = naiveScanTokens ss line (syntaxError "Unexpected character." line "" : tt)

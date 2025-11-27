@@ -2,7 +2,7 @@ module Scanner.Props (scannerProperties) where
 
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.List.NonEmpty qualified as NE
-import Scanner (errorMessage, scanTokens')
+import Scanner (errorMessage, scanTokens)
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)
 import Token (Token (tokenType), TokenType (EOF))
@@ -17,7 +17,7 @@ scannerProperties =
 
 eofOrUnterminatedString :: String -> Bool
 eofOrUnterminatedString s =
-  let lastToken = NE.last $ scanTokens' s
+  let lastToken = NE.last $ scanTokens s
       numDoubleQuotes = length $ filter (== '"') $ removeComments s
       result = bimap errorMessage tokenType lastToken
    in result
@@ -32,7 +32,7 @@ removeComments [] = []
 
 lessOrEqualTokensThanInputLength :: String -> Bool
 lessOrEqualTokensThanInputLength s =
-  let tokens = scanTokens' s
+  let tokens = scanTokens s
       hasEOF = fmap tokenType (NE.last tokens) == Right EOF
       tokenListLength = NE.length tokens
    in if hasEOF

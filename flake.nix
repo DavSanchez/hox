@@ -67,10 +67,10 @@
                   main :: IO ()
                   main = withSystemTempDirectory "crafting-interpreters-tests" $ \tmpDir -> do
                     -- Copy repository to temporary directory
+                    echo $ "Copying ${inputs.crafting-interpreters} to temporary directory " <> tmpDir <> "..."
                     cp "--no-preserve=all" "-r" "${inputs.crafting-interpreters}/." tmpDir
                     -- Change to it
                     cd tmpDir
-                    pwd
                     cd "./tool"
                     -- Pull dependencies
                     dart "pub" "get"
@@ -92,7 +92,7 @@
               test-chapter07 = mkTestApp "chap07_evaluating" self'.packages.hox;
               test-chapter08 = mkTestApp "chap08_statements" self'.packages.hox;
               test-chapter09 = mkTestApp "chap09_control" self'.packages.hox;
-              # test-chapter10 = mkTestApp "chap10_functions" self'.packages.hox;
+              test-chapter10 = mkTestApp "chap10_functions" self'.packages.hox;
               # test-chapter11 = mkTestApp "chap11_resolving" self'.packages.hox;
               # test-chapter12 = mkTestApp "chap12_classes" self'.packages.hox;
               # test-chapter13 = mkTestApp "chap13_inheritance" self'.packages.hox;

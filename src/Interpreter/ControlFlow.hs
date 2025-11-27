@@ -1,0 +1,31 @@
+module Interpreter.ControlFlow (ControlFlow (..)) where
+
+import Data.Bifunctor (Bifunctor (bimap))
+
+data ControlFlow b c
+  = Break b
+  | Continue c
+  deriving stock (Show, Eq)
+
+instance Functor (ControlFlow b) where
+  fmap :: (a -> c) -> ControlFlow b a -> ControlFlow b c
+  fmap _ (Break v) = Break v
+  fmap f (Continue a) = Continue (f a)
+
+instance Applicative (ControlFlow b) where
+  pure :: a -> ControlFlow b a
+  pure = Continue
+
+  (<*>) :: ControlFlow b (a -> c) -> ControlFlow b a -> ControlFlow b c
+  Break v <*> _ = Break v
+  Continue f <*> r = fmap f r
+
+instance Monad (ControlFlow b) where
+  (>>=) :: ControlFlow b a -> (a -> ControlFlow b c) -> ControlFlow b c
+  Break v >>= _ = Break v
+  Continue x >>= f = f x
+
+instance Bifunctor ControlFlow where
+  bimap :: (b -> d) -> (a -> c) -> ControlFlow b a -> ControlFlow d c
+  bimap f _ (Break v) = Break (f v)
+  bimap _ g (Continue a) = Continue (g a)

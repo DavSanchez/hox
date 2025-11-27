@@ -1,12 +1,20 @@
 module Main (main) where
 
 import Control.Monad ((>=>))
+import Data.Either (partitionEithers)
 import Data.List (singleton)
-import Error (InterpreterError (..), handleErr)
+import Data.List.NonEmpty (toList)
 import Expression (Expression, displayExpr, expression)
-import Interpreter (Interpreter, buildTreeWalkInterpreter, evaluateExpr, runInterpreter, runNoIOInterpreter)
+import Interpreter
+  ( Interpreter,
+    InterpreterError (..),
+    buildTreeWalkInterpreter,
+    evaluateExpr,
+    handleErr,
+    runInterpreter,
+  )
 import Parser (runParser)
-import Scanner (scanTokens)
+import Scanner (displayErr, scanTokens)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
@@ -20,9 +28,14 @@ main = do
     [] -> runPrompt
     ["--chap04_scanning", script] -> readFile' script >>= handleChap04Out . runChapter04
     ["--chap06_parsing", script] -> readFile' script >>= handleChap06Out . (runChapter04 >=> runChapter06)
-    ["--chap07_evaluating", script] -> readFile' script >>= handleChap07Out . (runChapter04 >=> runChapter06 >=> runChapter07)
+    ["--chap07_evaluating", script] ->
+      readFile' script >>= \src ->
+        case runChapter04 src >>= runChapter06 of
+          Left err -> handleErr err
+          Right expr -> runChapter07 expr >>= handleChap07Out
     ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . runChapter08 . runChapter04
     ["--chap09_control", script] -> readFile' script >>= treeWalkInterpreter
+    ["--chap10_functions", script] -> readFile' script >>= treeWalkInterpreter
     [script] -> readFile' script >>= treeWalkInterpreter
     _ -> do
       hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"
@@ -39,7 +52,11 @@ runPrompt = do
 
 -- Chapter 04 operations
 runChapter04 :: String -> Either InterpreterError [Token]
-runChapter04 = scanTokens
+runChapter04 s =
+  let (errs, toks) = partitionEithers $ toList $ scanTokens s
+   in if null errs
+        then Right toks
+        else Left (Syntax errs)
 
 handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
@@ -56,8 +73,8 @@ handleChap06Out :: Either InterpreterError Expression -> IO ()
 handleChap06Out = either handleErr (putStrLn . displayExpr)
 
 -- Chapter 07 operations
-runChapter07 :: Expression -> Either InterpreterError Value
-runChapter07 = runNoIOInterpreter . evaluateExpr
+runChapter07 :: Expression -> IO (Either InterpreterError Value)
+runChapter07 = runInterpreter . evaluateExpr
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . displayValue)
@@ -72,7 +89,15 @@ handleChap08Out = run
 
 -- Actual functions that will run from now on
 treeWalkInterpreter :: String -> IO ()
-treeWalkInterpreter = run . buildTreeWalkInterpreter . scanTokens
+treeWalkInterpreter src = do
+  let (errs, toks) = partitionEithers $ toList $ scanTokens src
+  mapM_ (hPutStrLn stderr . displayErr) errs
+  run (buildTreeWalkInterpreter (Right toks))
+  -- If there were scanner errors, exit with 65 after running,
+  -- so both scanner and parser errors can be emitted.
+  if null errs
+    then pure ()
+    else exitWith (ExitFailure 65)
 
 run :: Interpreter () -> IO ()
 run =

@@ -126,8 +126,8 @@ displayToken (Token EOF _) = "EOF  null"
 
 displayTokenType :: TokenType -> String
 displayTokenType (IDENTIFIER s) = s
-displayTokenType (STRING _ s) = s
-displayTokenType (NUMBER _ n) = show n
+displayTokenType (STRING s _) = s
+displayTokenType (NUMBER s _) = s
 displayTokenType LEFT_PAREN = "("
 displayTokenType RIGHT_PAREN = ")"
 displayTokenType LEFT_BRACE = "{"

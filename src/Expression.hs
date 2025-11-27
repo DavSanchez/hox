@@ -201,10 +201,16 @@ orOp :: TokenParser Expression
 orOp = leftAssociative andOp parseOr
 
 -- | Consumes a single 'or' operator.
+-- >>> let (Right f, _) = runParser parseOr (tokensOf "or")
+-- >>> displayExpr (f (Literal (Bool True)) (Literal (Bool False)))
+-- "(or true false)"
 parseOr :: TokenParser (Expression -> Expression -> Expression)
 parseOr = satisfy ((OR ==) . tokenType) ("Expect " <> displayTokenType OR <> ".") >>= \t -> pure (Logical (line t) Or)
 
 -- | Consumes a single 'and' operator.
+-- >>> let (Right f, _) = runParser parseAnd (tokensOf "and")
+-- >>> displayExpr (f (Literal (Bool True)) (Literal (Bool False)))
+-- "(and true false)"
 parseAnd :: TokenParser (Expression -> Expression -> Expression)
 parseAnd = satisfy ((AND ==) . tokenType) ("Expect " <> displayTokenType AND <> ".") >>= \t -> pure (Logical (line t) And)
 
@@ -223,10 +229,16 @@ equality :: TokenParser Expression
 equality = leftAssociative comparison (parseEq <|> parseNeq)
 
 -- | Parses '==' operator.
+-- >>> let (Right f, _) = runParser parseEq (tokensOf "==")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(== 1.0 2.0)"
 parseEq :: TokenParser (Expression -> Expression -> Expression)
 parseEq = satisfy ((EQUAL_EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) EqualEqual)
 
 -- | Parses '!=' operator.
+-- >>> let (Right f, _) = runParser parseNeq (tokensOf "!=")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(!= 1.0 2.0)"
 parseNeq :: TokenParser (Expression -> Expression -> Expression)
 parseNeq = satisfy ((BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType BANG_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) BangEqual)
 
@@ -239,18 +251,30 @@ comparison :: TokenParser Expression
 comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
 -- | Parses '>' operator.
+-- >>> let (Right f, _) = runParser parseGT (tokensOf ">")
+-- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 1)))
+-- "(> 2.0 1.0)"
 parseGT :: TokenParser (Expression -> Expression -> Expression)
 parseGT = satisfy ((GREATER ==) . tokenType) ("Expect " <> displayTokenType GREATER <> ".") >>= \token -> pure (BinaryOperation (line token) Greater)
 
 -- | Parses '>=' operator.
+-- >>> let (Right f, _) = runParser parseGTE (tokensOf ">=")
+-- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 1)))
+-- "(>= 2.0 1.0)"
 parseGTE :: TokenParser (Expression -> Expression -> Expression)
 parseGTE = satisfy ((GREATER_EQUAL ==) . tokenType) ("Expect " <> displayTokenType GREATER_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) GreaterEqual)
 
 -- | Parses '<' operator.
+-- >>> let (Right f, _) = runParser parseLT (tokensOf "<")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(< 1.0 2.0)"
 parseLT :: TokenParser (Expression -> Expression -> Expression)
 parseLT = satisfy ((LESS ==) . tokenType) ("Expect " <> displayTokenType LESS <> ".") >>= \token -> pure (BinaryOperation (line token) Less)
 
 -- | Parses '<=' operator.
+-- >>> let (Right f, _) = runParser parseLTE (tokensOf "<=")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(<= 1.0 2.0)"
 parseLTE :: TokenParser (Expression -> Expression -> Expression)
 parseLTE = satisfy ((LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType LESS_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) LessEqual)
 
@@ -263,10 +287,16 @@ term :: TokenParser Expression
 term = leftAssociative factor (parsePlus <|> parseMinus)
 
 -- | Parses '+' operator.
+-- >>> let (Right f, _) = runParser parsePlus (tokensOf "+")
+-- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
+-- "(+ 1.0 2.0)"
 parsePlus :: TokenParser (Expression -> Expression -> Expression)
 parsePlus = satisfy ((PLUS ==) . tokenType) ("Expect " <> displayTokenType PLUS <> ".") >>= \token -> pure (BinaryOperation (line token) Plus)
 
 -- | Parses '-' operator (binary minus).
+-- >>> let (Right f, _) = runParser parseMinus (tokensOf "-")
+-- >>> displayExpr (f (Literal (Number 3)) (Literal (Number 1)))
+-- "(- 3.0 1.0)"
 parseMinus :: TokenParser (Expression -> Expression -> Expression)
 parseMinus = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (BinaryOperation (line token) BMinus)
 
@@ -279,10 +309,16 @@ factor :: TokenParser Expression
 factor = leftAssociative unary (parseMul <|> parseDiv)
 
 -- | Parses '*' operator.
+-- >>> let (Right f, _) = runParser parseMul (tokensOf "*")
+-- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 3)))
+-- "(* 2.0 3.0)"
 parseMul :: TokenParser (Expression -> Expression -> Expression)
 parseMul = satisfy ((STAR ==) . tokenType) ("Expect " <> displayTokenType STAR <> ".") >>= \token -> pure (BinaryOperation (line token) Star)
 
 -- | Parses '/' operator.
+-- >>> let (Right f, _) = runParser parseDiv (tokensOf "/")
+-- >>> displayExpr (f (Literal (Number 6)) (Literal (Number 2)))
+-- "(/ 6.0 2.0)"
 parseDiv :: TokenParser (Expression -> Expression -> Expression)
 parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH <> ".") >>= \token -> pure (BinaryOperation (line token) Slash)
 
@@ -348,10 +384,16 @@ argumentList = do
             _ -> pure (reverse (arg : acc))
 
 -- | Parses unary '!'.
+-- >>> let (Right f, _) = runParser parseBang (tokensOf "!")
+-- >>> displayExpr (f (Literal (Bool True)))
+-- "(! true)"
 parseBang :: TokenParser (Expression -> Expression)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)
 
 -- | Parses unary '-'.
+-- >>> let (Right f, _) = runParser parseMinusUnary (tokensOf "-")
+-- >>> displayExpr (f (Literal (Number 5)))
+-- "(- 5.0)"
 parseMinusUnary :: TokenParser (Expression -> Expression)
 parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (UnaryOperation (line token) UMinus)
 

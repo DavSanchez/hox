@@ -105,7 +105,7 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
               -- If the function was declared at global scope (single frame),
               -- refresh its frame from the current caller's global frame
               -- so mutually recursive globals are visible.
-              -- TODO does this mean that mutually recursive functions declared in nested scopes won't work?
+              -- TODO this means that mutually recursive functions declared in nested scopes won't work
               let envForCall =
                     if NE.length env0 == 1
                       then NE.last callerEnv :| []

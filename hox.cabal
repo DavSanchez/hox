@@ -116,6 +116,7 @@ library
     Interpreter
     Parser
     Program
+    Resolver
     Scanner
     Token
     Value

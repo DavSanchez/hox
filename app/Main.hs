@@ -36,6 +36,7 @@ main = do
     ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . runChapter08 . runChapter04
     ["--chap09_control", script] -> readFile' script >>= treeWalkInterpreter
     ["--chap10_functions", script] -> readFile' script >>= treeWalkInterpreter
+    ["--chap11_resolving", script] -> readFile' script >>= treeWalkInterpreter
     [script] -> readFile' script >>= treeWalkInterpreter
     _ -> do
       hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"

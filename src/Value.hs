@@ -14,6 +14,7 @@ import Data.IORef (IORef)
 import Environment (Environment)
 import Interpreter.Error (InterpreterError)
 import Numeric (showFFloat)
+import ProgramState (ProgramState)
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value
@@ -30,7 +31,7 @@ data Callable = Callable
     closure :: Maybe (IORef (Environment Value)),
     call ::
       forall m.
-      ( MonadState (Environment Value) m,
+      ( MonadState (ProgramState Value) m,
         MonadError InterpreterError m,
         MonadIO m
       ) =>

@@ -12,19 +12,14 @@ where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.State (MonadState (get, put), StateT, evalStateT, modify)
+import Control.Monad.State (MonadState, StateT, evalStateT, gets, modify)
 import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NE
-import Environment
-  ( Environment,
-    declareVarRef,
-    findVarRef,
-    popFrame,
-    pushFrame,
-  )
+import Data.Map qualified as M
+import Environment (findVarRef, newEnv)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
@@ -32,6 +27,7 @@ import Expression (Expression (..), LogicalOperator (..))
 import Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Interpreter.Error (InterpreterError (..), handleErr)
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
+import ProgramState qualified as PS
 import Token (Token)
 import Value (Callable (..), Value (VCallable, VNil), displayValue, isTruthy)
 
@@ -46,10 +42,11 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
 runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
 runInterpreter interpreter = do
   env <- mkStdEnv
-  runInterpreter' env interpreter
+  let programState = PS.ProgramState env env M.empty
+  runInterpreter' programState interpreter
 
-runInterpreter' :: (Monad m) => Environment Value -> InterpreterT m a -> m (Either InterpreterError a)
-runInterpreter' env interpreter = runExceptT (evalStateT (runInterpreterT interpreter) env)
+runInterpreter' :: (Monad m) => ProgramState -> InterpreterT m a -> m (Either InterpreterError a)
+runInterpreter' programState interpreter = runExceptT (evalStateT (runInterpreterT interpreter) programState)
 
 interpreterFailure :: InterpreterError -> Interpreter a
 interpreterFailure = throwError
@@ -57,20 +54,22 @@ interpreterFailure = throwError
 evalError :: (MonadError InterpreterError m) => Int -> String -> m a
 evalError line msg = throwError (Eval (EvalError line msg))
 
+type ProgramState = PS.ProgramState Value
+
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: StateT (Environment Value) (ExceptT InterpreterError m) a
+  { runInterpreterT :: StateT ProgramState (ExceptT InterpreterError m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState (Environment Value),
+      MonadState ProgramState,
       MonadError InterpreterError,
       MonadIO
     )
 
 programInterpreter ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -78,7 +77,7 @@ programInterpreter ::
 programInterpreter (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -88,10 +87,10 @@ interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareFunction ::
-  (MonadState (Environment Value) m, MonadIO m) =>
+  (MonadState ProgramState m, MonadIO m) =>
   Function -> m ()
 declareFunction (Function {funcName, funcParams, funcBody}) = do
-  envAtDecl <- get
+  envAtDecl <- gets PS.environment
   closureRef <- liftIO (newIORef envAtDecl)
   let callable =
         Callable
@@ -99,7 +98,7 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
             name = funcName,
             closure = Just closureRef,
             call = \args -> do
-              callerEnv <- get
+              callerEnv <- gets PS.environment
               -- Switch to the function's closure environment
               env0 <- liftIO (readIORef closureRef)
               -- If the function was declared at global scope (single frame),
@@ -110,32 +109,32 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
                     if NE.length env0 == 1
                       then NE.last callerEnv :| []
                       else env0
-              put envForCall
-              modify pushFrame
+              modify $ PS.updateEnv envForCall
+              modify PS.pushEnvFrame
               -- Bind parameters as new refs in the function frame
               refs <- mapM (const (liftIO (newIORef VNil))) funcParams
-              traverse_ (modify . uncurry declareVarRef) (zip funcParams refs)
+              traverse_ (modify . uncurry PS.declareEnvVarRef) (zip funcParams refs)
               -- Assign passed argument values into parameter refs
               traverse_ (\(ref, val) -> liftIO (writeIORef ref val)) (zip refs args)
               r <- runFunctionBody funcBody
-              modify popFrame
+              modify PS.popEnvFrame
               -- Persist changes to the closure environment
-              envAfter <- get
+              envAfter <- gets PS.environment
               _ <- liftIO (writeIORef closureRef envAfter)
               -- Restore caller environment (refs share state, no merge needed)
-              put callerEnv
+              modify $ PS.updateEnv callerEnv
               pure r
           }
   -- Declare the function in the current environment, then update the closure to include it
   -- Function value must be stored as a ref in the environment
   fnRef <- liftIO (newIORef (VCallable callable))
-  modify (declareVarRef funcName fnRef)
-  envWithSelf <- get
+  modify (PS.declareEnvVarRef funcName fnRef)
+  envWithSelf <- gets PS.environment
   _ <- liftIO (writeIORef closureRef envWithSelf)
   pure ()
 
 runFunctionBody ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -147,7 +146,7 @@ runFunctionBody (d : ds) =
     Continue () -> runFunctionBody ds
 
 interpretDeclF ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -157,7 +156,7 @@ interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
 interpretDeclF (Fun f) = declareFunction f $> Continue ()
 
 declareVariable ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -167,10 +166,10 @@ declareVariable (Variable {varName, varInitializer}) = do
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
   ref <- liftIO (newIORef value)
-  modify (declareVarRef varName ref)
+  modify (PS.declareEnvVarRef varName ref)
 
 interpretStatement ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -181,7 +180,7 @@ interpretStatement s =
     Break _ -> evalError 0 "Return statement outside of function."
 
 interpretStatementCF ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -194,9 +193,9 @@ interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
     then interpretStatementCF thenBranch
     else maybe (pure (Continue ())) interpretStatementCF elseBranch
 interpretStatementCF (BlockStmt decls) = do
-  modify pushFrame
+  modify PS.pushEnvFrame
   r <- go decls
-  modify popFrame
+  modify PS.popEnvFrame
   pure r
   where
     go [] = pure (Continue ())
@@ -219,7 +218,7 @@ interpretStatementCF (WhileStmt expr stmt) = loop
 interpretStatementCF (ReturnStmt maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
 
 interpretPrint ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -228,7 +227,7 @@ interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
-  ( MonadState (Environment Value) m,
+  ( MonadState ProgramState m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -243,7 +242,7 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   v2 <- evaluateExpr e2
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
-  env <- get
+  env <- gets PS.environment
   case findVarRef name env of
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
     Just ref -> liftIO (readIORef ref)
@@ -254,7 +253,7 @@ evaluateExpr (VariableAssignment line name expr) = do
   -- It's broken because I will update the environment at the end without including the changes
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
-  env <- get
+  env <- gets PS.environment
   case findVarRef name env of
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
     Just ref -> liftIO (writeIORef ref value) >> pure value
@@ -273,7 +272,7 @@ evaluateExpr (Call line calleeExpr argExprs) = do
 
 callCallable ::
   ( MonadError InterpreterError m,
-    MonadState (Environment Value) m,
+    MonadState ProgramState m,
     MonadIO m
   ) =>
   Int ->

@@ -6,6 +6,7 @@ module Environment
     popFrame,
     newEnv,
     findVarRef,
+    newFromEnv,
   )
 where
 
@@ -22,6 +23,9 @@ type Frame a = M.Map String (IORef a)
 
 newEnv :: Environment a
 newEnv = mempty :| []
+
+newFromEnv :: Environment a -> Environment a
+newFromEnv = pushFrame
 
 pushFrame :: Environment a -> Environment a
 pushFrame = (mempty <|) -- prepend a new empty frame

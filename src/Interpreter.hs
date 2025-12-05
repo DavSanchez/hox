@@ -19,7 +19,7 @@ import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Environment (findVarRef, newEnv)
+import Environment (findVarRef)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))

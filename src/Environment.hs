@@ -1,7 +1,6 @@
 module Environment
   ( Environment,
     declareVarRef,
-    getVarRef,
     pushFrame,
     popFrame,
     newEnv,
@@ -43,10 +42,50 @@ declareVarRef name ref (frame :| rest) = M.insert name ref frame :| rest
 -- Traverses down the stack until it finds a frame that contains the variable,
 -- and returns its IORef. If not found, returns Nothing.
 findVarRef :: String -> Environment a -> Maybe (IORef a)
-findVarRef name (frame :| (r : rest))
-  | M.member name frame = M.lookup name frame
-  | otherwise = findVarRef name (r :| rest)
-findVarRef name (frame :| []) = M.lookup name frame
+findVarRef name env = join $ find isJust (M.lookup name <$> env)
 
-getVarRef :: String -> Environment a -> Maybe (IORef a)
-getVarRef name env = join $ find isJust (M.lookup name <$> env)
+{-
+-- Pretty printing
+
+-- | Render the environment stack as ASCII boxes, top (current frame) first.
+-- Each box lists variables and their values, with arrows pointing to parent frames.
+renderEnvBoxes :: (Show a) => Environment a -> IO String
+renderEnvBoxes env = do
+  frames <- for (zip [0 ..] (toList env)) $ \(i, frame) -> do
+    entries <- for (M.toList frame) $ \(name, ref) -> do
+      val <- readIORef ref
+      pure (name, val)
+    pure (i, entries)
+  pure $ intercalate "\n" (concatMap boxWithArrow (annotateParents frames))
+  where
+    annotateParents :: [(Int, [(String, a)])] -> [((Int, [(String, a)]), Bool)]
+    annotateParents xs =
+      let n = length xs
+       in [(x, idx < n - 1) | (idx, x) <- zip [0 ..] xs]
+
+    boxWithArrow :: (Show a) => ((Int, [(String, a)]), Bool) -> [String]
+    boxWithArrow ((i, entries), hasParent) =
+      let title = "Frame " ++ show i ++ if i == 0 then " (current)" else ""
+          contentLines = case entries of
+            [] -> ["<empty>"]
+            xs -> [name ++ " = " ++ show val | (name, val) <- xs]
+          width = maximum (length title : map length contentLines) + 2 -- padding
+          top = "+" ++ replicate width '-' ++ "+"
+          midTitle = "| " ++ padRight width title ++ "|"
+          mids = ["| " ++ padRight width ln ++ "|" | ln <- contentLines]
+          bottom = "+" ++ replicate width '-' ++ "+"
+          box = [top, midTitle] ++ mids ++ [bottom]
+       in if hasParent
+            then box ++ [centerArrow width]
+            else box
+
+    padRight :: Int -> String -> String
+    padRight w s = s ++ replicate (w - length s) ' '
+
+    centerArrow :: Int -> String
+    centerArrow w =
+      let mid = w `div` 2
+          left = replicate mid ' '
+       in left ++ "|" ++ "\n" ++ left ++ "v"
+
+-}

@@ -10,6 +10,7 @@ module Environment
   )
 where
 
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor (($>))
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
@@ -19,17 +20,17 @@ type Environment a = NonEmpty (Frame a)
 
 type Frame a = IORef (M.Map String a)
 
-newEnv :: IO (Environment a)
+newEnv :: (MonadIO m) => m (Environment a)
 newEnv = do
-  frame <- newIORef mempty
+  frame <- liftIO $ newIORef mempty
   pure $ frame :| []
 
-newFromEnv :: Environment a -> IO (Environment a)
+newFromEnv :: (MonadIO m) => Environment a -> m (Environment a)
 newFromEnv = pushFrame
 
-pushFrame :: Environment a -> IO (Environment a)
+pushFrame :: (MonadIO m) => Environment a -> m (Environment a)
 pushFrame env = do
-  frame <- newIORef mempty
+  frame <- liftIO $ newIORef mempty
   pure (frame <| env)
 
 popFrame :: Environment a -> Environment a
@@ -38,18 +39,18 @@ popFrame (_ :| (x : xs)) = x :| xs
 
 -- | Inserts the defined variable ref in the current environment frame (i.e. top of the stack)
 -- This is only for declarations
-declareVar :: String -> a -> Environment a -> IO ()
-declareVar name ref (frame :| _rest) = modifyIORef' frame (M.insert name ref)
+declareVar :: (MonadIO m) => String -> a -> Environment a -> m ()
+declareVar name ref (frame :| _rest) = liftIO $ modifyIORef' frame (M.insert name ref)
 
 -- | Assigns a value to an existing variable in the environment.
 -- Traverses down the stack until it finds a frame that contains the variable,
 -- and updates its value. Returns True if the variable was found and updated,
 -- False otherwise.
-assignVar :: String -> a -> Environment a -> IO Bool
+assignVar :: (MonadIO m) => String -> a -> Environment a -> m Bool
 assignVar name value (frame :| rest) = do
-  currentMap <- readIORef frame
+  currentMap <- liftIO $ readIORef frame
   if M.member name currentMap
-    then modifyIORef' frame (M.insert name value) $> True
+    then liftIO (modifyIORef' frame (M.insert name value)) $> True
     else case rest of
       [] -> pure False
       (nextFrame : xs) -> assignVar name value (nextFrame :| xs)
@@ -57,9 +58,9 @@ assignVar name value (frame :| rest) = do
 -- | Finds the variable reference in the environment.
 -- Traverses down the stack until it finds a frame that contains the variable,
 -- and returns its value. If not found, returns Nothing.
-findVar :: String -> Environment a -> IO (Maybe a)
+findVar :: (MonadIO m) => String -> Environment a -> m (Maybe a)
 findVar name (frame :| rest) = do
-  currentMap <- readIORef frame
+  currentMap <- liftIO $ readIORef frame
   case M.lookup name currentMap of
     Just val -> pure (Just val)
     Nothing -> case rest of

@@ -8,7 +8,7 @@ import Environment (Environment, declareVar, newEnv)
 import Value (Callable (..), FunctionType (..), Value (..))
 
 -- | Build the standard environment with built-in functions and variables.
-mkStdEnv :: IO (Environment Value)
+mkStdEnv :: (MonadIO m) => m (Environment Value)
 mkStdEnv = do
   let clockCallable = VCallable (Callable (NativeFunction 0 "clock" clock))
   env <- newEnv

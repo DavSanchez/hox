@@ -35,11 +35,11 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
   Left errs -> interpreterFailure (Parse errs)
   Right prog -> programInterpreter prog
 
-runInterpreter :: Interpreter a -> IO (Either InterpreterError a)
+runInterpreter :: (MonadIO m) => Interpreter a -> m (Either InterpreterError a)
 runInterpreter interpreter = do
   env <- mkStdEnv
   let programState = PS.ProgramState env env M.empty
-  runInterpreter' programState interpreter
+  liftIO $ runInterpreter' programState interpreter
 
 runInterpreter' :: (Monad m) => ProgramState -> InterpreterT m a -> m (Either InterpreterError a)
 runInterpreter' programState interpreter = runExceptT (evalStateT (runInterpreterT interpreter) programState)
@@ -89,7 +89,7 @@ declareFunction (Function {funcName, funcParams, funcBody}) = do
   env <- gets PS.environment
   let closure = env
   let callable = Callable (UserDefined (Function funcName funcParams funcBody) closure)
-  liftIO $ declareVar funcName (VCallable callable) env
+  declareVar funcName (VCallable callable) env
 
 runFunctionBody ::
   ( MonadState ProgramState m,
@@ -124,7 +124,7 @@ declareVariable (Variable {varName, varInitializer}) = do
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
   env <- gets PS.environment
-  liftIO $ declareVar varName value env
+  declareVar varName value env
 
 interpretStatement ::
   ( MonadState ProgramState m,
@@ -152,7 +152,7 @@ interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
     else maybe (pure (Continue ())) interpretStatementCF elseBranch
 interpretStatementCF (BlockStmt decls) = do
   previousEnv <- gets PS.environment
-  newEnv <- liftIO $ pushFrame previousEnv
+  newEnv <- pushFrame previousEnv
   modify (\ps -> ps {PS.environment = newEnv})
   r <- go decls
   modify (\ps -> ps {PS.environment = previousEnv})
@@ -203,12 +203,12 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
   env <- gets PS.environment
-  val <- liftIO $ findVar name env
+  val <- findVar name env
   case val of
     Just v -> pure v
     Nothing -> do
       globs <- gets PS.globals
-      valG <- liftIO $ findVar name globs
+      valG <- findVar name globs
       case valG of
         Just v -> pure v
         Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
@@ -220,12 +220,12 @@ evaluateExpr (VariableAssignment line name expr) = do
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
   env <- gets PS.environment
-  found <- liftIO $ assignVar name value env
+  found <- assignVar name value env
   if found
     then pure value
     else do
       globs <- gets PS.globals
-      foundG <- liftIO $ assignVar name value globs
+      foundG <- assignVar name value globs
       if foundG
         then pure value
         else evalError line ("Undefined variable '" <> name <> "'.")
@@ -265,15 +265,14 @@ call (Callable (UserDefined func closure)) args = do
   -- envStr <- liftIO $ renderEnvBoxes env'
   -- trace ("Current env: \n" ++ envStr) (pure ())
 
-  functionEnv <- liftIO $ newFromEnv closure
+  functionEnv <- newFromEnv closure
   let paramWithArgs = zip (funcParams func) args
   -- Set variables for the params and args in the function's environment
-  liftIO $
-    mapM_
-      ( \(paramName, argValue) -> do
-          declareVar paramName argValue functionEnv
-      )
-      paramWithArgs
+  mapM_
+    ( \(paramName, argValue) -> do
+        declareVar paramName argValue functionEnv
+    )
+    paramWithArgs
   -- Save the current environment
   currentEnv <- gets PS.environment
   -- Set the function's environment as the current environment

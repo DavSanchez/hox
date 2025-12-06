@@ -1,7 +1,7 @@
-module Resolver (programResolver, runResolver, Resolver) where
+module Resolver (programResolver, runResolver, Resolver, ResolverState (..)) where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
-import Control.Monad.State (MonadState (..), State, modify, runState)
+import Control.Monad.State (MonadState (..), State, gets, modify, runState)
 import Data.Foldable (for_, traverse_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
@@ -11,8 +11,9 @@ import Program (Declaration (..), Function (..), Program (..), Statement (..), V
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
-    locals :: M.Map String Int -- variable name -> resolved depth
+    locals :: M.Map Expression Int -- expression -> resolved depth
   }
+  deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool -- variable name and whether it's defined
 
@@ -53,6 +54,21 @@ define :: String -> ResolverState -> ResolverState
 define name rs@ResolverState {scopes = currentScope :| rest} =
   let updatedScope = M.insert name True currentScope
    in rs {scopes = updatedScope :| rest}
+
+resolveLocal :: Expression -> String -> Resolver ()
+resolveLocal expr name = do
+  scopesList <- gets (NE.toList . scopes)
+  let findScopeIndex :: [Scope] -> Int -> Maybe Int
+      findScopeIndex [] _ = Nothing
+      findScopeIndex (s : ss) i =
+        if M.member name s
+          then Just i
+          else findScopeIndex ss (i + 1)
+
+  case findScopeIndex scopesList 0 of
+    Just distance -> do
+      modify $ \rs -> rs {locals = M.insert expr distance (locals rs)}
+    Nothing -> pure ()
 
 -- Resolution functions
 
@@ -107,53 +123,28 @@ resolveFunction params body = do
   for_ params $ \param -> do
     modify (declare param)
     modify (define param)
-  resolveBlock body
+  mapM_ resolveDeclaration body
   modify endScope
 
 resolveExpr :: Expression -> Resolver ()
-resolveExpr (VariableExpr _ lexeme) = resolveVariableExpr lexeme
-resolveExpr (VariableAssignment _ lexeme valueExpr) = resolveVariableAssignment lexeme valueExpr
-resolveExpr (BinaryOperation _ _ left right) = resolveBinaryOperation left right
-resolveExpr (Call _ callee args) = resolveCall callee args
-resolveExpr (Grouping expr) = resolveExpr expr
-resolveExpr (Literal _) = pure ()
-resolveExpr (Logical _ _ left right) = resolveBinaryOperation left right
-resolveExpr (UnaryOperation _ _ operand) = resolveExpr operand
-
-resolveCall :: Expression -> [Expression] -> Resolver ()
-resolveCall callee args = do
-  resolveExpr callee
-  for_ args resolveExpr
-
-resolveBinaryOperation :: Expression -> Expression -> Resolver ()
-resolveBinaryOperation left right = do
+resolveExpr expr@(VariableExpr _ name) = do
+  scopesList <- gets scopes
+  let currentScope = NE.head scopesList
+  case M.lookup name currentScope of
+    Just False -> throwError $ "Can't read local variable in its own initializer: " ++ name
+    _ -> resolveLocal expr name
+resolveExpr expr@(VariableAssignment _ name value) = do
+  resolveExpr value
+  resolveLocal expr name
+resolveExpr (BinaryOperation _ _ left right) = do
   resolveExpr left
   resolveExpr right
-
-resolveVariableExpr :: String -> Resolver ()
-resolveVariableExpr varName = do
-  ResolverState {scopes = currentScope :| _} <- get
-  case M.lookup varName currentScope of
-    Just False -> throwError "Can't read local variable in its own initializer."
-    _ -> resolveLocal varName
-
-resolveVariableAssignment :: String -> Expression -> Resolver ()
-resolveVariableAssignment varName valueExpr = do
-  resolveExpr valueExpr
-  resolveLocal varName
-
-resolveLocal :: String -> Resolver ()
-resolveLocal varName = do
-  ResolverState {scopes} <- get
-  go scopes 0
-  where
-    go (scope :| rest) depth =
-      if M.member varName scope
-        then resolve varName depth
-        else case NE.nonEmpty rest of
-          Just nextScopes -> go nextScopes (depth + 1)
-          Nothing -> pure () -- Not found, assume global
-
-resolve :: String -> Int -> Resolver ()
-resolve name depth = do
-  modify $ \rs -> rs {locals = M.insert name depth (locals rs)}
+resolveExpr (Call _ callee args) = do
+  resolveExpr callee
+  mapM_ resolveExpr args
+resolveExpr (Grouping expr) = resolveExpr expr
+resolveExpr (Literal _) = pure ()
+resolveExpr (Logical _ _ left right) = do
+  resolveExpr left
+  resolveExpr right
+resolveExpr (UnaryOperation _ _ operand) = resolveExpr operand

@@ -24,11 +24,12 @@ import Environment
     popFrame,
     pushFrame,
   )
+import Expression (Expression)
 
 data ProgramState a = ProgramState
   { environment :: Environment a,
     globals :: Frame a,
-    locals :: M.Map String Int
+    locals :: M.Map Expression Int
   }
 
 newProgramState :: (MonadIO m) => m (ProgramState a)

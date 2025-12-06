@@ -1,6 +1,5 @@
 module Resolver (programResolver, runResolver, Resolver) where
 
-import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.State (MonadState (..), State, modify, runState)
 import Data.Foldable (for_, traverse_)
@@ -144,19 +143,16 @@ resolveVariableAssignment varName valueExpr = do
   resolveLocal varName
 
 resolveLocal :: String -> Resolver ()
-resolveLocal varName =
-  do
-    ResolverState {scopes = s} <- get
-    go varName s (length s - 1)
+resolveLocal varName = do
+  ResolverState {scopes} <- get
+  go scopes 0
   where
-    go :: String -> NE.NonEmpty Scope -> Int -> Resolver ()
-    go lexeme s@(scope :| (r : rr)) totalDepth =
-      if M.member lexeme scope
-        then resolve lexeme (totalDepth - length s) -- Found at depth N
-        else go lexeme (r :| rr) totalDepth
-    go lexeme (scope :| []) totalDepth =
-      when (M.member lexeme scope) $
-        resolve lexeme totalDepth -- Found at depth 0
+    go (scope :| rest) depth =
+      if M.member varName scope
+        then resolve varName depth
+        else case NE.nonEmpty rest of
+          Just nextScopes -> go nextScopes (depth + 1)
+          Nothing -> pure () -- Not found, assume global
 
 resolve :: String -> Int -> Resolver ()
 resolve name depth = do

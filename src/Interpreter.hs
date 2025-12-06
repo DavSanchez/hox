@@ -10,16 +10,14 @@ module Interpreter
   )
 where
 
+import Control.Monad (foldM, when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, gets, modify)
-import Data.Foldable (traverse_)
 import Data.Functor (($>))
 import Data.IORef (newIORef, readIORef, writeIORef)
-import Data.List.NonEmpty (NonEmpty ((:|)))
-import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Environment (findVarRef)
+import Environment (declareVarRef, findVarRef, newFromEnv)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
@@ -29,7 +27,7 @@ import Interpreter.Error (InterpreterError (..), handleErr)
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
 import ProgramState qualified as PS
 import Token (Token)
-import Value (Callable (..), Value (VCallable, VNil), displayValue, isTruthy)
+import Value (Callable (..), FunctionType (..), Value (VCallable, VNil), arity, displayValue, isTruthy)
 
 type Interpreter = InterpreterT IO
 
@@ -90,47 +88,13 @@ declareFunction ::
   (MonadState ProgramState m, MonadIO m) =>
   Function -> m ()
 declareFunction (Function {funcName, funcParams, funcBody}) = do
-  envAtDecl <- gets PS.environment
-  closureRef <- liftIO (newIORef envAtDecl)
-  let callable =
-        Callable
-          { arity = length funcParams,
-            name = funcName,
-            closure = Just closureRef,
-            call = \args -> do
-              callerEnv <- gets PS.environment
-              -- Switch to the function's closure environment
-              env0 <- liftIO (readIORef closureRef)
-              -- If the function was declared at global scope (single frame),
-              -- refresh its frame from the current caller's global frame
-              -- so mutually recursive globals are visible.
-              -- TODO this means that mutually recursive functions declared in nested scopes won't work
-              let envForCall =
-                    if NE.length env0 == 1
-                      then NE.last callerEnv :| []
-                      else env0
-              modify $ PS.updateEnv envForCall
-              modify PS.pushEnvFrame
-              -- Bind parameters as new refs in the function frame
-              refs <- mapM (const (liftIO (newIORef VNil))) funcParams
-              traverse_ (modify . uncurry PS.declareEnvVarRef) (zip funcParams refs)
-              -- Assign passed argument values into parameter refs
-              traverse_ (\(ref, val) -> liftIO (writeIORef ref val)) (zip refs args)
-              r <- runFunctionBody funcBody
-              modify PS.popEnvFrame
-              -- Persist changes to the closure environment
-              envAfter <- gets PS.environment
-              _ <- liftIO (writeIORef closureRef envAfter)
-              -- Restore caller environment (refs share state, no merge needed)
-              modify $ PS.updateEnv callerEnv
-              pure r
-          }
-  -- Declare the function in the current environment, then update the closure to include it
-  -- Function value must be stored as a ref in the environment
-  fnRef <- liftIO (newIORef (VCallable callable))
-  modify (PS.declareEnvVarRef funcName fnRef)
-  envWithSelf <- gets PS.environment
-  _ <- liftIO (writeIORef closureRef envWithSelf)
+  ref <- liftIO (newIORef VNil)
+  modify (PS.declareEnvVarRef funcName ref)
+  env <- gets PS.environment
+  when (length env == 1) $ modify (PS.declareGlobalVarRef funcName ref)
+  closure <- gets PS.environment
+  let callable = Callable (UserDefined (Function funcName funcParams funcBody) closure)
+  liftIO (writeIORef ref (VCallable callable))
   pure ()
 
 runFunctionBody ::
@@ -167,6 +131,8 @@ declareVariable (Variable {varName, varInitializer}) = do
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
   ref <- liftIO (newIORef value)
   modify (PS.declareEnvVarRef varName ref)
+  env <- gets PS.environment
+  when (length env == 1) $ modify (PS.declareGlobalVarRef varName ref)
 
 interpretStatement ::
   ( MonadState ProgramState m,
@@ -193,9 +159,11 @@ interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
     then interpretStatementCF thenBranch
     else maybe (pure (Continue ())) interpretStatementCF elseBranch
 interpretStatementCF (BlockStmt decls) = do
+  -- modify PS.pushEnvFrame
+  previousEnv <- gets PS.environment
   modify PS.pushEnvFrame
   r <- go decls
-  modify PS.popEnvFrame
+  modify (\ps -> ps {PS.environment = previousEnv})
   pure r
   where
     go [] = pure (Continue ())
@@ -244,8 +212,12 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
 evaluateExpr (VariableExpr line name) = do
   env <- gets PS.environment
   case findVarRef name env of
-    Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
     Just ref -> liftIO (readIORef ref)
+    Nothing -> do
+      globs <- gets PS.globals
+      case findVarRef name globs of
+        Just ref -> liftIO (readIORef ref)
+        Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
 evaluateExpr (VariableAssignment line name expr) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
   -- else the environment will not reflect the changes made by evaluating the expression, and
@@ -255,8 +227,12 @@ evaluateExpr (VariableAssignment line name expr) = do
   value <- evaluateExpr expr
   env <- gets PS.environment
   case findVarRef name env of
-    Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
     Just ref -> liftIO (writeIORef ref value) >> pure value
+    Nothing -> do
+      globs <- gets PS.globals
+      case findVarRef name globs of
+        Just ref -> liftIO (writeIORef ref value) >> pure value
+        Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
@@ -285,3 +261,38 @@ callCallable line callable args = do
    in if actualArity /= expectedArity
         then evalError line ("Expected " <> show expectedArity <> " arguments but got " <> show (length args) <> ".")
         else call callable args
+
+call :: Callable -> [Value] -> forall m. (MonadState ProgramState m, MonadError InterpreterError m, MonadIO m) => m Value
+call (Callable (UserDefined func closure)) args = do
+  -- trace "Calling user-defined function" (pure ())
+  -- env' <- gets PS.environment
+  -- envStr <- liftIO $ renderEnvBoxes env'
+  -- trace ("Current env: \n" ++ envStr) (pure ())
+
+  let functionEnv = newFromEnv closure
+      paramWithArgs = zip (funcParams func) args
+  -- Set variables for the params and args in the function's environment
+  updatedEnv <-
+    foldM
+      ( \env (paramName, argValue) -> do
+          arg <- liftIO (newIORef argValue)
+          pure $ declareVarRef paramName arg env
+      )
+      functionEnv
+      paramWithArgs
+  -- Save the current environment
+  currentEnv <- gets PS.environment
+  -- Set the function's environment as the current environment
+  modify (\ps -> ps {PS.environment = updatedEnv})
+
+  -- trace "Calling user-defined function" (pure ())
+  -- env' <- gets PS.environment
+  -- envStr <- liftIO $ renderEnvBoxes env'
+  -- trace ("Current env: \n" ++ envStr) (pure ())
+
+  -- Run the function body
+  result <- runFunctionBody (funcBody func)
+  -- Restore the previous environment
+  modify (\ps -> ps {PS.environment = currentEnv})
+  pure result
+call (Callable (NativeFunction _ _ implementation)) args = implementation args

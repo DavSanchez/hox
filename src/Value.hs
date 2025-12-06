@@ -5,7 +5,6 @@ module Value
     Callable (..),
     FunctionType (..),
     arity,
-    call,
   )
 where
 
@@ -13,12 +12,11 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
-import Data.IORef (IORef)
 import Environment (Environment)
 import Interpreter.Error (InterpreterError)
 import Numeric (showFFloat)
 import Program (Function (..))
-import ProgramState (ProgramState)
+import ProgramState (ProgramState (..))
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value
@@ -31,7 +29,7 @@ data Value
 
 newtype Callable = Callable FunctionType
 
-type Closure = IORef (Environment Value)
+type Closure = Environment Value
 
 data FunctionType
   = UserDefined Function Closure
@@ -65,13 +63,8 @@ arity :: Callable -> Int
 arity (Callable (UserDefined func _)) = length (funcParams func)
 arity (Callable (NativeFunction n _ _)) = n
 
-call :: Callable -> [Value] -> forall m. (MonadState (ProgramState Value) m, MonadError InterpreterError m, MonadIO m) => m Value
-call (Callable (UserDefined func maybeClosure)) args = do
-  -- Implementation for user-defined functions would go here
-  error "User-defined function calls are not implemented yet."
-call (Callable (NativeFunction _ _ implementation)) args = implementation args
-
 instance Eq Callable where
+  (==) :: Callable -> Callable -> Bool
   (Callable func1) == (Callable func2) =
     case (func1, func2) of
       (UserDefined f1 _, UserDefined f2 _) -> funcName f1 == funcName f2

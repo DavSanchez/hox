@@ -3,6 +3,7 @@ module ProgramState
     pushEnvFrame,
     popEnvFrame,
     declareEnvVarRef,
+    declareGlobalVarRef,
     findEnvVarRef,
     getEnvVarRef,
     updateEnv,
@@ -29,6 +30,9 @@ popEnvFrame ps = ps {environment = popFrame (environment ps)}
 
 declareEnvVarRef :: String -> IORef a -> ProgramState a -> ProgramState a
 declareEnvVarRef name ref ps = ps {environment = declareVarRef name ref (environment ps)}
+
+declareGlobalVarRef :: String -> IORef a -> ProgramState a -> ProgramState a
+declareGlobalVarRef name ref ps = ps {globals = declareVarRef name ref (globals ps)}
 
 findEnvVarRef :: String -> ProgramState a -> Maybe (IORef a)
 findEnvVarRef name ps =

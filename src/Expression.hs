@@ -90,17 +90,17 @@ data Expression
       String
       -- | The expression whose value is being assigned to the variable.
       Expression
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 -- | Represents a literal value in the AST.
 data Literal = Number Double | String String | Bool Bool | Nil
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 -- | Represents a logical operator in the AST.
 data LogicalOperator
   = Or
   | And
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 -- | Represents a unary operator in the AST.
 data UnaryOperator
@@ -108,7 +108,7 @@ data UnaryOperator
     UMinus
   | -- | Logical NOT (`!`) operator
     Bang
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 -- | Represents a binary operator in the AST.
 data BinaryOperator
@@ -132,7 +132,7 @@ data BinaryOperator
     Star
   | -- | Division (`/`) operator
     Slash
-  deriving stock (Show, Eq)
+  deriving stock (Show, Eq, Ord)
 
 -- (Token constructors imported once in $setup for doctests.)
 

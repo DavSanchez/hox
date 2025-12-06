@@ -4,16 +4,16 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor ((<&>))
 import Data.Time (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (getPOSIXTime)
-import Environment (Environment, declareVar, newEnv)
+import ProgramState (ProgramState, declare, newProgramState)
 import Value (Callable (..), FunctionType (..), Value (..))
 
 -- | Build the standard environment with built-in functions and variables.
-mkStdEnv :: (MonadIO m) => m (Environment Value)
+mkStdEnv :: (MonadIO m) => m (ProgramState Value)
 mkStdEnv = do
   let clockCallable = VCallable (Callable (NativeFunction 0 "clock" clock))
-  env <- newEnv
-  declareVar "clock" clockCallable env
-  pure env
+  state <- newProgramState
+  declare "clock" clockCallable state
+  pure state
 
 clock :: forall m. (MonadIO m) => [Value] -> m Value
 clock = const $ liftIO getPOSIXTime <&> (VNumber . (fromRational . toRational . nominalDiffTimeToSeconds))

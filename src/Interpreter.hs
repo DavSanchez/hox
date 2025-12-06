@@ -12,10 +12,8 @@ where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.State (MonadState, StateT, evalStateT, gets, modify)
+import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
-import Data.Map qualified as M
-import Environment (assignVar, declareVar, findVar, newFromEnv, pushFrame)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
@@ -37,8 +35,7 @@ buildTreeWalkInterpreter (Right tokens) = case parseProgram tokens of
 
 runInterpreter :: (MonadIO m) => Interpreter a -> m (Either InterpreterError a)
 runInterpreter interpreter = do
-  env <- mkStdEnv
-  let programState = PS.ProgramState env env M.empty
+  programState <- mkStdEnv
   liftIO $ runInterpreter' programState interpreter
 
 runInterpreter' :: (Monad m) => ProgramState -> InterpreterT m a -> m (Either InterpreterError a)
@@ -88,7 +85,8 @@ declareFunction ::
 declareFunction (Function {funcName, funcParams, funcBody}) = do
   env <- gets PS.environment
   let callable = Callable (UserDefined (Function funcName funcParams funcBody) env)
-  declareVar funcName (VCallable callable) env
+  state <- get
+  PS.declare funcName (VCallable callable) state
 
 runFunctionBody ::
   ( MonadState ProgramState m,
@@ -122,8 +120,8 @@ declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
-  env <- gets PS.environment
-  declareVar varName value env
+  state <- get
+  PS.declare varName value state
 
 interpretStatement ::
   ( MonadState ProgramState m,
@@ -152,11 +150,11 @@ interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
       Just elseStmt -> interpretStatementCF elseStmt
       Nothing -> pure (Continue ())
 interpretStatementCF (BlockStmt decls) = do
-  previousEnv <- gets PS.environment
-  newEnv <- pushFrame previousEnv
-  modify (\ps -> ps {PS.environment = newEnv})
+  state <- get
+  newState <- PS.pushScope state
+  put newState
   r <- go decls
-  modify (\ps -> ps {PS.environment = previousEnv})
+  modify PS.popScope
   pure r
   where
     go [] = pure (Continue ())
@@ -203,16 +201,11 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   v2 <- evaluateExpr e2
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
-  env <- gets PS.environment
-  val <- findVar name env
+  state <- get
+  val <- PS.find name state
   case val of
     Just v -> pure v
-    Nothing -> do
-      globs <- gets PS.globals
-      valG <- findVar name globs
-      case valG of
-        Just v -> pure v
-        Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
+    Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
 evaluateExpr (VariableAssignment line name expr) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
   -- else the environment will not reflect the changes made by evaluating the expression, and
@@ -220,16 +213,11 @@ evaluateExpr (VariableAssignment line name expr) = do
   -- It's broken because I will update the environment at the end without including the changes
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
-  env <- gets PS.environment
-  found <- assignVar name value env
+  state <- get
+  found <- PS.assign name value state
   if found
     then pure value
-    else do
-      globs <- gets PS.globals
-      foundG <- assignVar name value globs
-      if foundG
-        then pure value
-        else evalError line ("Undefined variable '" <> name <> "'.")
+    else evalError line ("Undefined variable '" <> name <> "'.")
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
@@ -261,17 +249,20 @@ callCallable line callable args = do
 
 call :: Callable -> [Value] -> forall m. (MonadState ProgramState m, MonadError InterpreterError m, MonadIO m) => m Value
 call (Callable (UserDefined func closure)) args = do
-  functionEnv <- newFromEnv closure
+  state <- get
+  newState <- PS.pushClosureScope closure state
+  put newState
   let paramWithArgs = zip (funcParams func) args
   -- Set variables for the params and args in the function's environment
-  mapM_ (\(paramName, argValue) -> declareVar paramName argValue functionEnv) paramWithArgs
-  -- Save the current environment
-  currentEnv <- gets PS.environment
-  -- Set the function's environment as the current environment
-  modify (\ps -> ps {PS.environment = functionEnv})
+  mapM_
+    ( \(paramName, argValue) -> do
+        s <- get
+        PS.declare paramName argValue s
+    )
+    paramWithArgs
   -- Run the function body
   result <- runFunctionBody (funcBody func)
   -- Restore the previous environment
-  modify (\ps -> ps {PS.environment = currentEnv})
+  modify (\ps -> ps {PS.environment = PS.environment state})
   pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args

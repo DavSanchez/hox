@@ -87,8 +87,7 @@ declareFunction ::
   Function -> m ()
 declareFunction (Function {funcName, funcParams, funcBody}) = do
   env <- gets PS.environment
-  let closure = env
-  let callable = Callable (UserDefined (Function funcName funcParams funcBody) closure)
+  let callable = Callable (UserDefined (Function funcName funcParams funcBody) env)
   declareVar funcName (VCallable callable) env
 
 runFunctionBody ::
@@ -149,7 +148,9 @@ interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
   cond <- isTruthy <$> evaluateExpr expr
   if cond
     then interpretStatementCF thenBranch
-    else maybe (pure (Continue ())) interpretStatementCF elseBranch
+    else case elseBranch of
+      Just elseStmt -> interpretStatementCF elseStmt
+      Nothing -> pure (Continue ())
 interpretStatementCF (BlockStmt decls) = do
   previousEnv <- gets PS.environment
   newEnv <- pushFrame previousEnv
@@ -260,29 +261,14 @@ callCallable line callable args = do
 
 call :: Callable -> [Value] -> forall m. (MonadState ProgramState m, MonadError InterpreterError m, MonadIO m) => m Value
 call (Callable (UserDefined func closure)) args = do
-  -- trace "Calling user-defined function" (pure ())
-  -- env' <- gets PS.environment
-  -- envStr <- liftIO $ renderEnvBoxes env'
-  -- trace ("Current env: \n" ++ envStr) (pure ())
-
   functionEnv <- newFromEnv closure
   let paramWithArgs = zip (funcParams func) args
   -- Set variables for the params and args in the function's environment
-  mapM_
-    ( \(paramName, argValue) -> do
-        declareVar paramName argValue functionEnv
-    )
-    paramWithArgs
+  mapM_ (\(paramName, argValue) -> declareVar paramName argValue functionEnv) paramWithArgs
   -- Save the current environment
   currentEnv <- gets PS.environment
   -- Set the function's environment as the current environment
   modify (\ps -> ps {PS.environment = functionEnv})
-
-  -- trace "Calling user-defined function" (pure ())
-  -- env' <- gets PS.environment
-  -- envStr <- liftIO $ renderEnvBoxes env'
-  -- trace ("Current env: \n" ++ envStr) (pure ())
-
   -- Run the function body
   result <- runFunctionBody (funcBody func)
   -- Restore the previous environment

@@ -1,48 +1,70 @@
 module Environment
   ( Environment,
-    declareVarRef,
+    declareVar,
     pushFrame,
     popFrame,
     newEnv,
-    findVarRef,
+    findVar,
+    assignVar,
     newFromEnv,
   )
 where
 
-import Control.Monad (join)
-import Data.Foldable (find)
-import Data.IORef (IORef)
+import Data.Functor (($>))
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.Map qualified as M
-import Data.Maybe (isJust)
 
 type Environment a = NonEmpty (Frame a)
 
-type Frame a = M.Map String (IORef a)
+type Frame a = IORef (M.Map String a)
 
-newEnv :: Environment a
-newEnv = mempty :| []
+newEnv :: IO (Environment a)
+newEnv = do
+  frame <- newIORef mempty
+  pure $ frame :| []
 
-newFromEnv :: Environment a -> Environment a
+newFromEnv :: Environment a -> IO (Environment a)
 newFromEnv = pushFrame
 
-pushFrame :: Environment a -> Environment a
-pushFrame = (mempty <|) -- prepend a new empty frame
+pushFrame :: Environment a -> IO (Environment a)
+pushFrame env = do
+  frame <- newIORef mempty
+  pure (frame <| env)
 
 popFrame :: Environment a -> Environment a
 popFrame single@(_ :| []) = single -- cannot pop the last frame
 popFrame (_ :| (x : xs)) = x :| xs
 
--- Inserts the defined variable ref in the current environment frame (i.e. top of the stack)
+-- | Inserts the defined variable ref in the current environment frame (i.e. top of the stack)
 -- This is only for declarations
-declareVarRef :: String -> IORef a -> Environment a -> Environment a
-declareVarRef name ref (frame :| rest) = M.insert name ref frame :| rest
+declareVar :: String -> a -> Environment a -> IO ()
+declareVar name ref (frame :| _rest) = modifyIORef' frame (M.insert name ref)
+
+-- | Assigns a value to an existing variable in the environment.
+-- Traverses down the stack until it finds a frame that contains the variable,
+-- and updates its value. Returns True if the variable was found and updated,
+-- False otherwise.
+assignVar :: String -> a -> Environment a -> IO Bool
+assignVar name value (frame :| rest) = do
+  currentMap <- readIORef frame
+  if M.member name currentMap
+    then modifyIORef' frame (M.insert name value) $> True
+    else case rest of
+      [] -> pure False
+      (nextFrame : xs) -> assignVar name value (nextFrame :| xs)
 
 -- | Finds the variable reference in the environment.
 -- Traverses down the stack until it finds a frame that contains the variable,
--- and returns its IORef. If not found, returns Nothing.
-findVarRef :: String -> Environment a -> Maybe (IORef a)
-findVarRef name env = join $ find isJust (M.lookup name <$> env)
+-- and returns its value. If not found, returns Nothing.
+findVar :: String -> Environment a -> IO (Maybe a)
+findVar name (frame :| rest) = do
+  currentMap <- readIORef frame
+  case M.lookup name currentMap of
+    Just val -> pure (Just val)
+    Nothing -> case rest of
+      [] -> pure Nothing
+      (nextFrame : xs) -> findVar name (nextFrame :| xs)
 
 {-
 -- Pretty printing

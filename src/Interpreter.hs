@@ -10,14 +10,12 @@ module Interpreter
   )
 where
 
-import Control.Monad (foldM, when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, gets, modify)
 import Data.Functor (($>))
-import Data.IORef (newIORef, readIORef, writeIORef)
 import Data.Map qualified as M
-import Environment (declareVarRef, findVarRef, newFromEnv)
+import Environment (assignVar, declareVar, findVar, newFromEnv, pushFrame)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
@@ -88,14 +86,10 @@ declareFunction ::
   (MonadState ProgramState m, MonadIO m) =>
   Function -> m ()
 declareFunction (Function {funcName, funcParams, funcBody}) = do
-  ref <- liftIO (newIORef VNil)
-  modify (PS.declareEnvVarRef funcName ref)
   env <- gets PS.environment
-  when (length env == 1) $ modify (PS.declareGlobalVarRef funcName ref)
-  closure <- gets PS.environment
+  let closure = env
   let callable = Callable (UserDefined (Function funcName funcParams funcBody) closure)
-  liftIO (writeIORef ref (VCallable callable))
-  pure ()
+  liftIO $ declareVar funcName (VCallable callable) env
 
 runFunctionBody ::
   ( MonadState ProgramState m,
@@ -129,10 +123,8 @@ declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
-  ref <- liftIO (newIORef value)
-  modify (PS.declareEnvVarRef varName ref)
   env <- gets PS.environment
-  when (length env == 1) $ modify (PS.declareGlobalVarRef varName ref)
+  liftIO $ declareVar varName value env
 
 interpretStatement ::
   ( MonadState ProgramState m,
@@ -159,9 +151,9 @@ interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
     then interpretStatementCF thenBranch
     else maybe (pure (Continue ())) interpretStatementCF elseBranch
 interpretStatementCF (BlockStmt decls) = do
-  -- modify PS.pushEnvFrame
   previousEnv <- gets PS.environment
-  modify PS.pushEnvFrame
+  newEnv <- liftIO $ pushFrame previousEnv
+  modify (\ps -> ps {PS.environment = newEnv})
   r <- go decls
   modify (\ps -> ps {PS.environment = previousEnv})
   pure r
@@ -211,12 +203,14 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 evaluateExpr (VariableExpr line name) = do
   env <- gets PS.environment
-  case findVarRef name env of
-    Just ref -> liftIO (readIORef ref)
+  val <- liftIO $ findVar name env
+  case val of
+    Just v -> pure v
     Nothing -> do
       globs <- gets PS.globals
-      case findVarRef name globs of
-        Just ref -> liftIO (readIORef ref)
+      valG <- liftIO $ findVar name globs
+      case valG of
+        Just v -> pure v
         Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
 evaluateExpr (VariableAssignment line name expr) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
@@ -226,13 +220,15 @@ evaluateExpr (VariableAssignment line name expr) = do
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
   env <- gets PS.environment
-  case findVarRef name env of
-    Just ref -> liftIO (writeIORef ref value) >> pure value
-    Nothing -> do
+  found <- liftIO $ assignVar name value env
+  if found
+    then pure value
+    else do
       globs <- gets PS.globals
-      case findVarRef name globs of
-        Just ref -> liftIO (writeIORef ref value) >> pure value
-        Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
+      foundG <- liftIO $ assignVar name value globs
+      if foundG
+        then pure value
+        else evalError line ("Undefined variable '" <> name <> "'.")
 evaluateExpr (Logical _ op e1 e2) =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
@@ -269,21 +265,19 @@ call (Callable (UserDefined func closure)) args = do
   -- envStr <- liftIO $ renderEnvBoxes env'
   -- trace ("Current env: \n" ++ envStr) (pure ())
 
-  let functionEnv = newFromEnv closure
-      paramWithArgs = zip (funcParams func) args
+  functionEnv <- liftIO $ newFromEnv closure
+  let paramWithArgs = zip (funcParams func) args
   -- Set variables for the params and args in the function's environment
-  updatedEnv <-
-    foldM
-      ( \env (paramName, argValue) -> do
-          arg <- liftIO (newIORef argValue)
-          pure $ declareVarRef paramName arg env
+  liftIO $
+    mapM_
+      ( \(paramName, argValue) -> do
+          declareVar paramName argValue functionEnv
       )
-      functionEnv
       paramWithArgs
   -- Save the current environment
   currentEnv <- gets PS.environment
   -- Set the function's environment as the current environment
-  modify (\ps -> ps {PS.environment = updatedEnv})
+  modify (\ps -> ps {PS.environment = functionEnv})
 
   -- trace "Calling user-defined function" (pure ())
   -- env' <- gets PS.environment

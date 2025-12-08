@@ -83,6 +83,8 @@ data Expression
       Int
       -- | The name of the variable.
       String
+      -- | The resolution distance (depth).
+      (Maybe Int)
   | VariableAssignment
       -- | The line number where the assignment happens.
       Int
@@ -90,6 +92,8 @@ data Expression
       String
       -- | The expression whose value is being assigned to the variable.
       Expression
+      -- | The resolution distance (depth).
+      (Maybe Int)
   deriving stock (Show, Eq, Ord)
 
 -- | Represents a literal value in the AST.
@@ -187,9 +191,9 @@ assignment = do
 varAssign :: Expression -> TokenParser Expression
 varAssign expr = do
   case expr of
-    VariableExpr lineNum name -> do
+    VariableExpr lineNum name _ -> do
       void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
-      VariableAssignment lineNum name <$> assignment
+      VariableAssignment lineNum name <$> assignment <*> pure Nothing
     _ -> fail "Invalid assignment target."
 
 -- Logic
@@ -460,7 +464,7 @@ parseGrouping = Grouping <$> parens expression
 parseVarName :: TokenParser Expression
 parseVarName = do
   Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "Expect expression."
-  pure (VariableExpr lineNum name)
+  pure (VariableExpr lineNum name Nothing)
 
 -- Helpers
 
@@ -505,8 +509,8 @@ displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> display
 displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
-displayExpr (VariableExpr _ name) = name
-displayExpr (VariableAssignment _ name expr) = "(= " <> name <> " " <> displayExpr expr <> ")"
+displayExpr (VariableExpr _ name _) = name
+displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"
 displayExpr (Logical _ op e1 e2) = "(" <> displayLogicOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 
 displayBinOp :: BinaryOperator -> String

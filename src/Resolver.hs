@@ -1,23 +1,42 @@
-module Resolver (programResolver, runResolver, Resolver, ResolverState (..), ResolveError) where
+module Resolver
+  ( programResolver,
+    runResolver,
+    Resolver,
+    ResolverState (..),
+    ResolveError,
+    displayResolveError,
+  )
+where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.State (MonadState (..), State, gets, modify, runState)
-import Data.Foldable (for_, traverse_)
+import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
 import Expression (Expression (..))
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
-data ResolverState = ResolverState
-  { scopes :: NE.NonEmpty Scope,
-    locals :: M.Map Expression Int -- expression -> resolved depth
+newtype ResolverState = ResolverState
+  { scopes :: NE.NonEmpty Scope
   }
   deriving stock (Show, Eq)
 
-type Scope = M.Map String Bool -- variable name and whether it's defined
+type Scope = M.Map String Bool
 
-newtype ResolveError = ResolveError String deriving stock (Show, Eq)
+data ResolveError
+  = ResolveError
+      -- | Lexeme
+      String
+      -- | Line number
+      Int
+      -- | Error message
+      String
+  deriving stock (Show, Eq)
+
+displayResolveError :: ResolveError -> String
+displayResolveError (ResolveError name line msg) =
+  "[line " ++ show line ++ "] Error at '" ++ name ++ "': " ++ msg
 
 newtype Resolver a = Resolver {runResolverT :: ExceptT ResolveError (State ResolverState) a}
   deriving newtype
@@ -33,10 +52,8 @@ runResolver resolver =
   let stateAction = runState (runExceptT (runResolverT resolver))
    in stateAction newScope
 
--- Scope manipulation
-
 newScope :: ResolverState
-newScope = ResolverState (mempty :| []) M.empty
+newScope = ResolverState (mempty :| [])
 
 beginScope :: ResolverState -> ResolverState
 beginScope rs = rs {scopes = mempty <| scopes rs}
@@ -44,15 +61,16 @@ beginScope rs = rs {scopes = mempty <| scopes rs}
 endScope :: ResolverState -> ResolverState
 endScope rs =
   case scopes rs of
-    single@(_ :| []) -> rs {scopes = single} -- cannot pop the last scope
+    single@(_ :| []) -> rs {scopes = single}
     (_ :| (x : xs)) -> rs {scopes = x :| xs}
 
 declare :: String -> ResolverState -> Either ResolveError ResolverState
 declare name rs@ResolverState {scopes = currentScope :| rest} =
   let alreadyDeclared = M.member name currentScope
       updatedScope = M.insert name False currentScope
-   in if alreadyDeclared
-        then Left $ ResolveError "Already a variable with this name in this scope."
+      isGlobal = null rest
+   in if alreadyDeclared && not isGlobal
+        then Left $ ResolveError name 0 "Already a variable with this name in this scope."
         else Right $ rs {scopes = updatedScope :| rest}
 
 define :: String -> ResolverState -> ResolverState
@@ -60,8 +78,8 @@ define name rs@ResolverState {scopes = currentScope :| rest} =
   let updatedScope = M.insert name True currentScope
    in rs {scopes = updatedScope :| rest}
 
-resolveLocal :: Expression -> String -> Resolver ()
-resolveLocal expr name = do
+resolveLocal :: String -> Resolver (Maybe Int)
+resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
   let findScopeIndex :: [Scope] -> Int -> Maybe Int
       findScopeIndex [] _ = Nothing
@@ -72,63 +90,56 @@ resolveLocal expr name = do
 
   case findScopeIndex scopesList 0 of
     Just distance -> do
-      modify $ \rs -> rs {locals = M.insert expr distance (locals rs)}
-    Nothing -> pure ()
+      let isGlobal = distance == length scopesList - 1
+      if not isGlobal
+        then pure (Just distance)
+        else pure Nothing
+    Nothing -> pure Nothing
 
--- Resolution functions
+programResolver :: Program -> Resolver Program
+programResolver (Program decls) = Program <$> mapM resolveDeclaration decls
 
-programResolver :: Program -> Resolver ()
-programResolver (Program decls) = resolveBlock decls
-
-resolveBlock :: [Declaration] -> Resolver ()
+resolveBlock :: [Declaration] -> Resolver [Declaration]
 resolveBlock block = do
   modify beginScope
-  mapM_ resolveDeclaration block
+  decls <- mapM resolveDeclaration block
   modify endScope
+  pure decls
 
-resolveDeclaration :: Declaration -> Resolver ()
-resolveDeclaration (VarDecl var) = resolveVarDecl var
-resolveDeclaration (Fun func) = resolveFuncDecl func
-resolveDeclaration (Statement stmt) = resolveStatement stmt
+resolveDeclaration :: Declaration -> Resolver Declaration
+resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
+resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl func
+resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
 
-resolveStatement :: Statement -> Resolver ()
-resolveStatement (ExprStmt expr) = resolveExpr expr
-resolveStatement (IfStmt cond thenBranch elseBranch) = resolveIfStmt cond thenBranch elseBranch
-resolveStatement (PrintStmt expr) = resolveExpr expr
-resolveStatement (ReturnStmt maybeExpr) = traverse_ resolveExpr maybeExpr
-resolveStatement (WhileStmt cond body) = resolveWhileStmt cond body
-resolveStatement (BlockStmt block) = resolveBlock block
+resolveStatement :: Statement -> Resolver Statement
+resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
+resolveStatement (IfStmt cond thenBranch elseBranch) = IfStmt <$> resolveExpr cond <*> resolveStatement thenBranch <*> traverse resolveStatement elseBranch
+resolveStatement (PrintStmt expr) = PrintStmt <$> resolveExpr expr
+resolveStatement (ReturnStmt maybeExpr) = ReturnStmt <$> traverse resolveExpr maybeExpr
+resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
+resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block
 
-resolveWhileStmt :: Expression -> Statement -> Resolver ()
-resolveWhileStmt cond body = do
-  resolveExpr cond
-  resolveStatement body
-
-resolveIfStmt :: Expression -> Statement -> Maybe Statement -> Resolver ()
-resolveIfStmt cond thenBranch elseBranch = do
-  resolveExpr cond
-  resolveStatement thenBranch
-  traverse_ resolveStatement elseBranch
-
-resolveVarDecl :: Variable -> Resolver ()
+resolveVarDecl :: Variable -> Resolver Variable
 resolveVarDecl (Variable vName vValue) = do
   st <- get
   case declare vName st of
     Left err -> throwError err
     Right st' -> put st'
-  traverse_ resolveExpr vValue
+  vValue' <- traverse resolveExpr vValue
   modify (define vName)
+  pure (Variable vName vValue')
 
-resolveFuncDecl :: Function -> Resolver ()
+resolveFuncDecl :: Function -> Resolver Function
 resolveFuncDecl (Function fName fParams fBody) = do
   st <- get
   case declare fName st of
     Left err -> throwError err
     Right st' -> put st'
   modify (define fName)
-  resolveFunction fParams fBody
+  fBody' <- resolveFunction fParams fBody
+  pure (Function fName fParams fBody')
 
-resolveFunction :: [String] -> [Declaration] -> Resolver ()
+resolveFunction :: [String] -> [Declaration] -> Resolver [Declaration]
 resolveFunction params body = do
   modify beginScope
   for_ params $ \param -> do
@@ -137,28 +148,27 @@ resolveFunction params body = do
       Left err -> throwError err
       Right st' -> put st'
     modify (define param)
-  mapM_ resolveDeclaration body
+  body' <- mapM resolveDeclaration body
   modify endScope
+  pure body'
 
-resolveExpr :: Expression -> Resolver ()
-resolveExpr expr@(VariableExpr _ name) = do
+resolveExpr :: Expression -> Resolver Expression
+resolveExpr (VariableExpr line name _) = do
   scopesList <- gets scopes
   let currentScope = NE.head scopesList
+      isGlobal = length scopesList == 1
   case M.lookup name currentScope of
-    Just False -> throwError $ ResolveError $ "Can't read local variable in its own initializer: " ++ name
-    _ -> resolveLocal expr name
-resolveExpr expr@(VariableAssignment _ name value) = do
-  resolveExpr value
-  resolveLocal expr name
-resolveExpr (BinaryOperation _ _ left right) = do
-  resolveExpr left
-  resolveExpr right
-resolveExpr (Call _ callee args) = do
-  resolveExpr callee
-  mapM_ resolveExpr args
-resolveExpr (Grouping expr) = resolveExpr expr
-resolveExpr (Literal _) = pure ()
-resolveExpr (Logical _ _ left right) = do
-  resolveExpr left
-  resolveExpr right
-resolveExpr (UnaryOperation _ _ operand) = resolveExpr operand
+    Just False | not isGlobal -> throwError $ ResolveError name line "Can't read local variable in its own initializer."
+    _ -> do
+      dist <- resolveLocal name
+      pure (VariableExpr line name dist)
+resolveExpr (VariableAssignment line name value _) = do
+  value' <- resolveExpr value
+  dist <- resolveLocal name
+  pure (VariableAssignment line name value' dist)
+resolveExpr (BinaryOperation line op left right) = BinaryOperation line op <$> resolveExpr left <*> resolveExpr right
+resolveExpr (Call line callee args) = Call line <$> resolveExpr callee <*> mapM resolveExpr args
+resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
+resolveExpr (Literal lit) = pure (Literal lit)
+resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right
+resolveExpr (UnaryOperation line op operand) = UnaryOperation line op <$> resolveExpr operand

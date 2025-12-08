@@ -7,7 +7,7 @@ where
 import Evaluation.Error (EvalError, displayEvalErr)
 import GHC.IO.Handle.Text (hPutStrLn)
 import Parser (ParseError, displayParseErr)
-import Resolver (ResolveError)
+import Resolver (ResolveError, displayResolveError)
 import Scanner.Error (SyntaxError, displayErr)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (stderr)
@@ -29,7 +29,7 @@ handleErr = \case
     mapM_ (hPutStrLn stderr . displayParseErr) err
     exitWith (ExitFailure 65)
   Resolve err -> do
-    hPutStrLn stderr (show err)
+    hPutStrLn stderr (displayResolveError err)
     exitWith (ExitFailure 65)
   Eval err -> do
     hPutStrLn stderr (displayEvalErr err)

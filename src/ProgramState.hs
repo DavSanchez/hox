@@ -7,7 +7,6 @@ module ProgramState
     pushScope,
     pushClosureScope,
     popScope,
-    setResolvedLocals,
   )
 where
 
@@ -30,18 +29,13 @@ import Resolver qualified as R
 
 data ProgramState a = ProgramState
   { environment :: Environment a,
-    globals :: Frame a,
-    locals :: M.Map Expression Int
+    globals :: Frame a
   }
 
 newProgramState :: (MonadIO m) => m (ProgramState a)
 newProgramState = do
   g <- newFrame
-  pure $ ProgramState {environment = [], globals = g, locals = mempty}
-
-setResolvedLocals :: R.ResolverState -> ProgramState a -> ProgramState a
-setResolvedLocals resolverState progState =
-  progState {locals = R.locals resolverState}
+  pure $ ProgramState {environment = [], globals = g}
 
 declare :: (MonadIO m) => String -> a -> ProgramState a -> m ()
 declare name val state = do

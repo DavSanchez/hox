@@ -70,13 +70,11 @@ programInterpreter ::
     MonadIO m
   ) =>
   Program -> m ()
-programInterpreter prog@(Program decls) = do
-  let (resolverResult, resolverState) = runResolver (programResolver prog)
+programInterpreter prog = do
+  let (resolverResult, _) = runResolver (programResolver prog)
   case resolverResult of
     Left err -> throwError (Resolve err)
-    -- Set the program state with the resolved locals
-    Right () -> modify (PS.setResolvedLocals resolverState)
-  mapM_ interpretDecl decls
+    Right (Program decls) -> mapM_ interpretDecl decls
 
 interpretDecl ::
   ( MonadState ProgramState m,
@@ -209,13 +207,13 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   v1 <- evaluateExpr e1
   v2 <- evaluateExpr e2
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
-evaluateExpr expr@(VariableExpr line name) = do
+evaluateExpr (VariableExpr line name dist) = do
   state <- get
-  val <- lookupVariable name expr state
+  val <- lookupVariable name dist state
   case val of
     Just v -> pure v
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
-evaluateExpr va@(VariableAssignment line name expr) = do
+evaluateExpr (VariableAssignment line name expr dist) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
   -- else the environment will not reflect the changes made by evaluating the expression, and
   -- the right-associativity property of this operation will be broken.
@@ -223,7 +221,7 @@ evaluateExpr va@(VariableAssignment line name expr) = do
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
   state <- get
-  found <- assignVariable name va value state
+  found <- assignVariable name dist value state
   if found
     then pure value
     else evalError line ("Undefined variable '" <> name <> "'.")
@@ -240,22 +238,18 @@ evaluateExpr (Call line calleeExpr argExprs) = do
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
 
-lookupVariable :: (MonadIO m) => String -> Expression -> ProgramState -> m (Maybe Value)
-lookupVariable name expr st =
-  let locals' = PS.locals st
-      env' = PS.environment st
+lookupVariable :: (MonadIO m) => String -> Maybe Int -> ProgramState -> m (Maybe Value)
+lookupVariable name distance st =
+  let env' = PS.environment st
       globals' = PS.globals st
-      distance = M.lookup expr locals'
    in case distance of
         Just d -> getAtDistance d name env'
         Nothing -> findInFrame name globals'
 
-assignVariable :: (MonadIO m) => String -> Expression -> Value -> ProgramState -> m Bool
-assignVariable name expr value st =
-  let locals' = PS.locals st
-      env' = PS.environment st
+assignVariable :: (MonadIO m) => String -> Maybe Int -> Value -> ProgramState -> m Bool
+assignVariable name distance value st =
+  let env' = PS.environment st
       globals' = PS.globals st
-      distance = M.lookup expr locals'
    in case distance of
         Just d -> assignAtDistance d name value env'
         Nothing -> assignInFrame name value globals'

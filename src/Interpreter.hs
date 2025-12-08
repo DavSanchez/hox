@@ -14,7 +14,6 @@ import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
-import Data.Map qualified as M
 import Environment (assignAtDistance, assignInFrame, findInFrame, getAtDistance)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
@@ -89,11 +88,11 @@ interpretDecl (Statement stmt) = interpretStatement stmt
 declareFunction ::
   (MonadState ProgramState m, MonadIO m) =>
   Function -> m ()
-declareFunction (Function {funcName, funcParams, funcBody}) = do
+declareFunction func = do
   env <- gets PS.environment
-  let callable = Callable (UserDefined (Function funcName funcParams funcBody) env)
+  let callable = Callable (UserDefined func env)
   state <- get
-  PS.declare funcName (VCallable callable) state
+  PS.declare (funcName func) (VCallable callable) state
 
 runFunctionBody ::
   ( MonadState ProgramState m,
@@ -181,7 +180,7 @@ interpretStatementCF (WhileStmt expr stmt) = loop
           case cf of
             Break v -> pure (Break v)
             Continue () -> loop
-interpretStatementCF (ReturnStmt maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
+interpretStatementCF (ReturnStmt _ maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
 
 interpretPrint ::
   ( MonadState ProgramState m,
@@ -278,7 +277,7 @@ call (Callable (UserDefined func closure)) args = do
   let paramWithArgs = zip (funcParams func) args
   -- Set variables for the params and args in the function's environment
   mapM_
-    ( \(paramName, argValue) -> do
+    ( \((paramName, _), argValue) -> do
         s <- get
         PS.declare paramName argValue s
     )

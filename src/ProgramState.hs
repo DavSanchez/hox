@@ -11,7 +11,6 @@ module ProgramState
 where
 
 import Control.Monad.IO.Class (MonadIO)
-import Data.Map qualified as M
 import Environment
   ( Environment,
     Frame,
@@ -24,8 +23,6 @@ import Environment
     popFrame,
     pushFrame,
   )
-import Expression (Expression)
-import Resolver qualified as R
 
 data ProgramState a = ProgramState
   { environment :: Environment a,

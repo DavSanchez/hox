@@ -24,14 +24,16 @@ type Block = [Declaration]
 
 data Function = Function
   { funcName :: String,
-    funcParams :: [String],
-    funcBody :: Block
+    funcParams :: [(String, Int)],
+    funcBody :: Block,
+    funcLine :: Int
   }
   deriving stock (Show, Eq)
 
 data Variable = Variable
   { varName :: String,
-    varInitializer :: Maybe Expression
+    varInitializer :: Maybe Expression,
+    varLine :: Int
   }
   deriving stock (Show, Eq)
 
@@ -45,7 +47,7 @@ data Statement
       -- | else
       (Maybe Statement)
   | PrintStmt Expression
-  | ReturnStmt (Maybe Expression)
+  | ReturnStmt Int (Maybe Expression)
   | WhileStmt Expression Statement
   | BlockStmt Block
   deriving stock (Show, Eq)
@@ -88,45 +90,51 @@ declaration = do
 function :: String -> TokenParser Function
 function kind = do
   void $ satisfy ((FUN ==) . tokenType) ("Expect " <> displayTokenType FUN <> ".")
-  Token {tokenType = IDENTIFIER name} <- satisfy (isIdentifier . tokenType) ("Expect " <> kind <> " name.")
+  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) ("Expect " <> kind <> " name.")
   void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect '(' after " <> kind <> " name.")
   params <- parseFunctionParameters
   when (length params >= 255) $ fail "Can't have more than 255 parameters."
   void $ satisfy ((RIGHT_PAREN ==) . tokenType) "Expect ')' after parameters."
   void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> kind <> " body.") -- start function body
-  Function name params <$> parseScopedProgram
+  body <- parseScopedProgram
+  pure $ Function name params body l
 
-parseFunctionParameters :: TokenParser [String]
+parseFunctionParameters :: TokenParser [(String, Int)]
 parseFunctionParameters = do
   t <- peek
   if tokenType t == RIGHT_PAREN
     then pure []
     else go 0 []
   where
-    go :: Int -> [String] -> TokenParser [String]
+    go :: Int -> [(String, Int)] -> TokenParser [(String, Int)]
     go n acc = do
       -- Check limit before consuming the next parameter so the error is emitted
       -- for the offending identifier token.
       if n >= 255
         then fail "Can't have more than 255 parameters."
         else do
-          Token {tokenType = IDENTIFIER paramName} <- satisfy (isIdentifier . tokenType) "Expect parameter name."
+          Token {tokenType = IDENTIFIER paramName, line = l} <- satisfy (isIdentifier . tokenType) "Expect parameter name."
           t <- peek
           case tokenType t of
-            RIGHT_PAREN -> pure (reverse (paramName : acc))
+            RIGHT_PAREN -> pure (reverse ((paramName, l) : acc))
             COMMA -> do
               void $ satisfy ((COMMA ==) . tokenType) ("Expect " <> displayTokenType COMMA <> ".")
-              go (n + 1) (paramName : acc)
+              go (n + 1) ((paramName, l) : acc)
             _ -> fail "Expect ')' after parameters."
 
 variable :: TokenParser Variable
-variable =
-  satisfy ((VAR ==) . tokenType) ("Expect " <> displayTokenType VAR <> ".")
-    *> (Variable <$> variableName <*> (withInitializer <|> noInitializer))
-    <* varDeclEnd
+variable = do
+  void $ satisfy ((VAR ==) . tokenType) ("Expect " <> displayTokenType VAR <> ".")
+  (name, l) <- variableName
+  initExpr <- withInitializer <|> noInitializer
+  void varDeclEnd
+  pure $ Variable name initExpr l
 
 variable' :: TokenParser Variable
-variable' = Variable <$> variableName <*> (withInitializer <|> noInitializer)
+variable' = do
+  (name, l) <- variableName
+  initExpr <- withInitializer <|> noInitializer
+  pure $ Variable name initExpr l
 
 withInitializer :: TokenParser (Maybe Expression)
 withInitializer = Just <$> (satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".") *> expression)
@@ -134,10 +142,10 @@ withInitializer = Just <$> (satisfy ((EQUAL ==) . tokenType) ("Expect " <> displ
 noInitializer :: TokenParser (Maybe Expression)
 noInitializer = pure Nothing
 
-variableName :: TokenParser String
+variableName :: TokenParser (String, Int)
 variableName = do
-  Token {tokenType = IDENTIFIER name} <- satisfy (isIdentifier . tokenType) "Expect variable name."
-  pure name
+  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) "Expect variable name."
+  pure (name, l)
 
 varDeclEnd :: TokenParser Token
 varDeclEnd = satisfy ((SEMICOLON ==) . tokenType) "Expect ';' after variable declaration"
@@ -156,14 +164,14 @@ statement = do
 
 parseReturnStmt :: TokenParser Statement
 parseReturnStmt = do
-  void $ satisfy ((RETURN ==) . tokenType) ("Expect " <> displayTokenType RETURN <> ".")
+  Token {line = l} <- satisfy ((RETURN ==) . tokenType) ("Expect " <> displayTokenType RETURN <> ".")
   t <- peek
   case tokenType t of
-    SEMICOLON -> consume $> ReturnStmt Nothing
+    SEMICOLON -> consume $> ReturnStmt l Nothing
     _ -> do
       expr <- expression
       void $ satisfy ((SEMICOLON ==) . tokenType) ("Expect '" <> displayTokenType SEMICOLON <> "' after return value.")
-      pure (ReturnStmt (Just expr))
+      pure (ReturnStmt l (Just expr))
 
 parseForStmt :: TokenParser Statement
 parseForStmt = do

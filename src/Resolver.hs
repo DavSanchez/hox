@@ -8,6 +8,7 @@ module Resolver
   )
 where
 
+import Control.Monad (when)
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.State (MonadState (..), State, gets, modify, runState)
 import Data.Foldable (for_)
@@ -17,9 +18,13 @@ import Data.Map qualified as M
 import Expression (Expression (..))
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
-newtype ResolverState = ResolverState
-  { scopes :: NE.NonEmpty Scope
+data ResolverState = ResolverState
+  { scopes :: NE.NonEmpty Scope,
+    currentFunction :: FunctionType
   }
+  deriving stock (Show, Eq)
+
+data FunctionType = TypeNone | TypeFunction
   deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool
@@ -53,7 +58,7 @@ runResolver resolver =
    in stateAction newScope
 
 newScope :: ResolverState
-newScope = ResolverState (mempty :| [])
+newScope = ResolverState (mempty :| []) TypeNone
 
 beginScope :: ResolverState -> ResolverState
 beginScope rs = rs {scopes = mempty <| scopes rs}
@@ -64,13 +69,13 @@ endScope rs =
     single@(_ :| []) -> rs {scopes = single}
     (_ :| (x : xs)) -> rs {scopes = x :| xs}
 
-declare :: String -> ResolverState -> Either ResolveError ResolverState
-declare name rs@ResolverState {scopes = currentScope :| rest} =
+declare :: String -> Int -> ResolverState -> Either ResolveError ResolverState
+declare name line rs@ResolverState {scopes = currentScope :| rest} =
   let alreadyDeclared = M.member name currentScope
       updatedScope = M.insert name False currentScope
       isGlobal = null rest
    in if alreadyDeclared && not isGlobal
-        then Left $ ResolveError name 0 "Already a variable with this name in this scope."
+        then Left $ ResolveError name line "Already a variable with this name in this scope."
         else Right $ rs {scopes = updatedScope :| rest}
 
 define :: String -> ResolverState -> ResolverState
@@ -115,36 +120,48 @@ resolveStatement :: Statement -> Resolver Statement
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
 resolveStatement (IfStmt cond thenBranch elseBranch) = IfStmt <$> resolveExpr cond <*> resolveStatement thenBranch <*> traverse resolveStatement elseBranch
 resolveStatement (PrintStmt expr) = PrintStmt <$> resolveExpr expr
-resolveStatement (ReturnStmt maybeExpr) = ReturnStmt <$> traverse resolveExpr maybeExpr
+resolveStatement (ReturnStmt line maybeExpr) = do
+  fType <- gets currentFunction
+  when (fType == TypeNone) $
+    throwError (ResolveError "return" line "Can't return from top-level code.")
+  ReturnStmt line <$> traverse resolveExpr maybeExpr
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
 resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block
 
 resolveVarDecl :: Variable -> Resolver Variable
-resolveVarDecl (Variable vName vValue) = do
+resolveVarDecl (Variable vName vValue vLine) = do
   st <- get
-  case declare vName st of
+  case declare vName vLine st of
     Left err -> throwError err
     Right st' -> put st'
   vValue' <- traverse resolveExpr vValue
   modify (define vName)
-  pure (Variable vName vValue')
+  pure (Variable vName vValue' vLine)
+
+withFunctionType :: FunctionType -> Resolver a -> Resolver a
+withFunctionType t action = do
+  oldType <- gets currentFunction
+  modify (\s -> s {currentFunction = t})
+  res <- action
+  modify (\s -> s {currentFunction = oldType})
+  pure res
 
 resolveFuncDecl :: Function -> Resolver Function
-resolveFuncDecl (Function fName fParams fBody) = do
+resolveFuncDecl (Function fName fParams fBody fLine) = do
   st <- get
-  case declare fName st of
+  case declare fName fLine st of
     Left err -> throwError err
     Right st' -> put st'
   modify (define fName)
-  fBody' <- resolveFunction fParams fBody
-  pure (Function fName fParams fBody')
+  fBody' <- withFunctionType TypeFunction $ resolveFunction fParams fBody
+  pure (Function fName fParams fBody' fLine)
 
-resolveFunction :: [String] -> [Declaration] -> Resolver [Declaration]
+resolveFunction :: [(String, Int)] -> [Declaration] -> Resolver [Declaration]
 resolveFunction params body = do
   modify beginScope
-  for_ params $ \param -> do
+  for_ params $ \(param, line) -> do
     st <- get
-    case declare param st of
+    case declare param line st of
       Left err -> throwError err
       Right st' -> put st'
     modify (define param)

@@ -47,18 +47,6 @@ data FunctionType
         [Value] -> m Value
       )
 
--- data Callable = Callable
---   { name :: String,
---     closure :: Maybe (IORef (Environment Value)),
---     call ::
---       forall m.
---       ( MonadState (ProgramState Value) m,
---         MonadError InterpreterError m,
---         MonadIO m
---       ) =>
---       [Value] -> m Value
---   }
-
 arity :: Callable -> Int
 arity (Callable (UserDefined func _)) = length (funcParams func)
 arity (Callable (NativeFunction n _ _)) = n

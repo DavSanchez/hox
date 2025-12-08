@@ -14,6 +14,8 @@ import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
+import Data.Map qualified as M
+import Environment (assignAtDistance, assignInFrame, findInFrame, getAtDistance)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
@@ -22,6 +24,7 @@ import Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Interpreter.Error (InterpreterError (..), handleErr)
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
 import ProgramState qualified as PS
+import Resolver (programResolver, runResolver)
 import Token (Token)
 import Value (Callable (..), FunctionType (..), Value (VCallable, VNil), arity, displayValue, isTruthy)
 
@@ -67,7 +70,13 @@ programInterpreter ::
     MonadIO m
   ) =>
   Program -> m ()
-programInterpreter (Program decls) = mapM_ interpretDecl decls
+programInterpreter prog@(Program decls) = do
+  let (resolverResult, resolverState) = runResolver (programResolver prog)
+  case resolverResult of
+    Left err -> throwError (Resolve err)
+    -- Set the program state with the resolved locals
+    Right () -> modify (PS.setResolvedLocals resolverState)
+  mapM_ interpretDecl decls
 
 interpretDecl ::
   ( MonadState ProgramState m,
@@ -200,13 +209,13 @@ evaluateExpr (BinaryOperation line op e1 e2) = do
   v1 <- evaluateExpr e1
   v2 <- evaluateExpr e2
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
-evaluateExpr (VariableExpr line name) = do
+evaluateExpr expr@(VariableExpr line name) = do
   state <- get
-  val <- PS.find name state
+  val <- lookupVariable name expr state
   case val of
     Just v -> pure v
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
-evaluateExpr (VariableAssignment line name expr) = do
+evaluateExpr va@(VariableAssignment line name expr) = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
   -- else the environment will not reflect the changes made by evaluating the expression, and
   -- the right-associativity property of this operation will be broken.
@@ -214,7 +223,7 @@ evaluateExpr (VariableAssignment line name expr) = do
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
   state <- get
-  found <- PS.assign name value state
+  found <- assignVariable name va value state
   if found
     then pure value
     else evalError line ("Undefined variable '" <> name <> "'.")
@@ -230,6 +239,26 @@ evaluateExpr (Call line calleeExpr argExprs) = do
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
+
+lookupVariable :: (MonadIO m) => String -> Expression -> ProgramState -> m (Maybe Value)
+lookupVariable name expr st =
+  let locals' = PS.locals st
+      env' = PS.environment st
+      globals' = PS.globals st
+      distance = M.lookup expr locals'
+   in case distance of
+        Just d -> getAtDistance d name env'
+        Nothing -> findInFrame name globals'
+
+assignVariable :: (MonadIO m) => String -> Expression -> Value -> ProgramState -> m Bool
+assignVariable name expr value st =
+  let locals' = PS.locals st
+      env' = PS.environment st
+      globals' = PS.globals st
+      distance = M.lookup expr locals'
+   in case distance of
+        Just d -> assignAtDistance d name value env'
+        Nothing -> assignInFrame name value globals'
 
 callCallable ::
   ( MonadError InterpreterError m,

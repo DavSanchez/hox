@@ -1,4 +1,4 @@
-module Resolver (programResolver, runResolver, Resolver, ResolverState (..)) where
+module Resolver (programResolver, runResolver, Resolver, ResolverState (..), ResolveError) where
 
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.State (MonadState (..), State, gets, modify, runState)
@@ -17,16 +17,18 @@ data ResolverState = ResolverState
 
 type Scope = M.Map String Bool -- variable name and whether it's defined
 
-newtype Resolver a = Resolver {runResolverT :: ExceptT String (State ResolverState) a}
+newtype ResolveError = ResolveError String deriving stock (Show, Eq)
+
+newtype Resolver a = Resolver {runResolverT :: ExceptT ResolveError (State ResolverState) a}
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
       MonadState ResolverState,
-      MonadError String -- TODO Replace String with a proper error type
+      MonadError ResolveError
     )
 
-runResolver :: Resolver a -> (Either String a, ResolverState)
+runResolver :: Resolver a -> (Either ResolveError a, ResolverState)
 runResolver resolver =
   let stateAction = runState (runExceptT (runResolverT resolver))
    in stateAction newScope
@@ -45,10 +47,13 @@ endScope rs =
     single@(_ :| []) -> rs {scopes = single} -- cannot pop the last scope
     (_ :| (x : xs)) -> rs {scopes = x :| xs}
 
-declare :: String -> ResolverState -> ResolverState
+declare :: String -> ResolverState -> Either ResolveError ResolverState
 declare name rs@ResolverState {scopes = currentScope :| rest} =
-  let updatedScope = M.insert name False currentScope
-   in rs {scopes = updatedScope :| rest}
+  let alreadyDeclared = M.member name currentScope
+      updatedScope = M.insert name False currentScope
+   in if alreadyDeclared
+        then Left $ ResolveError "Already a variable with this name in this scope."
+        else Right $ rs {scopes = updatedScope :| rest}
 
 define :: String -> ResolverState -> ResolverState
 define name rs@ResolverState {scopes = currentScope :| rest} =
@@ -107,13 +112,19 @@ resolveIfStmt cond thenBranch elseBranch = do
 
 resolveVarDecl :: Variable -> Resolver ()
 resolveVarDecl (Variable vName vValue) = do
-  modify (declare vName)
+  st <- get
+  case declare vName st of
+    Left err -> throwError err
+    Right st' -> put st'
   traverse_ resolveExpr vValue
   modify (define vName)
 
 resolveFuncDecl :: Function -> Resolver ()
 resolveFuncDecl (Function fName fParams fBody) = do
-  modify (declare fName)
+  st <- get
+  case declare fName st of
+    Left err -> throwError err
+    Right st' -> put st'
   modify (define fName)
   resolveFunction fParams fBody
 
@@ -121,7 +132,10 @@ resolveFunction :: [String] -> [Declaration] -> Resolver ()
 resolveFunction params body = do
   modify beginScope
   for_ params $ \param -> do
-    modify (declare param)
+    st <- get
+    case declare param st of
+      Left err -> throwError err
+      Right st' -> put st'
     modify (define param)
   mapM_ resolveDeclaration body
   modify endScope
@@ -131,7 +145,7 @@ resolveExpr expr@(VariableExpr _ name) = do
   scopesList <- gets scopes
   let currentScope = NE.head scopesList
   case M.lookup name currentScope of
-    Just False -> throwError $ "Can't read local variable in its own initializer: " ++ name
+    Just False -> throwError $ ResolveError $ "Can't read local variable in its own initializer: " ++ name
     _ -> resolveLocal expr name
 resolveExpr expr@(VariableAssignment _ name value) = do
   resolveExpr value

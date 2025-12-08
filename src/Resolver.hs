@@ -15,7 +15,7 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Expression (Expression (..))
+import Expression (Expression (..), Resolution (..), Unresolved (..))
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
 data ResolverState = ResolverState
@@ -83,7 +83,7 @@ define name rs@ResolverState {scopes = currentScope :| rest} =
   let updatedScope = M.insert name True currentScope
    in rs {scopes = updatedScope :| rest}
 
-resolveLocal :: String -> Resolver (Maybe Int)
+resolveLocal :: String -> Resolver Resolution
 resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
   let findScopeIndex :: [Scope] -> Int -> Maybe Int
@@ -97,26 +97,26 @@ resolveLocal name = do
     Just distance -> do
       let isGlobal = distance == length scopesList - 1
       if not isGlobal
-        then pure (Just distance)
-        else pure Nothing
-    Nothing -> pure Nothing
+        then pure (Local distance)
+        else pure Global
+    Nothing -> pure Global
 
-programResolver :: Program -> Resolver Program
+programResolver :: Program Unresolved -> Resolver (Program Resolution)
 programResolver (Program decls) = Program <$> mapM resolveDeclaration decls
 
-resolveBlock :: [Declaration] -> Resolver [Declaration]
+resolveBlock :: [Declaration Unresolved] -> Resolver [Declaration Resolution]
 resolveBlock block = do
   modify beginScope
   decls <- mapM resolveDeclaration block
   modify endScope
   pure decls
 
-resolveDeclaration :: Declaration -> Resolver Declaration
+resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
 resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl func
 resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
 
-resolveStatement :: Statement -> Resolver Statement
+resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
 resolveStatement (IfStmt cond thenBranch elseBranch) = IfStmt <$> resolveExpr cond <*> resolveStatement thenBranch <*> traverse resolveStatement elseBranch
 resolveStatement (PrintStmt expr) = PrintStmt <$> resolveExpr expr
@@ -128,7 +128,7 @@ resolveStatement (ReturnStmt line maybeExpr) = do
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
 resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block
 
-resolveVarDecl :: Variable -> Resolver Variable
+resolveVarDecl :: Variable Unresolved -> Resolver (Variable Resolution)
 resolveVarDecl (Variable vName vValue vLine) = do
   st <- get
   case declare vName vLine st of
@@ -146,7 +146,7 @@ withFunctionType t action = do
   modify (\s -> s {currentFunction = oldType})
   pure res
 
-resolveFuncDecl :: Function -> Resolver Function
+resolveFuncDecl :: Function Unresolved -> Resolver (Function Resolution)
 resolveFuncDecl (Function fName fParams fBody fLine) = do
   st <- get
   case declare fName fLine st of
@@ -156,7 +156,7 @@ resolveFuncDecl (Function fName fParams fBody fLine) = do
   fBody' <- withFunctionType TypeFunction $ resolveFunction fParams fBody
   pure (Function fName fParams fBody' fLine)
 
-resolveFunction :: [(String, Int)] -> [Declaration] -> Resolver [Declaration]
+resolveFunction :: [(String, Int)] -> [Declaration Unresolved] -> Resolver [Declaration Resolution]
 resolveFunction params body = do
   modify beginScope
   for_ params $ \(param, line) -> do
@@ -169,7 +169,7 @@ resolveFunction params body = do
   modify endScope
   pure body'
 
-resolveExpr :: Expression -> Resolver Expression
+resolveExpr :: Expression Unresolved -> Resolver (Expression Resolution)
 resolveExpr (VariableExpr line name _) = do
   scopesList <- gets scopes
   let currentScope = NE.head scopesList

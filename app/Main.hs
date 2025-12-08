@@ -4,7 +4,7 @@ import Control.Monad ((>=>))
 import Data.Either (partitionEithers)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
-import Expression (Expression, displayExpr, expression)
+import Expression (Expression, Resolution (Global), Unresolved (..), displayExpr, expression)
 import Interpreter
   ( Interpreter,
     InterpreterError (..),
@@ -63,19 +63,19 @@ handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
 
 -- Chapter 06 operations
-runChapter06 :: [Token] -> Either InterpreterError Expression
+runChapter06 :: [Token] -> Either InterpreterError (Expression Unresolved)
 runChapter06 s =
   let (result, _) = runParser expression s
    in case result of
         Left parseErr -> Left (Parse $ singleton parseErr)
-        Right expr -> Right expr
+        Right expr -> Right (fmap (const Unresolved) expr)
 
-handleChap06Out :: Either InterpreterError Expression -> IO ()
+handleChap06Out :: Either InterpreterError (Expression Unresolved) -> IO ()
 handleChap06Out = either handleErr (putStrLn . displayExpr)
 
 -- Chapter 07 operations
-runChapter07 :: Expression -> IO (Either InterpreterError Value)
-runChapter07 = runInterpreter . evaluateExpr
+runChapter07 :: Expression Unresolved -> IO (Either InterpreterError Value)
+runChapter07 expr = runInterpreter $ evaluateExpr (fmap (const Global) expr)
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . displayValue)

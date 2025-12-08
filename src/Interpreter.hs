@@ -18,7 +18,7 @@ import Environment (assignAtDistance, assignInFrame, findInFrame, getAtDistance)
 import Environment.StdEnv (mkStdEnv)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
-import Expression (Expression (..), LogicalOperator (..))
+import Expression (Expression (..), LogicalOperator (..), Resolution (..), Unresolved (..))
 import Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Interpreter.Error (InterpreterError (..), handleErr)
 import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
@@ -68,7 +68,7 @@ programInterpreter ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Program -> m ()
+  Program Unresolved -> m ()
 programInterpreter prog = do
   let (resolverResult, _) = runResolver (programResolver prog)
   case resolverResult of
@@ -80,14 +80,14 @@ interpretDecl ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Declaration -> m ()
+  Declaration Resolution -> m ()
 interpretDecl (Fun function) = declareFunction function
 interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareFunction ::
   (MonadState ProgramState m, MonadIO m) =>
-  Function -> m ()
+  Function Resolution -> m ()
 declareFunction func = do
   env <- gets PS.environment
   let callable = Callable (UserDefined func env)
@@ -99,7 +99,7 @@ runFunctionBody ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  [Declaration] -> m Value
+  [Declaration Resolution] -> m Value
 runFunctionBody [] = pure VNil
 runFunctionBody (d : ds) =
   interpretDeclF d >>= \case
@@ -111,7 +111,7 @@ interpretDeclF ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Declaration -> m (ControlFlow Value ())
+  Declaration Resolution -> m (ControlFlow Value ())
 interpretDeclF (Statement s) = interpretStatementCF s
 interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
 interpretDeclF (Fun f) = declareFunction f $> Continue ()
@@ -121,7 +121,7 @@ declareVariable ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Variable -> m ()
+  Variable Resolution -> m ()
 declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
@@ -134,7 +134,7 @@ interpretStatement ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Statement -> m ()
+  Statement Resolution -> m ()
 interpretStatement s =
   interpretStatementCF s >>= \case
     Continue () -> pure ()
@@ -145,7 +145,7 @@ interpretStatementCF ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Statement -> m (ControlFlow Value ())
+  Statement Resolution -> m (ControlFlow Value ())
 interpretStatementCF (PrintStmt expr) = interpretPrint expr $> Continue ()
 interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
 interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
@@ -187,7 +187,7 @@ interpretPrint ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Expression -> m ()
+  Expression Resolution -> m ()
 interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
@@ -196,7 +196,7 @@ evaluateExpr ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Expression -> m Value
+  Expression Resolution -> m Value
 evaluateExpr (Literal lit) = pure $ evalLiteral lit
 evaluateExpr (Grouping expr) = evaluateExpr expr
 evaluateExpr (UnaryOperation line op e) = do
@@ -237,21 +237,21 @@ evaluateExpr (Call line calleeExpr argExprs) = do
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
 
-lookupVariable :: (MonadIO m) => String -> Maybe Int -> ProgramState -> m (Maybe Value)
+lookupVariable :: (MonadIO m) => String -> Resolution -> ProgramState -> m (Maybe Value)
 lookupVariable name distance st =
   let env' = PS.environment st
       globals' = PS.globals st
    in case distance of
-        Just d -> getAtDistance d name env'
-        Nothing -> findInFrame name globals'
+        Local d -> getAtDistance d name env'
+        Global -> findInFrame name globals'
 
-assignVariable :: (MonadIO m) => String -> Maybe Int -> Value -> ProgramState -> m Bool
+assignVariable :: (MonadIO m) => String -> Resolution -> Value -> ProgramState -> m Bool
 assignVariable name distance value st =
   let env' = PS.environment st
       globals' = PS.globals st
    in case distance of
-        Just d -> assignAtDistance d name value env'
-        Nothing -> assignInFrame name value globals'
+        Local d -> assignAtDistance d name value env'
+        Global -> assignInFrame name value globals'
 
 callCallable ::
   ( MonadError InterpreterError m,

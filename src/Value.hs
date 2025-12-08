@@ -13,6 +13,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
 import Environment (Environment)
+import Expression (Resolution)
 import Interpreter.Error (InterpreterError)
 import Numeric (showFFloat)
 import Program (Function (..))
@@ -32,7 +33,7 @@ newtype Callable = Callable FunctionType
 type Closure = Environment Value
 
 data FunctionType
-  = UserDefined Function Closure
+  = UserDefined (Function Resolution) Closure
   | NativeFunction
       -- | arity
       Int

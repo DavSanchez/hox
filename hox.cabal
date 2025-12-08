@@ -114,9 +114,9 @@ library
     Evaluation
     Expression
     Interpreter
+    Interpreter.State
     Parser
     Program
-    ProgramState
     Resolver
     Scanner
     Token
@@ -124,10 +124,10 @@ library
 
   -- Modules included in this library but not exported.
   other-modules:
-    Environment.StdEnv
     Evaluation.Error
     Interpreter.ControlFlow
     Interpreter.Error
+    Interpreter.StdEnv
     Scanner.Error
     Scanner.Internal
     Scanner.Naive

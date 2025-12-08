@@ -15,9 +15,9 @@ import Data.Char (toLower)
 import Environment (Environment)
 import Expression (Resolution)
 import Interpreter.Error (InterpreterError)
+import Interpreter.State (ProgramState (..))
 import Numeric (showFFloat)
 import Program (Function (..))
-import ProgramState (ProgramState (..))
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value

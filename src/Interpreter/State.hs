@@ -1,4 +1,4 @@
-module ProgramState
+module Interpreter.State
   ( ProgramState (..),
     newProgramState,
     declare,

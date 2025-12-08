@@ -1,10 +1,10 @@
-module Environment.StdEnv (mkStdEnv) where
+module Interpreter.StdEnv (mkStdEnv) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor ((<&>))
 import Data.Time (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (getPOSIXTime)
-import ProgramState (ProgramState, declare, newProgramState)
+import Interpreter.State (ProgramState, declare, newProgramState)
 import Value (Callable (..), FunctionType (..), Value (..))
 
 -- | Build the standard environment with built-in functions and variables.

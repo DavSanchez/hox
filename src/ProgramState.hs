@@ -7,6 +7,7 @@ module ProgramState
     pushScope,
     pushClosureScope,
     popScope,
+    lookupVariable,
   )
 where
 
@@ -69,3 +70,5 @@ pushClosureScope closure state = do
 
 popScope :: ProgramState a -> ProgramState a
 popScope state = state {environment = popFrame (environment state)}
+
+lookupVariable = const undefined

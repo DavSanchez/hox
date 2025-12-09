@@ -174,7 +174,7 @@
                     package = haskellPackages.hlint;
                   };
                   cabal2nix = {
-                    enable = true; # Cabal to Nix pacakge definition
+                    enable = true; # Cabal to Nix package definition
                     settings.outputFilename = "hox.nix";
                     extraPackages = [ haskellPackages.cabal2nix ];
                   };

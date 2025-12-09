@@ -3,7 +3,7 @@
 }:
 mkDerivation {
   pname = "hox";
-  version = "0.1.11.0";
+  version = "0.12.0.0";
   src = ./.;
   isLibrary = true;
   isExecutable = true;

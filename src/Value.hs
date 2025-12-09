@@ -3,6 +3,8 @@ module Value
     displayValue,
     isTruthy,
     Callable (..),
+    FunctionType (..),
+    arity,
   )
 where
 
@@ -10,10 +12,12 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
-import Data.IORef (IORef)
 import Environment (Environment)
+import Expression (Resolution)
 import Interpreter.Error (InterpreterError)
+import Interpreter.State (ProgramState (..))
 import Numeric (showFFloat)
+import Program (Function (..))
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value
@@ -24,26 +28,42 @@ data Value
   | VCallable Callable
   deriving stock (Eq, Show)
 
-data Callable = Callable
-  { arity :: Int,
-    name :: String,
-    closure :: Maybe (IORef (Environment Value)),
-    call ::
-      forall m.
-      ( MonadState (Environment Value) m,
-        MonadError InterpreterError m,
-        MonadIO m
-      ) =>
-      [Value] -> m Value
-  }
+newtype Callable = Callable FunctionType
+
+type Closure = Environment Value
+
+data FunctionType
+  = UserDefined (Function Resolution) Closure
+  | NativeFunction
+      -- | arity
+      Int
+      -- | name
+      String
+      -- | implementation
+      ( forall m.
+        ( MonadState (ProgramState Value) m,
+          MonadError InterpreterError m,
+          MonadIO m
+        ) =>
+        [Value] -> m Value
+      )
+
+arity :: Callable -> Int
+arity (Callable (UserDefined func _)) = length (funcParams func)
+arity (Callable (NativeFunction n _ _)) = n
 
 instance Eq Callable where
   (==) :: Callable -> Callable -> Bool
-  (Callable a1 n1 _ _) == (Callable a2 n2 _ _) = a1 == a2 && n1 == n2
+  (Callable func1) == (Callable func2) =
+    case (func1, func2) of
+      (UserDefined f1 _, UserDefined f2 _) -> funcName f1 == funcName f2
+      (NativeFunction _ name1 _, NativeFunction _ name2 _) -> name1 == name2
+      _ -> False
 
 instance Show Callable where
   show :: Callable -> String
-  show (Callable _ name _ _) = "<fn " ++ name ++ ">"
+  show (Callable (UserDefined func _)) = "<fn " ++ funcName func ++ ">"
+  show (Callable (NativeFunction {})) = "<native fn>"
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False
@@ -64,5 +84,4 @@ displayValue (VNumber n) =
 displayValue (VBool b) = (map toLower . show) b
 displayValue (VString s) = s
 displayValue VNil = "nil"
-displayValue (VCallable (Callable _ _ Nothing _)) = "<native fn>"
 displayValue (VCallable callable) = show callable

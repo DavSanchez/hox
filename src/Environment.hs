@@ -1,48 +1,78 @@
 module Environment
   ( Environment,
-    declareVarRef,
-    getVarRef,
+    Frame,
+    newFrame,
+    declareInFrame,
+    findInFrame,
+    assignInFrame,
+    findInEnv,
+    assignInEnv,
     pushFrame,
     popFrame,
-    newEnv,
-    findVarRef,
+    getAtDistance,
+    assignAtDistance,
   )
 where
 
-import Control.Monad (join)
-import Data.Foldable (find)
-import Data.IORef (IORef)
-import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Data.Functor (($>))
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map qualified as M
-import Data.Maybe (isJust)
 
-type Environment a = NonEmpty (Frame a)
+type Frame a = IORef (M.Map String a)
 
-type Frame a = M.Map String (IORef a)
+type Environment a = [Frame a]
 
-newEnv :: Environment a
-newEnv = mempty :| []
+newFrame :: (MonadIO m) => m (Frame a)
+newFrame = liftIO $ newIORef mempty
 
-pushFrame :: Environment a -> Environment a
-pushFrame = (mempty <|) -- prepend a new empty frame
+declareInFrame :: (MonadIO m) => String -> a -> Frame a -> m ()
+declareInFrame name val frame = liftIO $ modifyIORef' frame (M.insert name val)
+
+findInFrame :: (MonadIO m) => String -> Frame a -> m (Maybe a)
+findInFrame name frame = do
+  m <- liftIO $ readIORef frame
+  pure $ M.lookup name m
+
+assignInFrame :: (MonadIO m) => String -> a -> Frame a -> m Bool
+assignInFrame name val frame = do
+  m <- liftIO $ readIORef frame
+  if M.member name m
+    then liftIO (modifyIORef' frame (M.insert name val)) $> True
+    else pure False
+
+findInEnv :: (MonadIO m) => String -> Environment a -> m (Maybe a)
+findInEnv _ [] = pure Nothing
+findInEnv name (f : fs) = do
+  res <- findInFrame name f
+  case res of
+    Just v -> pure (Just v)
+    Nothing -> findInEnv name fs
+
+assignInEnv :: (MonadIO m) => String -> a -> Environment a -> m Bool
+assignInEnv _ _ [] = pure False
+assignInEnv name val (f : fs) = do
+  done <- assignInFrame name val f
+  if done
+    then pure True
+    else assignInEnv name val fs
+
+pushFrame :: (MonadIO m) => Environment a -> m (Environment a)
+pushFrame env = do
+  f <- newFrame
+  pure (f : env)
 
 popFrame :: Environment a -> Environment a
-popFrame single@(_ :| []) = single -- cannot pop the last frame
-popFrame (_ :| (x : xs)) = x :| xs
+popFrame [] = []
+popFrame (_ : xs) = xs
 
--- Inserts the defined variable ref in the current environment frame (i.e. top of the stack)
--- This is only for declarations
-declareVarRef :: String -> IORef a -> Environment a -> Environment a
-declareVarRef name ref (frame :| rest) = M.insert name ref frame :| rest
+-- Interaction with distances gotten from the resolver
+getAtDistance :: (MonadIO m) => Int -> String -> Environment a -> m (Maybe a)
+getAtDistance _ _ [] = pure Nothing
+getAtDistance 0 name (f : _) = findInFrame name f
+getAtDistance n name (_ : fs) = getAtDistance (n - 1) name fs
 
--- | Finds the variable reference in the environment.
--- Traverses down the stack until it finds a frame that contains the variable,
--- and returns its IORef. If not found, returns Nothing.
-findVarRef :: String -> Environment a -> Maybe (IORef a)
-findVarRef name (frame :| (r : rest))
-  | M.member name frame = M.lookup name frame
-  | otherwise = findVarRef name (r :| rest)
-findVarRef name (frame :| []) = M.lookup name frame
-
-getVarRef :: String -> Environment a -> Maybe (IORef a)
-getVarRef name env = join $ find isJust (M.lookup name <$> env)
+assignAtDistance :: (MonadIO m) => Int -> String -> a -> Environment a -> m Bool
+assignAtDistance _ _ _ [] = pure False
+assignAtDistance 0 name val (f : _) = assignInFrame name val f
+assignAtDistance n name val (_ : fs) = assignAtDistance (n - 1) name val fs

@@ -86,6 +86,26 @@
             haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
             hoxPkg = haskellPackages.callPackage ./hox.nix { };
             ghcWithDeps = haskellPackages.ghcWithPackages (p: hoxPkg.propagatedBuildInputs);
+            doctestScript = pkgs.writeShellApplication {
+              name = "hox-doctest";
+              runtimeInputs = [
+                ghcWithDeps
+                haskellPackages.doctest
+              ];
+              text = "doctest -XGHC2024 -isrc src/ -w -Wdefault --verbose";
+            };
+            weederScript = pkgs.writeShellApplication {
+              name = "hox-weeder";
+              runtimeInputs = [
+                ghcWithDeps
+                haskellPackages.weeder
+              ];
+              text = ''
+                mkdir -p .hie dist-newstyle/temp
+                ghc -XGHC2024 -isrc -fwrite-ide-info -hiedir=.hie -odir=dist-newstyle/temp -hidir=dist-newstyle/temp -o dist-newstyle/temp/Main --make app/Main.hs
+                weeder --hie-directory=.hie
+              '';
+            };
           in
           {
             apps = {
@@ -98,6 +118,17 @@
               test-chapter11 = mkTestApp "chap11_resolving" self'.packages.hox;
               test-chapter12 = mkTestApp "chap12_classes" self'.packages.hox;
               # test-chapter13 = mkTestApp "chap13_inheritance" self'.packages.hox;
+
+              hoxDoctest = {
+                type = "app";
+                program = "${doctestScript}/bin/hox-doctest";
+                meta.description = "Run Hox's doctests from Nix.";
+              };
+              hoxWeeder = {
+                type = "app";
+                program = "${weederScript}/bin/hox-weeder";
+                meta.description = "Run Hox's weeder unused code detector from Nix.";
+              };
             };
 
             devShells = rec {
@@ -150,45 +181,19 @@
                   markdownlint.enable = true; # Markdown
                   # Custom
                   # Haskell doctests
-                  doctest =
-                    let
-                      doctestScript = pkgs.writeShellApplication {
-                        name = "doctest-hook";
-                        runtimeInputs = [
-                          ghcWithDeps
-                          haskellPackages.doctest
-                        ];
-                        text = "doctest -XGHC2024 -isrc src/";
-                      };
-                    in
-                    {
-                      enable = true;
-                      name = "doctest";
-                      entry = "${pkgs.lib.getExe doctestScript}";
-                      pass_filenames = false;
-                    };
+                  doctest = {
+                    enable = true;
+                    name = "doctest";
+                    entry = "${pkgs.lib.getExe doctestScript}";
+                    pass_filenames = false;
+                  };
                   # Haskell unused code detector
-                  weeder =
-                    let
-                      weederScript = pkgs.writeShellApplication {
-                        name = "weeder-hook";
-                        runtimeInputs = [
-                          ghcWithDeps
-                          haskellPackages.weeder
-                        ];
-                        text = ''
-                          mkdir -p .hie dist-newstyle/temp
-                          ghc -XGHC2024 -isrc -fwrite-ide-info -hiedir=.hie -odir=dist-newstyle/temp -hidir=dist-newstyle/temp -o dist-newstyle/temp/Main --make app/Main.hs
-                          weeder --hie-directory=.hie
-                        '';
-                      };
-                    in
-                    {
-                      enable = true;
-                      name = "weeder";
-                      entry = "${pkgs.lib.getExe weederScript}";
-                      pass_filenames = false;
-                    };
+                  weeder = {
+                    enable = true;
+                    name = "weeder";
+                    entry = "${pkgs.lib.getExe weederScript}";
+                    pass_filenames = false;
+                  };
                 };
               };
             };

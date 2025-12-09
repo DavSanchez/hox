@@ -85,15 +85,7 @@
             };
             haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
             hoxPkg = haskellPackages.callPackage ./hox.nix { };
-            ghcWithDeps = haskellPackages.ghcWithPackages (
-              p:
-              hoxPkg.propagatedBuildInputs
-              ++ (with p; [
-                tasty
-                tasty-hunit
-                tasty-quickcheck
-              ])
-            );
+            ghcWithDeps = haskellPackages.ghcWithPackages (p: hoxPkg.propagatedBuildInputs);
           in
           {
             apps = {

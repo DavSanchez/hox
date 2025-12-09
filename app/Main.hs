@@ -1,3 +1,5 @@
+{-# LANGUAGE OrPatterns #-}
+
 module Main (main) where
 
 import Control.Monad ((>=>))
@@ -34,10 +36,14 @@ main = do
           Left err -> handleErr err
           Right expr -> runChapter07 expr >>= handleChap07Out
     ["--chap08_statements", script] -> readFile' script >>= handleChap08Out . runChapter08 . runChapter04
-    ["--chap09_control", script] -> readFile' script >>= treeWalkInterpreter
-    ["--chap10_functions", script] -> readFile' script >>= treeWalkInterpreter
-    ["--chap11_resolving", script] -> readFile' script >>= treeWalkInterpreter
-    [script] -> readFile' script >>= treeWalkInterpreter
+    -- complete implementation for the remaining chapters
+
+    ([( "--chap09_control"
+      ; "--chap10_functions"
+      ; "--chap11_resolving"
+      ; "--chap12_classes"
+      ), script]
+     ; [script]) -> readFile' script >>= treeWalkInterpreter
     _ -> do
       hPutStrLn stderr "Usage: hox [[--<CHAP>] script]"
       exitWith (ExitFailure 64)

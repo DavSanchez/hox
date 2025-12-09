@@ -6,11 +6,8 @@ module Token
     isString,
     isIdentifier,
     displayTokenType,
-    displayTokenStream,
   )
 where
-
-import Data.List (intersperse)
 
 data TokenType
   = -- Single character tokens
@@ -164,6 +161,3 @@ displayTokenType THIS = "this"
 displayTokenType VAR = "var"
 displayTokenType WHILE = "while"
 displayTokenType EOF = "EOF"
-
-displayTokenStream :: [Token] -> String
-displayTokenStream tokens = mconcat $ intersperse " " $ displayTokenType . tokenType <$> tokens

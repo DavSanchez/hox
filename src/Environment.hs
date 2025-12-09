@@ -5,8 +5,6 @@ module Environment
     declareInFrame,
     findInFrame,
     assignInFrame,
-    findInEnv,
-    assignInEnv,
     pushFrame,
     popFrame,
     getAtDistance,
@@ -40,22 +38,6 @@ assignInFrame name val frame = do
   if M.member name m
     then liftIO (modifyIORef' frame (M.insert name val)) $> True
     else pure False
-
-findInEnv :: (MonadIO m) => String -> Environment a -> m (Maybe a)
-findInEnv _ [] = pure Nothing
-findInEnv name (f : fs) = do
-  res <- findInFrame name f
-  case res of
-    Just v -> pure (Just v)
-    Nothing -> findInEnv name fs
-
-assignInEnv :: (MonadIO m) => String -> a -> Environment a -> m Bool
-assignInEnv _ _ [] = pure False
-assignInEnv name val (f : fs) = do
-  done <- assignInFrame name val f
-  if done
-    then pure True
-    else assignInEnv name val fs
 
 pushFrame :: (MonadIO m) => Environment a -> m (Environment a)
 pushFrame env = do

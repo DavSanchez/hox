@@ -2,8 +2,6 @@ module Interpreter.State
   ( ProgramState (..),
     newProgramState,
     declare,
-    assign,
-    find,
     pushScope,
     pushClosureScope,
     popScope,
@@ -14,11 +12,7 @@ import Control.Monad.IO.Class (MonadIO)
 import Environment
   ( Environment,
     Frame,
-    assignInEnv,
-    assignInFrame,
     declareInFrame,
-    findInEnv,
-    findInFrame,
     newFrame,
     popFrame,
     pushFrame,
@@ -39,20 +33,6 @@ declare name val state = do
   case environment state of
     [] -> declareInFrame name val (globals state)
     (top : _) -> declareInFrame name val top
-
-assign :: (MonadIO m) => String -> a -> ProgramState a -> m Bool
-assign name val state = do
-  foundInLocals <- assignInEnv name val (environment state)
-  if foundInLocals
-    then pure True
-    else assignInFrame name val (globals state)
-
-find :: (MonadIO m) => String -> ProgramState a -> m (Maybe a)
-find name state = do
-  inLocals <- findInEnv name (environment state)
-  case inLocals of
-    Just v -> pure (Just v)
-    Nothing -> findInFrame name (globals state)
 
 pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)
 pushScope state = do

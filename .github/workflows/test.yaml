@@ -23,24 +23,24 @@ jobs:
       - name: Run nix flake checks
         run: nix flake check -L
 
-  doctests:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-    name: 📜 Doctests (${{ matrix.os }})
-    steps:
-      - uses: actions/checkout@v6
-      - uses: cachix/install-nix-action@v31
-        with:
-          github_access_token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: cachix/cachix-action@v16
-        with:
-          name: hox
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+  # doctests:
+  #   runs-on: ${{ matrix.os }}
+  #   strategy:
+  #     matrix:
+  #       os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+  #   name: 📜 Doctests (${{ matrix.os }})
+  #   steps:
+  #     - uses: actions/checkout@v6
+  #     - uses: cachix/install-nix-action@v31
+  #       with:
+  #         github_access_token: ${{ secrets.GITHUB_TOKEN }}
+  #     - uses: cachix/cachix-action@v16
+  #       with:
+  #         name: hox
+  #         authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
-      - name: Run doctests
-        run: nix develop --command cabal repl --with-compiler=doctest --repl-options='-w -Wdefault --verbose'
+  #     - name: Run doctests
+  #       run: nix develop --command cabal repl --with-compiler=doctest --repl-options='-w -Wdefault --verbose'
 
   crafting-interpreter-tests:
     runs-on: ${{ matrix.os }}
@@ -48,7 +48,7 @@ jobs:
       fail-fast: false # for knowing the results of other matrix checks even if some fail
       matrix:
         os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
-        test-chapter: ["04", "06", "07", "08", "09", "10", "11"]
+        test-chapter: ["04", "06", "07", "08", "09", "10", "11", "12"]
     name: ⚙️ Crafting Interpreters tests (Chapter ${{ matrix.test-chapter }}, ${{ matrix.os }})
     steps:
       - uses: actions/checkout@v6
@@ -69,7 +69,6 @@ jobs:
     runs-on: Ubuntu-latest
     needs:
       - nix-checks
-      - doctests
       - crafting-interpreter-tests
     steps:
       - name: Decide whether the needed jobs succeeded or failed

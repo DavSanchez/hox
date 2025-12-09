@@ -1,0 +1,9 @@
+# Roots are regular expressions matching the top-level symbols that are
+# considered the entry points of the application.
+roots = [
+  "^Main.main$",
+  "^Paths_.*",
+]
+
+# If true, all type class instances are considered roots.
+type-class-roots = true

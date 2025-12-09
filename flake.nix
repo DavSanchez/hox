@@ -109,6 +109,7 @@
                     haskell-language-server
                     cabal-install
                     doctest
+                    weeder
                   ])
                   ++ [
                     pkgs.gnumake
@@ -145,6 +146,14 @@
                     extraPackages = [ haskellPackages.cabal2nix ];
                   };
                   markdownlint.enable = true; # Markdown
+                  # Custom
+                  # Haskell unused code detector
+                  weeder = {
+                    enable = true;
+                    name = "weeder";
+                    entry = "${pkgs.lib.getExe haskellPackages.weeder} --hie-directory=.hie";
+                    pass_filenames = false;
+                  };
                 };
               };
             };

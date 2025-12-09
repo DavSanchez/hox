@@ -84,6 +84,16 @@
               meta.description = "Run the Crafting Interpreters test suite for ${testCase}, using the '${interpreter.meta.mainProgram}' interpreter.";
             };
             haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
+            hoxPkg = haskellPackages.callPackage ./hox.nix { };
+            ghcWithDeps = haskellPackages.ghcWithPackages (
+              p:
+              hoxPkg.propagatedBuildInputs
+              ++ (with p; [
+                tasty
+                tasty-hunit
+                tasty-quickcheck
+              ])
+            );
           in
           {
             apps = {
@@ -120,7 +130,7 @@
 
             packages = rec {
               default = hox;
-              hox = haskellPackages.callPackage ./hox.nix { };
+              hox = hoxPkg;
             };
 
             # Git hooks
@@ -152,12 +162,11 @@
                     let
                       doctestScript = pkgs.writeShellApplication {
                         name = "doctest-hook";
-                        runtimeInputs = with haskellPackages; [
-                          ghc
-                          cabal-install
-                          doctest
+                        runtimeInputs = [
+                          ghcWithDeps
+                          haskellPackages.doctest
                         ];
-                        text = "cabal repl --with-compiler=doctest --repl-options='-w -Wdefault --verbose'";
+                        text = "doctest -XGHC2024 -isrc src/";
                       };
                     in
                     {
@@ -171,13 +180,13 @@
                     let
                       weederScript = pkgs.writeShellApplication {
                         name = "weeder-hook";
-                        runtimeInputs = with haskellPackages; [
-                          ghc
-                          cabal-install
-                          weeder
+                        runtimeInputs = [
+                          ghcWithDeps
+                          haskellPackages.weeder
                         ];
                         text = ''
-                          cabal build
+                          mkdir -p .hie dist-newstyle/temp
+                          ghc -XGHC2024 -isrc -fwrite-ide-info -hiedir=.hie -odir=dist-newstyle/temp -hidir=dist-newstyle/temp -o dist-newstyle/temp/Main --make app/Main.hs
                           weeder --hie-directory=.hie
                         '';
                       };

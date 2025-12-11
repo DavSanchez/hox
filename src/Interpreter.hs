@@ -13,6 +13,7 @@ where
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
+import Data.Foldable (find)
 import Data.Functor (($>))
 import Environment (assignAtDistance, assignInFrame, findInFrame, getAtDistance)
 import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
@@ -25,7 +26,7 @@ import Interpreter.StdEnv (mkStdEnv)
 import Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
 import Resolver (programResolver, runResolver)
 import Token (Token)
-import Value (Callable (..), FunctionType (..), Value (VCallable, VNil), arity, displayValue, isTruthy)
+import Value (Callable (..), CallableType (..), Value (VCallable, VNil), arity, displayValue, isTruthy)
 
 type Interpreter = InterpreterT IO
 
@@ -88,29 +89,24 @@ interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareClass ::
   ( MonadState ProgramState m,
-    MonadError InterpreterError m,
     MonadIO m
   ) =>
   Class Resolution -> m ()
 declareClass cls = do
   state <- get
-  -- TODO review
-  PS.declare (className cls) (VCallable (Callable (NativeFunction 0 "Class" classConstructor))) state
-  where
-    classConstructor ::
-      ( MonadState ProgramState m,
-        MonadError InterpreterError m,
-        MonadIO m
-      ) =>
-      [Value] -> m Value
-    classConstructor _ = pure VNil -- Placeholder for class instantiation logic
+  let className' = className cls
+  PS.declare className' VNil state
+  -- Build class object
+  PS.declare className' (VCallable (Callable (UserDefinedClassInstance cls))) state
 
 declareFunction ::
-  (MonadState ProgramState m, MonadIO m) =>
+  ( MonadState ProgramState m,
+    MonadIO m
+  ) =>
   Function Resolution -> m ()
 declareFunction func = do
   env <- gets PS.environment
-  let callable = Callable (UserDefined func env)
+  let callable = Callable (UserDefinedFunction func env)
   state <- get
   PS.declare (funcName func) (VCallable callable) state
 
@@ -257,6 +253,21 @@ evaluateExpr (Call line calleeExpr argExprs) = do
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
+evaluateExpr (Get line objectExpr propName) = do
+  objectValue <- evaluateExpr objectExpr
+  case objectValue of
+    -- TODO this assumes I'm looking only for methods, not fields
+    VCallable (Callable (UserDefinedClassInstance (Class _ methods _))) ->
+      case lookupMethod propName methods of
+        Just methodFunc -> do
+          env <- gets PS.environment
+          let callable = Callable (UserDefinedFunction methodFunc env)
+          pure (VCallable callable)
+        Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
+    _ -> evalError line "Only instances have properties."
+
+lookupMethod :: String -> [Function Resolution] -> Maybe (Function Resolution)
+lookupMethod name = find (\(Function fName _ _ _) -> fName == name)
 
 lookupVariable :: (MonadIO m) => String -> Resolution -> ProgramState -> m (Maybe Value)
 lookupVariable name distance st =
@@ -291,7 +302,7 @@ callCallable line callable args = do
         else call callable args
 
 call :: Callable -> [Value] -> forall m. (MonadState ProgramState m, MonadError InterpreterError m, MonadIO m) => m Value
-call (Callable (UserDefined func closure)) args = do
+call (Callable (UserDefinedFunction func closure)) args = do
   state <- get
   newState <- PS.pushClosureScope closure state
   put newState
@@ -309,3 +320,4 @@ call (Callable (UserDefined func closure)) args = do
   modify (\ps -> ps {PS.environment = PS.environment state})
   pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
+call clsi@(Callable (UserDefinedClassInstance _)) _ = pure (VCallable clsi)

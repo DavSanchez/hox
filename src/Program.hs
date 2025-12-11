@@ -6,6 +6,7 @@ module Program
     Variable (..),
     Function (..),
     Class (..),
+    FunctionKind (..),
   )
 where
 
@@ -104,7 +105,7 @@ declaration = do
   t <- peek
   case tokenType t of
     CLASS -> ClassDecl <$> classDeclaration
-    FUN -> Fun <$> function "function"
+    FUN -> Fun <$> function KFunction
     VAR -> VarDecl <$> variable
     _ -> Statement <$> statement
 
@@ -123,19 +124,28 @@ parseClassMethods = do
   if tokenType t == RIGHT_BRACE
     then pure []
     else do
-      func <- function "method"
+      func <- function KMethod
       rest <- parseClassMethods
       pure (func : rest)
 
-function :: String -> TokenParser (Function Unresolved)
+data FunctionKind
+  = KFunction
+  | KMethod
+  deriving stock (Eq)
+
+displayFunctionKind :: FunctionKind -> String
+displayFunctionKind KFunction = "function"
+displayFunctionKind KMethod = "method"
+
+function :: FunctionKind -> TokenParser (Function Unresolved)
 function kind = do
-  void $ satisfy ((FUN ==) . tokenType) ("Expect " <> displayTokenType FUN <> ".")
-  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) ("Expect " <> kind <> " name.")
-  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect '(' after " <> kind <> " name.")
+  when (kind == KFunction) $ void $ satisfy ((FUN ==) . tokenType) ("Expect " <> displayTokenType FUN <> ".")
+  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) ("Expect " <> displayFunctionKind kind <> " name.")
+  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect '(' after " <> displayFunctionKind kind <> " name.")
   params <- parseFunctionParameters
   when (length params >= 255) $ fail "Can't have more than 255 parameters."
   void $ satisfy ((RIGHT_PAREN ==) . tokenType) "Expect ')' after parameters."
-  void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> kind <> " body.") -- start function body
+  void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> displayFunctionKind kind <> " body.") -- start function body
   body <- parseScopedProgram
   pure $ Function name params body l
 

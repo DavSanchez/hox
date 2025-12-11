@@ -101,6 +101,7 @@
                 haskellPackages.weeder
               ];
               text = ''
+                rm -rf .hie/* dist-newstyle/temp/*
                 mkdir -p .hie dist-newstyle/temp
                 ghc -XGHC2024 -isrc -fwrite-ide-info -hiedir=.hie -odir=dist-newstyle/temp -hidir=dist-newstyle/temp -o dist-newstyle/temp/Main --make app/Main.hs
                 weeder --hie-directory=.hie

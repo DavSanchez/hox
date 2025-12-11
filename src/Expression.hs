@@ -94,6 +94,14 @@ data Expression a
       (Expression a)
       -- | The list of argument expressions.
       [Expression a]
+  | -- | A property access expression (e.g., object.property).
+    Get
+      -- | The line number where the property access happens.
+      Int
+      -- | The object expression.
+      (Expression a)
+      -- | The name of the property being accessed.
+      String
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression a)
   | -- | A variable (identifier).
@@ -371,19 +379,32 @@ unary = (parseBang <|> parseMinusUnary) <*> unary <|> call
 call :: TokenParser (Expression Unresolved)
 call = do
   expr <- primary
-  t <- peek
-  if tokenType t == LEFT_PAREN
-    then finishCall expr
-    else pure expr
+  tt <- tokenType <$> peek
+  case tt of
+    LEFT_PAREN -> finishCall expr
+    DOT -> finishCall expr
+    _ -> pure expr
+
+-- getEpxr :: Expression Unresolved -> TokenParser (Expression Unresolved)
+-- getEpxr expr = do
+--   void $ satisfy ((DOT ==) . tokenType) ("Expect " <> displayTokenType DOT <> ".")
+--   Token (IDENTIFIER name) lineNum <- satisfy isIdentifier "Expect property name after '.'."
 
 -- | Tail-recursive call finisher (continues parsing chained calls).
 -- (Internal helper; prefer using 'call')
 finishCall :: Expression Unresolved -> TokenParser (Expression Unresolved)
 finishCall expr = do
   t <- peek
-  if tokenType t == LEFT_PAREN
-    then functionArgs >>= finishCall . Call (line t) expr
-    else pure expr
+  case tokenType t of
+    LEFT_PAREN -> functionArgs >>= finishCall . Call (line t) expr
+    DOT -> getProperty expr >>= finishCall
+    _ -> pure expr
+
+getProperty :: Expression Unresolved -> TokenParser (Expression Unresolved)
+getProperty expr = do
+  void $ satisfy ((DOT ==) . tokenType) ("Expect " <> displayTokenType DOT <> ".")
+  Token (IDENTIFIER name) lineNum <- satisfy (isIdentifier . tokenType) "Expect property name after '.'."
+  pure (Get lineNum expr name)
 
 -- | Parses argument list including parentheses.
 functionArgs :: TokenParser [Expression Unresolved]
@@ -539,6 +560,7 @@ displayExpr (Literal lit) = displayLit lit
 displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> displayExpr expr <> ")"
 displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
+displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name _) = name
 displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"

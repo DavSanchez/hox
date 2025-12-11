@@ -5,7 +5,7 @@ import Data.Functor ((<&>))
 import Data.Time (nominalDiffTimeToSeconds)
 import Data.Time.Clock.POSIX (getPOSIXTime)
 import Interpreter.State (ProgramState, declare, newProgramState)
-import Value (Callable (..), FunctionType (..), Value (..))
+import Value (Callable (..), CallableType (..), Value (..))
 
 -- | Build the standard environment with built-in functions and variables.
 mkStdEnv :: (MonadIO m) => m (ProgramState Value)

@@ -197,6 +197,7 @@ resolveExpr (VariableAssignment line name value _) = do
   pure (VariableAssignment line name value' dist)
 resolveExpr (BinaryOperation line op left right) = BinaryOperation line op <$> resolveExpr left <*> resolveExpr right
 resolveExpr (Call line callee args) = Call line <$> resolveExpr callee <*> mapM resolveExpr args
+resolveExpr (Get line object propName) = Get line <$> resolveExpr object <*> pure propName
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right

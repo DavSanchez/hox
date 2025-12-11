@@ -5,6 +5,7 @@ module Program
     Statement (..),
     Variable (..),
     Function (..),
+    Class (..),
   )
 where
 
@@ -25,7 +26,19 @@ deriving stock instance (Show a) => Show (Program a)
 
 deriving stock instance (Eq a) => Eq (Program a)
 
-data Declaration a = Fun (Function a) | VarDecl (Variable a) | Statement (Statement a) deriving stock (Show, Eq, Functor, Foldable, Traversable)
+data Declaration a
+  = ClassDecl (Class a)
+  | Fun (Function a)
+  | VarDecl (Variable a)
+  | Statement (Statement a)
+  deriving stock (Show, Eq, Functor, Foldable, Traversable)
+
+data Class a = Class
+  { className :: String,
+    classMethods :: [Function a],
+    classLine :: Int
+  }
+  deriving stock (Show, Eq, Functor, Foldable, Traversable)
 
 type Block a = [Declaration a]
 
@@ -90,9 +103,29 @@ declaration :: TokenParser (Declaration Unresolved)
 declaration = do
   t <- peek
   case tokenType t of
+    CLASS -> ClassDecl <$> classDeclaration
     FUN -> Fun <$> function "function"
     VAR -> VarDecl <$> variable
     _ -> Statement <$> statement
+
+classDeclaration :: TokenParser (Class Unresolved)
+classDeclaration = do
+  void $ satisfy ((CLASS ==) . tokenType) ("Expect " <> displayTokenType CLASS <> ".")
+  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) "Expect class name."
+  void $ satisfy ((LEFT_BRACE ==) . tokenType) "Expect '{' before class body."
+  methods <- parseClassMethods
+  void $ satisfy ((RIGHT_BRACE ==) . tokenType) "Expect '}' after class body."
+  pure $ Class name methods l
+
+parseClassMethods :: TokenParser [Function Unresolved]
+parseClassMethods = do
+  t <- peek
+  if tokenType t == RIGHT_BRACE
+    then pure []
+    else do
+      func <- function "method"
+      rest <- parseClassMethods
+      pure (func : rest)
 
 function :: String -> TokenParser (Function Unresolved)
 function kind = do

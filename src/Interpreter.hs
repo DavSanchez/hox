@@ -22,7 +22,7 @@ import Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Interpreter.Error (InterpreterError (..), handleErr)
 import Interpreter.State qualified as PS
 import Interpreter.StdEnv (mkStdEnv)
-import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
+import Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
 import Resolver (programResolver, runResolver)
 import Token (Token)
 import Value (Callable (..), FunctionType (..), Value (VCallable, VNil), arity, displayValue, isTruthy)
@@ -81,9 +81,29 @@ interpretDecl ::
     MonadIO m
   ) =>
   Declaration Resolution -> m ()
+interpretDecl (ClassDecl cls) = declareClass cls
 interpretDecl (Fun function) = declareFunction function
 interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
+
+declareClass ::
+  ( MonadState ProgramState m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Class Resolution -> m ()
+declareClass cls = do
+  state <- get
+  -- TODO review
+  PS.declare (className cls) (VCallable (Callable (NativeFunction 0 "Class" classConstructor))) state
+  where
+    classConstructor ::
+      ( MonadState ProgramState m,
+        MonadError InterpreterError m,
+        MonadIO m
+      ) =>
+      [Value] -> m Value
+    classConstructor _ = pure VNil -- Placeholder for class instantiation logic
 
 declareFunction ::
   (MonadState ProgramState m, MonadIO m) =>
@@ -112,6 +132,7 @@ interpretDeclF ::
     MonadIO m
   ) =>
   Declaration Resolution -> m (ControlFlow Value ())
+interpretDeclF (ClassDecl c) = declareClass c $> Continue ()
 interpretDeclF (Statement s) = interpretStatementCF s
 interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
 interpretDeclF (Fun f) = declareFunction f $> Continue ()

@@ -16,7 +16,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
 import Expression (Expression (..), Resolution (..), Unresolved (..))
-import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
+import Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
@@ -112,9 +112,21 @@ resolveBlock block = do
   pure decls
 
 resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
+resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
 resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl func
 resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
+
+resolveClassDecl :: Class Unresolved -> Resolver (Class Resolution)
+resolveClassDecl (Class className methods line) = do
+  st <- get
+  case declare className line st of
+    Left err -> throwError err
+    Right st' -> put st'
+  modify (define className)
+  -- TODO review this one
+  methods' <- mapM resolveFuncDecl methods
+  pure (Class className methods' line)
 
 resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr

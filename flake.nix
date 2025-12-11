@@ -47,7 +47,7 @@
           let
             dart2 = inputs.oldDartNixpkgs.legacyPackages.${system}.dart;
             crafting-interpreters-script =
-              testCase: interpreter:
+              interpreter:
               pkgs.writers.writeHaskellBin "crafting-interpreters-script"
                 {
                   libraries = [
@@ -57,15 +57,58 @@
                 }
                 ''
                   {-# LANGUAGE TemplateHaskell #-}
+
                   import Shh
                   import System.IO.Temp (withSystemTempDirectory)
+                  import System.Environment (getArgs)
+                  import Data.List (sort)
+                  import Control.Monad (forM_)
+                  import System.Exit (exitFailure)
 
                   -- Load binaries from Nix packages. The dependencies will be captured
                   -- in the closure.
                   loadFromBins ["${dart2}", "${pkgs.gnumake}", "${pkgs.uutils-coreutils-noprefix}"]
 
+                  chapterMap :: [(String, String)]
+                  chapterMap =
+                    [ ("4", "chap04_scanning"), ("04", "chap04_scanning")
+                    , ("6", "chap06_parsing"), ("06", "chap06_parsing")
+                    , ("7", "chap07_evaluating"), ("07", "chap07_evaluating")
+                    , ("8", "chap08_statements"), ("08", "chap08_statements")
+                    , ("9", "chap09_control"), ("09", "chap09_control")
+                    , ("10", "chap10_functions")
+                    , ("11", "chap11_resolving")
+                    , ("12", "chap12_classes")
+                    -- , ("13", "chap13_inheritance")
+                    ]
+
+                  orderedChapters :: [String]
+                  orderedChapters =
+                    [ "chap04_scanning"
+                    , "chap06_parsing"
+                    , "chap07_evaluating"
+                    , "chap08_statements"
+                    , "chap09_control"
+                    , "chap10_functions"
+                    , "chap11_resolving"
+                    -- , "chap12_classes"
+                    -- , "chap13_inheritance"
+                    ]
+
+                  getChapter :: String -> Maybe String
+                  getChapter arg = lookup arg chapterMap
+
                   main :: IO ()
                   main = withSystemTempDirectory "crafting-interpreters-tests" $ \tmpDir -> do
+                    args <- getArgs
+                    targets <- if null args
+                               then pure orderedChapters
+                               else case mapM getChapter args of
+                                      Just ts -> pure ts
+                                      Nothing -> do
+                                        echo "Error: Invalid chapter number provided."
+                                        exitFailure
+
                     -- Copy repository to temporary directory
                     echo $ "Copying ${inputs.crafting-interpreters} to temporary directory " <> tmpDir <> "..."
                     cp "--no-preserve=all" "-r" "${inputs.crafting-interpreters}/." tmpDir
@@ -76,13 +119,12 @@
                     dart "pub" "get"
                     cd tmpDir
                     -- Run the tests!
-                    dart "tool/bin/test.dart" "${testCase}" "--interpreter" "${pkgs.lib.getExe interpreter}" "--arguments" "--${testCase}"
+                    forM_ targets $ \target -> do
+                      echo "--------------------------------------------------------------------------------"
+                      echo ("Running " ++ target ++ "...")
+                      echo "--------------------------------------------------------------------------------"
+                      dart "tool/bin/test.dart" target "--interpreter" "${pkgs.lib.getExe interpreter}" "--arguments" ("--" ++ target)
                 '';
-            mkTestApp = testCase: interpreter: {
-              type = "app";
-              program = "${crafting-interpreters-script testCase interpreter}/bin/crafting-interpreters-script";
-              meta.description = "Run the Crafting Interpreters test suite for ${testCase}, using the '${interpreter.meta.mainProgram}' interpreter.";
-            };
             haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
             hoxPkg = haskellPackages.callPackage ./hox.nix { };
             ghcWithDeps = haskellPackages.ghcWithPackages (p: hoxPkg.propagatedBuildInputs);
@@ -110,24 +152,19 @@
           in
           {
             apps = {
-              test-chapter04 = mkTestApp "chap04_scanning" self'.packages.hox;
-              test-chapter06 = mkTestApp "chap06_parsing" self'.packages.hox;
-              test-chapter07 = mkTestApp "chap07_evaluating" self'.packages.hox;
-              test-chapter08 = mkTestApp "chap08_statements" self'.packages.hox;
-              test-chapter09 = mkTestApp "chap09_control" self'.packages.hox;
-              test-chapter10 = mkTestApp "chap10_functions" self'.packages.hox;
-              test-chapter11 = mkTestApp "chap11_resolving" self'.packages.hox;
-              test-chapter12 = mkTestApp "chap12_classes" self'.packages.hox;
-              # test-chapter13 = mkTestApp "chap13_inheritance" self'.packages.hox;
-
+              hox-tests = {
+                type = "app";
+                program = "${crafting-interpreters-script self'.packages.hox}/bin/crafting-interpreters-script";
+                meta.description = "Run the Crafting Interpreters test suite. Usage: nix run .#tests -- [chapters...]";
+              };
               hoxDoctest = {
                 type = "app";
-                program = "${doctestScript}/bin/hox-doctest";
+                program = "${pkgs.lib.getExe doctestScript}";
                 meta.description = "Run Hox's doctests from Nix.";
               };
               hoxWeeder = {
                 type = "app";
-                program = "${weederScript}/bin/hox-weeder";
+                program = "${pkgs.lib.getExe weederScript}";
                 meta.description = "Run Hox's weeder unused code detector from Nix.";
               };
             };
@@ -146,6 +183,7 @@
                     weeder
                   ])
                   ++ [
+                    pkgs.just
                     pkgs.gnumake
                     dart2
                   ];
@@ -185,14 +223,14 @@
                   doctest = {
                     enable = true;
                     name = "doctest";
-                    entry = "${pkgs.lib.getExe doctestScript}";
+                    entry = "${self'.apps.hoxDoctest.program}";
                     pass_filenames = false;
                   };
                   # Haskell unused code detector
                   weeder = {
                     enable = true;
                     name = "weeder";
-                    entry = "${pkgs.lib.getExe weederScript}";
+                    entry = "${self'.apps.hoxWeeder.program}";
                     pass_filenames = false;
                   };
                 };

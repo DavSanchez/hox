@@ -5,6 +5,8 @@ module Interpreter.State
     pushScope,
     pushClosureScope,
     popScope,
+    getVariable,
+    assignVariable,
   )
 where
 
@@ -12,11 +14,16 @@ import Control.Monad.IO.Class (MonadIO)
 import Environment
   ( Environment,
     Frame,
+    assignAtDistance,
+    assignInFrame,
     declareInFrame,
+    findInFrame,
+    getAtDistance,
     newFrame,
     popFrame,
     pushFrame,
   )
+import Expression (Resolution (..))
 
 data ProgramState a = ProgramState
   { environment :: Environment a,
@@ -33,6 +40,22 @@ declare name val state = do
   case environment state of
     [] -> declareInFrame name val (globals state)
     (top : _) -> declareInFrame name val top
+
+getVariable :: (MonadIO m) => String -> Resolution -> ProgramState a -> m (Maybe a)
+getVariable name distance st =
+  let env' = environment st
+      globals' = globals st
+   in case distance of
+        Local d -> getAtDistance d name env'
+        Global -> findInFrame name globals'
+
+assignVariable :: (MonadIO m) => String -> Resolution -> a -> ProgramState a -> m Bool
+assignVariable name distance val st =
+  let env' = environment st
+      globals' = globals st
+   in case distance of
+        Local d -> assignAtDistance d name val env'
+        Global -> assignInFrame name val globals'
 
 pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)
 pushScope state = do

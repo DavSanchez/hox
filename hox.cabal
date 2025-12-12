@@ -111,7 +111,6 @@ library
   -- Modules exported by the library.
   exposed-modules:
     Environment
-    Evaluation
     Expression
     Interpreter
     Interpreter.State

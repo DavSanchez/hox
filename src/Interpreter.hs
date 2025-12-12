@@ -15,7 +15,6 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Foldable (find)
 import Data.Functor (($>))
-import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
 import Evaluation.Error (EvalError (EvalError))
 import Expression
   ( BinaryOperator,
@@ -54,7 +53,7 @@ import Value
     Value (VCallable, VNil),
     arity,
     displayValue,
-    isTruthy,
+    isTruthy, evalLiteral, evalUnaryOp, evalBinaryOp,
   )
 
 type Interpreter = InterpreterT IO

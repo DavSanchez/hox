@@ -1,4 +1,4 @@
-module Resolver
+module Language.Analysis.Resolver
   ( programResolver,
     runResolver,
     Resolver,
@@ -15,8 +15,8 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Expression (Expression (..), Resolution (..), Unresolved (..))
-import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
+import Language.Syntax.Expression (Expression (..), Resolution (..), Unresolved (..))
+import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
@@ -112,9 +112,21 @@ resolveBlock block = do
   pure decls
 
 resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
+resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
 resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl func
 resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
+
+resolveClassDecl :: Class Unresolved -> Resolver (Class Resolution)
+resolveClassDecl (Class className methods line) = do
+  st <- get
+  case declare className line st of
+    Left err -> throwError err
+    Right st' -> put st'
+  modify (define className)
+  -- TODO review this one
+  methods' <- mapM resolveFuncDecl methods
+  pure (Class className methods' line)
 
 resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
@@ -185,6 +197,7 @@ resolveExpr (VariableAssignment line name value _) = do
   pure (VariableAssignment line name value' dist)
 resolveExpr (BinaryOperation line op left right) = BinaryOperation line op <$> resolveExpr left <*> resolveExpr right
 resolveExpr (Call line callee args) = Call line <$> resolveExpr callee <*> mapM resolveExpr args
+resolveExpr (Get line object propName) = Get line <$> resolveExpr object <*> pure propName
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right

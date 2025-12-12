@@ -1,6 +1,6 @@
 module RepresentingCode (displayExprUnitTests) where
 
-import Expression
+import Language.Syntax.Expression
   ( BinaryOperator (Plus, Star),
     Expression (BinaryOperation, Grouping, Literal, UnaryOperation),
     Literal (Number),

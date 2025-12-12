@@ -1,4 +1,4 @@
-module Scanner.Error (SyntaxError (..), displayErr) where
+module Language.Scanner.Error (SyntaxError (..), displayErr) where
 
 data SyntaxError = Error
   { errorMessage :: String,

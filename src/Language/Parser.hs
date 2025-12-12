@@ -1,4 +1,4 @@
-module Parser
+module Language.Parser
   ( TokenParser,
     Parser (Parser, runParser),
     ParseError (..),
@@ -11,8 +11,8 @@ where
 
 import Control.Applicative (Alternative (..))
 import Data.Functor (void)
-import Scanner.Error (SyntaxError (..), displayErr)
-import Token (Token (..), TokenType (..), displayTokenType)
+import Language.Scanner.Error (SyntaxError (..), displayErr)
+import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType)
 
 -- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.
 -- A rough equivalent to this in Rust would be:

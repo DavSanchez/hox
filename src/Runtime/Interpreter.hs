@@ -1,4 +1,4 @@
-module Interpreter
+module Runtime.Interpreter
   ( Interpreter,
     buildTreeWalkInterpreter,
     runInterpreter,
@@ -13,19 +13,51 @@ where
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
+import Data.Foldable (find)
 import Data.Functor (($>))
-import Environment (assignAtDistance, assignInFrame, findInFrame, getAtDistance)
-import Evaluation (evalBinaryOp, evalLiteral, evalUnaryOp)
-import Evaluation.Error (EvalError (EvalError))
-import Expression (Expression (..), LogicalOperator (..), Resolution (..), Unresolved (..))
-import Interpreter.ControlFlow (ControlFlow (Break, Continue))
-import Interpreter.Error (InterpreterError (..), handleErr)
-import Interpreter.State qualified as PS
-import Interpreter.StdEnv (mkStdEnv)
-import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..), parseProgram)
-import Resolver (programResolver, runResolver)
-import Token (Token)
-import Value (Callable (..), FunctionType (..), Value (VCallable, VNil), arity, displayValue, isTruthy)
+import Language.Analysis.Resolver (programResolver, runResolver)
+import Language.Syntax.Expression
+  ( BinaryOperator,
+    Expression (..),
+    LogicalOperator (..),
+    Resolution (..),
+    UnaryOperator,
+    Unresolved (..),
+  )
+import Language.Syntax.Program
+  ( Class (..),
+    Declaration (..),
+    Function (..),
+    Program (..),
+    Statement (..),
+    Variable (..),
+    parseProgram,
+  )
+import Language.Syntax.Token (Token)
+import Runtime.Interpreter.ControlFlow (ControlFlow (Break, Continue))
+import Runtime.Interpreter.Error (InterpreterError (..), handleErr)
+import Runtime.Interpreter.State
+  ( ProgramState (environment),
+    assignVariable,
+    declare,
+    getVariable,
+    popScope,
+    pushClosureScope,
+    pushScope,
+  )
+import Runtime.Interpreter.StdEnv (mkStdEnv)
+import Runtime.Value
+  ( Callable (..),
+    CallableType (..),
+    EvalError (EvalError),
+    Value (VCallable, VNil),
+    arity,
+    displayValue,
+    evalBinaryOp,
+    evalLiteral,
+    evalUnaryOp,
+    isTruthy,
+  )
 
 type Interpreter = InterpreterT IO
 
@@ -40,7 +72,7 @@ runInterpreter interpreter = do
   programState <- mkStdEnv
   liftIO $ runInterpreter' programState interpreter
 
-runInterpreter' :: (Monad m) => ProgramState -> InterpreterT m a -> m (Either InterpreterError a)
+runInterpreter' :: (Monad m) => ProgramState Value -> InterpreterT m a -> m (Either InterpreterError a)
 runInterpreter' programState interpreter = runExceptT (evalStateT (runInterpreterT interpreter) programState)
 
 interpreterFailure :: InterpreterError -> Interpreter a
@@ -49,22 +81,20 @@ interpreterFailure = throwError
 evalError :: (MonadError InterpreterError m) => Int -> String -> m a
 evalError line msg = throwError (Eval (EvalError line msg))
 
-type ProgramState = PS.ProgramState Value
-
 newtype InterpreterT m a = Interpreter
-  { runInterpreterT :: StateT ProgramState (ExceptT InterpreterError m) a
+  { runInterpreterT :: StateT (ProgramState Value) (ExceptT InterpreterError m) a
   }
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState ProgramState,
+      MonadState (ProgramState Value),
       MonadError InterpreterError,
       MonadIO
     )
 
 programInterpreter ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -76,26 +106,41 @@ programInterpreter prog = do
     Right (Program decls) -> mapM_ interpretDecl decls
 
 interpretDecl ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
   Declaration Resolution -> m ()
+interpretDecl (ClassDecl cls) = declareClass cls
 interpretDecl (Fun function) = declareFunction function
 interpretDecl (VarDecl var) = declareVariable var
 interpretDecl (Statement stmt) = interpretStatement stmt
 
+declareClass ::
+  ( MonadState (ProgramState Value) m,
+    MonadIO m
+  ) =>
+  Class Resolution -> m ()
+declareClass cls = do
+  state <- get
+  let className' = className cls
+  declare className' VNil state
+  -- Build class object
+  declare className' (VCallable (Callable (UserDefinedClassInstance cls))) state
+
 declareFunction ::
-  (MonadState ProgramState m, MonadIO m) =>
+  ( MonadState (ProgramState Value) m,
+    MonadIO m
+  ) =>
   Function Resolution -> m ()
 declareFunction func = do
-  env <- gets PS.environment
-  let callable = Callable (UserDefined func env)
+  env <- gets environment
+  let callable = Callable (UserDefinedFunction func env)
   state <- get
-  PS.declare (funcName func) (VCallable callable) state
+  declare (funcName func) (VCallable callable) state
 
 runFunctionBody ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -107,17 +152,18 @@ runFunctionBody (d : ds) =
     Continue () -> runFunctionBody ds
 
 interpretDeclF ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
   Declaration Resolution -> m (ControlFlow Value ())
+interpretDeclF (ClassDecl c) = declareClass c $> Continue ()
 interpretDeclF (Statement s) = interpretStatementCF s
 interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
 interpretDeclF (Fun f) = declareFunction f $> Continue ()
 
 declareVariable ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -127,10 +173,10 @@ declareVariable (Variable {varName, varInitializer}) = do
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
   state <- get
-  PS.declare varName value state
+  declare varName value state
 
 interpretStatement ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -141,26 +187,48 @@ interpretStatement s =
     Break _ -> evalError 0 "Return statement outside of function."
 
 interpretStatementCF ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
   Statement Resolution -> m (ControlFlow Value ())
 interpretStatementCF (PrintStmt expr) = interpretPrint expr $> Continue ()
 interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
-interpretStatementCF (IfStmt expr thenBranch elseBranch) = do
+interpretStatementCF (IfStmt expr thenBranch elseBranch) = executeIf expr thenBranch elseBranch
+interpretStatementCF (BlockStmt decls) = executeBlock decls
+interpretStatementCF (WhileStmt expr stmt) = executeWhile expr stmt
+interpretStatementCF (ReturnStmt _ maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
+
+executeIf ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Expression Resolution ->
+  Statement Resolution ->
+  Maybe (Statement Resolution) ->
+  m (ControlFlow Value ())
+executeIf expr thenBranch elseBranch = do
   cond <- isTruthy <$> evaluateExpr expr
   if cond
     then interpretStatementCF thenBranch
     else case elseBranch of
       Just elseStmt -> interpretStatementCF elseStmt
       Nothing -> pure (Continue ())
-interpretStatementCF (BlockStmt decls) = do
+
+executeBlock ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  [Declaration Resolution] ->
+  m (ControlFlow Value ())
+executeBlock decls = do
   state <- get
-  newState <- PS.pushScope state
+  newState <- pushScope state
   put newState
   r <- go decls
-  modify PS.popScope
+  modify popScope
   pure r
   where
     go [] = pure (Continue ())
@@ -169,7 +237,16 @@ interpretStatementCF (BlockStmt decls) = do
       case cf of
         Break v -> pure (Break v)
         Continue () -> go ds
-interpretStatementCF (WhileStmt expr stmt) = loop
+
+executeWhile ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Expression Resolution ->
+  Statement Resolution ->
+  m (ControlFlow Value ())
+executeWhile expr stmt = loop
   where
     loop = do
       c <- isTruthy <$> evaluateExpr expr
@@ -180,10 +257,9 @@ interpretStatementCF (WhileStmt expr stmt) = loop
           case cf of
             Break v -> pure (Break v)
             Continue () -> loop
-interpretStatementCF (ReturnStmt _ maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
 
 interpretPrint ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
@@ -192,27 +268,76 @@ interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
-  ( MonadState ProgramState m,
+  ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
   ) =>
   Expression Resolution -> m Value
 evaluateExpr (Literal lit) = pure $ evalLiteral lit
 evaluateExpr (Grouping expr) = evaluateExpr expr
-evaluateExpr (UnaryOperation line op e) = do
+evaluateExpr (UnaryOperation line op e) = executeUnary line op e
+evaluateExpr (BinaryOperation line op e1 e2) = executeBinary line op e1 e2
+evaluateExpr (VariableExpr line name dist) = executeVariable line name dist
+evaluateExpr (VariableAssignment line name expr dist) = evaluateVarAssignment line name expr dist
+evaluateExpr (Logical _ op e1 e2) = evaluateLogical op e1 e2
+evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argExprs
+evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
+
+executeUnary ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int ->
+  UnaryOperator ->
+  Expression Resolution ->
+  m Value
+executeUnary line op e = do
   v <- evaluateExpr e
   either (throwError . Eval) pure (evalUnaryOp line op v)
-evaluateExpr (BinaryOperation line op e1 e2) = do
+
+executeBinary ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int ->
+  BinaryOperator ->
+  Expression Resolution ->
+  Expression Resolution ->
+  m Value
+executeBinary line op e1 e2 = do
   v1 <- evaluateExpr e1
   v2 <- evaluateExpr e2
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
-evaluateExpr (VariableExpr line name dist) = do
+
+executeVariable ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int ->
+  String ->
+  Resolution ->
+  m Value
+executeVariable line name dist = do
   state <- get
-  val <- lookupVariable name dist state
+  val <- getVariable name dist state
   case val of
     Just v -> pure v
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
-evaluateExpr (VariableAssignment line name expr dist) = do
+
+evaluateVarAssignment ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int ->
+  String ->
+  Expression Resolution ->
+  Resolution ->
+  m Value
+evaluateVarAssignment line name expr dist = do
   -- The variable expression needs to be evaluated *before* we retrieve the environment,
   -- else the environment will not reflect the changes made by evaluating the expression, and
   -- the right-associativity property of this operation will be broken.
@@ -224,38 +349,67 @@ evaluateExpr (VariableAssignment line name expr dist) = do
   if found
     then pure value
     else evalError line ("Undefined variable '" <> name <> "'.")
-evaluateExpr (Logical _ op e1 e2) =
+
+evaluateLogical ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  LogicalOperator ->
+  Expression Resolution ->
+  Expression Resolution ->
+  m Value
+evaluateLogical op e1 e2 =
   evaluateExpr e1
     >>= \b -> if shortCircuits op b then pure b else evaluateExpr e2
   where
     shortCircuits Or expr = isTruthy expr
     shortCircuits And expr = not $ isTruthy expr
-evaluateExpr (Call line calleeExpr argExprs) = do
+
+executeCall ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int ->
+  Expression Resolution ->
+  [Expression Resolution] ->
+  m Value
+executeCall line calleeExpr argExprs = do
   callee <- evaluateExpr calleeExpr
   args <- mapM evaluateExpr argExprs
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
 
-lookupVariable :: (MonadIO m) => String -> Resolution -> ProgramState -> m (Maybe Value)
-lookupVariable name distance st =
-  let env' = PS.environment st
-      globals' = PS.globals st
-   in case distance of
-        Local d -> getAtDistance d name env'
-        Global -> findInFrame name globals'
+executeGet ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int ->
+  Expression Resolution ->
+  String ->
+  m Value
+executeGet line objectExpr propName = do
+  objectValue <- evaluateExpr objectExpr
+  case objectValue of
+    -- TODO this assumes I'm looking only for methods, not fields
+    VCallable (Callable (UserDefinedClassInstance (Class _ methods _))) ->
+      case lookupMethod propName methods of
+        Just methodFunc -> do
+          env <- gets environment
+          let callable = Callable (UserDefinedFunction methodFunc env)
+          pure (VCallable callable)
+        Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
+    _ -> evalError line "Only instances have properties."
 
-assignVariable :: (MonadIO m) => String -> Resolution -> Value -> ProgramState -> m Bool
-assignVariable name distance value st =
-  let env' = PS.environment st
-      globals' = PS.globals st
-   in case distance of
-        Local d -> assignAtDistance d name value env'
-        Global -> assignInFrame name value globals'
+lookupMethod :: String -> [Function Resolution] -> Maybe (Function Resolution)
+lookupMethod name = find (\(Function fName _ _ _) -> fName == name)
 
 callCallable ::
   ( MonadError InterpreterError m,
-    MonadState ProgramState m,
+    MonadState (ProgramState Value) m,
     MonadIO m
   ) =>
   Int ->
@@ -269,22 +423,23 @@ callCallable line callable args = do
         then evalError line ("Expected " <> show expectedArity <> " arguments but got " <> show (length args) <> ".")
         else call callable args
 
-call :: Callable -> [Value] -> forall m. (MonadState ProgramState m, MonadError InterpreterError m, MonadIO m) => m Value
-call (Callable (UserDefined func closure)) args = do
+call :: Callable -> [Value] -> forall m. (MonadState (ProgramState Value) m, MonadError InterpreterError m, MonadIO m) => m Value
+call (Callable (UserDefinedFunction func closure)) args = do
   state <- get
-  newState <- PS.pushClosureScope closure state
+  newState <- pushClosureScope closure state
   put newState
   let paramWithArgs = zip (funcParams func) args
   -- Set variables for the params and args in the function's environment
   mapM_
     ( \((paramName, _), argValue) -> do
         s <- get
-        PS.declare paramName argValue s
+        declare paramName argValue s
     )
     paramWithArgs
   -- Run the function body
   result <- runFunctionBody (funcBody func)
   -- Restore the previous environment
-  modify (\ps -> ps {PS.environment = PS.environment state})
+  modify (\ps -> ps {environment = environment state})
   pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
+call clsi@(Callable (UserDefinedClassInstance _)) _ = pure (VCallable clsi)

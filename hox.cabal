@@ -110,26 +110,26 @@ library
   import: common-options
   -- Modules exported by the library.
   exposed-modules:
-    Environment
-    Expression
-    Interpreter
-    Interpreter.State
-    Parser
-    Program
-    Resolver
-    Scanner
-    Token
-    Value
+    Language.Parser
+    Language.Scanner
+    Language.Syntax.Expression
+    Language.Syntax.Token
+    Runtime.Interpreter
+    Runtime.Value
 
   -- Modules included in this library but not exported.
   other-modules:
-    Evaluation.Error
-    Interpreter.ControlFlow
-    Interpreter.Error
-    Interpreter.StdEnv
-    Scanner.Error
-    Scanner.Internal
-    Scanner.Naive
+    Language.Analysis.Resolver
+    Language.Scanner.Error
+    Language.Scanner.Internal
+    Language.Scanner.Naive
+    Language.Syntax.Program
+    Runtime.Environment
+    Runtime.Error
+    Runtime.Interpreter.ControlFlow
+    Runtime.Interpreter.Error
+    Runtime.Interpreter.State
+    Runtime.Interpreter.StdEnv
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

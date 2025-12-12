@@ -4,8 +4,11 @@ import Control.Monad ((>=>))
 import Data.Either (partitionEithers)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
-import Expression (Expression, Resolution (Global), Unresolved (..), displayExpr, expression)
-import Interpreter
+import Language.Parser (runParser)
+import Language.Scanner (displayErr, scanTokens)
+import Language.Syntax.Expression (Expression, Resolution (Global), Unresolved (..), displayExpr, expression)
+import Language.Syntax.Token (Token, displayToken)
+import Runtime.Interpreter
   ( Interpreter,
     InterpreterError (..),
     buildTreeWalkInterpreter,
@@ -13,13 +16,10 @@ import Interpreter
     handleErr,
     runInterpreter,
   )
-import Parser (runParser)
-import Scanner (displayErr, scanTokens)
+import Runtime.Value (Value, displayValue)
 import System.Environment (getArgs)
 import System.Exit (ExitCode (ExitFailure), exitWith)
 import System.IO (hFlush, hPutStrLn, isEOF, readFile', stderr, stdout)
-import Token (Token, displayToken)
-import Value (Value, displayValue)
 
 main :: IO ()
 main = do

@@ -1,4 +1,4 @@
-module Interpreter.State
+module Runtime.Interpreter.State
   ( ProgramState (..),
     newProgramState,
     declare,
@@ -11,7 +11,8 @@ module Interpreter.State
 where
 
 import Control.Monad.IO.Class (MonadIO)
-import Environment
+import Language.Syntax.Expression (Resolution (..))
+import Runtime.Environment
   ( Environment,
     Frame,
     assignAtDistance,
@@ -23,7 +24,6 @@ import Environment
     popFrame,
     pushFrame,
   )
-import Expression (Resolution (..))
 
 data ProgramState a = ProgramState
   { environment :: Environment a,

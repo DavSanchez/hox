@@ -1,11 +1,11 @@
-module Scanner.Naive (naiveScanTokens) where
+module Language.Scanner.Naive (naiveScanTokens) where
 
 import Data.Char (isDigit)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
-import Scanner.Internal (TokenResult, isAlpha, isAlphaNum, keywords, syntaxError, validToken)
+import Language.Scanner.Internal (TokenResult, isAlpha, isAlphaNum, keywords, syntaxError, validToken)
+import Language.Syntax.Token (TokenType (..))
 import Text.Read (readMaybe)
-import Token (TokenType (..))
 
 -- | Auxiliary function that scans the input strings and tracks the state: the current line number and the accumulated tokens
 naiveScanTokens ::

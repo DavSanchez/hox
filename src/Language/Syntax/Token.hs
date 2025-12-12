@@ -1,4 +1,4 @@
-module Token
+module Language.Syntax.Token
   ( Token (..),
     TokenType (..),
     displayToken,

@@ -14,7 +14,7 @@
 --               | "(" expression ")" ;
 -- @
 --  This naturally translates to Haskell ADTs, so that's what we will use.
-module Expression
+module Language.Syntax.Expression
   ( -- * Data types
     Expression (..),
     Literal (..),
@@ -37,13 +37,13 @@ import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
 import Data.Proxy (Proxy)
-import Parser (TokenParser, peek, satisfy)
-import Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
+import Language.Parser (TokenParser, peek, satisfy)
+import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 
 -- $setup
--- >>> import Parser (runParser)
--- >>> import Scanner (scanTokens)
--- >>> import Token (Token (..), TokenType (..))
+-- >>> import Language.Parser (runParser)
+-- >>> import Language.Scanner (scanTokens)
+-- >>> import Language.Syntax.Token (Token (..), TokenType (..))
 -- >>> import Data.List.NonEmpty qualified as NE
 -- >>> let tokensOf src = [t | Right t <- NE.toList (scanTokens src)]
 
@@ -384,11 +384,6 @@ call = do
     LEFT_PAREN -> finishCall expr
     DOT -> finishCall expr
     _ -> pure expr
-
--- getEpxr :: Expression Unresolved -> TokenParser (Expression Unresolved)
--- getEpxr expr = do
---   void $ satisfy ((DOT ==) . tokenType) ("Expect " <> displayTokenType DOT <> ".")
---   Token (IDENTIFIER name) lineNum <- satisfy isIdentifier "Expect property name after '.'."
 
 -- | Tail-recursive call finisher (continues parsing chained calls).
 -- (Internal helper; prefer using 'call')

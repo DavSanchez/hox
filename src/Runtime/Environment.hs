@@ -1,4 +1,4 @@
-module Environment
+module Runtime.Environment
   ( Environment,
     Frame,
     newFrame,

@@ -1,4 +1,4 @@
-module Scanner
+module Language.Scanner
   ( scanTokens,
     displayErr,
     SyntaxError (..),
@@ -7,9 +7,9 @@ where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
-import Scanner.Error (SyntaxError (..), displayErr)
-import Scanner.Internal (TokenResult)
-import Scanner.Naive (naiveScanTokens)
+import Language.Scanner.Error (SyntaxError (..), displayErr)
+import Language.Scanner.Internal (TokenResult)
+import Language.Scanner.Naive (naiveScanTokens)
 
 -- | Scans the input string and returns a list of tokens.
 -- >>> scanTokens "hello world"

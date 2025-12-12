@@ -1,4 +1,4 @@
-module Interpreter
+module Runtime.Interpreter
   ( Interpreter,
     buildTreeWalkInterpreter,
     runInterpreter,
@@ -15,8 +15,8 @@ import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Foldable (find)
 import Data.Functor (($>))
-import Evaluation.Error (EvalError (EvalError))
-import Expression
+import Language.Analysis.Resolver (programResolver, runResolver)
+import Language.Syntax.Expression
   ( BinaryOperator,
     Expression (..),
     LogicalOperator (..),
@@ -24,19 +24,7 @@ import Expression
     UnaryOperator,
     Unresolved (..),
   )
-import Interpreter.ControlFlow (ControlFlow (Break, Continue))
-import Interpreter.Error (InterpreterError (..), handleErr)
-import Interpreter.State
-  ( ProgramState (environment),
-    assignVariable,
-    declare,
-    getVariable,
-    popScope,
-    pushClosureScope,
-    pushScope,
-  )
-import Interpreter.StdEnv (mkStdEnv)
-import Program
+import Language.Syntax.Program
   ( Class (..),
     Declaration (..),
     Function (..),
@@ -45,15 +33,30 @@ import Program
     Variable (..),
     parseProgram,
   )
-import Resolver (programResolver, runResolver)
-import Token (Token)
-import Value
+import Language.Syntax.Token (Token)
+import Runtime.Interpreter.ControlFlow (ControlFlow (Break, Continue))
+import Runtime.Interpreter.Error (InterpreterError (..), handleErr)
+import Runtime.Interpreter.State
+  ( ProgramState (environment),
+    assignVariable,
+    declare,
+    getVariable,
+    popScope,
+    pushClosureScope,
+    pushScope,
+  )
+import Runtime.Interpreter.StdEnv (mkStdEnv)
+import Runtime.Value
   ( Callable (..),
     CallableType (..),
+    EvalError (EvalError),
     Value (VCallable, VNil),
     arity,
     displayValue,
-    isTruthy, evalLiteral, evalUnaryOp, evalBinaryOp,
+    evalBinaryOp,
+    evalLiteral,
+    evalUnaryOp,
+    isTruthy,
   )
 
 type Interpreter = InterpreterT IO
@@ -272,15 +275,15 @@ evaluateExpr ::
   Expression Resolution -> m Value
 evaluateExpr (Literal lit) = pure $ evalLiteral lit
 evaluateExpr (Grouping expr) = evaluateExpr expr
-evaluateExpr (UnaryOperation line op e) = evaluateUnary line op e
-evaluateExpr (BinaryOperation line op e1 e2) = evaluateBinary line op e1 e2
-evaluateExpr (VariableExpr line name dist) = evaluateVariable line name dist
+evaluateExpr (UnaryOperation line op e) = executeUnary line op e
+evaluateExpr (BinaryOperation line op e1 e2) = executeBinary line op e1 e2
+evaluateExpr (VariableExpr line name dist) = executeVariable line name dist
 evaluateExpr (VariableAssignment line name expr dist) = evaluateVarAssignment line name expr dist
 evaluateExpr (Logical _ op e1 e2) = evaluateLogical op e1 e2
-evaluateExpr (Call line calleeExpr argExprs) = evaluateCall line calleeExpr argExprs
-evaluateExpr (Get line objectExpr propName) = evaluateGet line objectExpr propName
+evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argExprs
+evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
 
-evaluateUnary ::
+executeUnary ::
   ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
@@ -289,11 +292,11 @@ evaluateUnary ::
   UnaryOperator ->
   Expression Resolution ->
   m Value
-evaluateUnary line op e = do
+executeUnary line op e = do
   v <- evaluateExpr e
   either (throwError . Eval) pure (evalUnaryOp line op v)
 
-evaluateBinary ::
+executeBinary ::
   ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
@@ -303,12 +306,12 @@ evaluateBinary ::
   Expression Resolution ->
   Expression Resolution ->
   m Value
-evaluateBinary line op e1 e2 = do
+executeBinary line op e1 e2 = do
   v1 <- evaluateExpr e1
   v2 <- evaluateExpr e2
   either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 
-evaluateVariable ::
+executeVariable ::
   ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
@@ -317,7 +320,7 @@ evaluateVariable ::
   String ->
   Resolution ->
   m Value
-evaluateVariable line name dist = do
+executeVariable line name dist = do
   state <- get
   val <- getVariable name dist state
   case val of
@@ -363,7 +366,7 @@ evaluateLogical op e1 e2 =
     shortCircuits Or expr = isTruthy expr
     shortCircuits And expr = not $ isTruthy expr
 
-evaluateCall ::
+executeCall ::
   ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
@@ -372,14 +375,14 @@ evaluateCall ::
   Expression Resolution ->
   [Expression Resolution] ->
   m Value
-evaluateCall line calleeExpr argExprs = do
+executeCall line calleeExpr argExprs = do
   callee <- evaluateExpr calleeExpr
   args <- mapM evaluateExpr argExprs
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
 
-evaluateGet ::
+executeGet ::
   ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
@@ -388,7 +391,7 @@ evaluateGet ::
   Expression Resolution ->
   String ->
   m Value
-evaluateGet line objectExpr propName = do
+executeGet line objectExpr propName = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of
     -- TODO this assumes I'm looking only for methods, not fields

@@ -1,4 +1,4 @@
-module Value
+module Runtime.Value
   ( Value (..),
     displayValue,
     isTruthy,
@@ -8,6 +8,8 @@ module Value
     evalLiteral,
     evalUnaryOp,
     evalBinaryOp,
+    EvalError (..),
+    displayEvalErr,
   )
 where
 
@@ -15,13 +17,13 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
-import Environment (Environment)
-import Evaluation.Error (EvalError (..))
-import Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
-import Interpreter.Error (InterpreterError)
-import Interpreter.State (ProgramState (..))
+import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
+import Language.Syntax.Program (Class (..), Function (..))
 import Numeric (showFFloat)
-import Program (Class (..), Function (..))
+import Runtime.Environment (Environment)
+import Runtime.Error (EvalError (..), displayEvalErr)
+import Runtime.Interpreter.Error (InterpreterError)
+import Runtime.Interpreter.State (ProgramState (..))
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value

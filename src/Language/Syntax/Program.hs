@@ -1,4 +1,4 @@
-module Program
+module Language.Syntax.Program
   ( Program (..),
     parseProgram,
     Declaration (..),
@@ -14,9 +14,9 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
-import Expression (Expression (Literal), Literal (Bool), Phase, Unresolved (..), expression)
-import Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
-import Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
+import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
+import Language.Syntax.Expression (Expression (Literal), Literal (Bool), Phase, Unresolved (..), expression)
+import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
 
 -- GADTs for AST with phase parameter
 data Program a where

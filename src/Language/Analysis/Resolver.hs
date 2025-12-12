@@ -1,4 +1,4 @@
-module Resolver
+module Language.Analysis.Resolver
   ( programResolver,
     runResolver,
     Resolver,
@@ -15,8 +15,8 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Expression (Expression (..), Resolution (..), Unresolved (..))
-import Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
+import Language.Syntax.Expression (Expression (..), Resolution (..), Unresolved (..))
+import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,

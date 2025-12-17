@@ -4,13 +4,12 @@ module Runtime.Interpreter.Error
   )
 where
 
-import GHC.IO.Handle.Text (hPutStrLn)
 import Language.Analysis.Resolver (ResolveError, displayResolveError)
 import Language.Parser (ParseError, displayParseErr)
 import Language.Scanner.Error (SyntaxError, displayErr)
 import Runtime.Error (EvalError, displayEvalErr)
 import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.IO (stderr)
+import System.IO (hPutStrLn, stderr)
 
 -- Error handling
 data InterpreterError

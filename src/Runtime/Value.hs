@@ -10,6 +10,8 @@ module Runtime.Value
     evalBinaryOp,
     EvalError (..),
     displayEvalErr,
+    ClassInstance (..),
+    lookupField,
   )
 where
 
@@ -17,8 +19,9 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
+import Data.Map qualified as M
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
-import Language.Syntax.Program (Class (..), Function (..))
+import Language.Syntax.Program (Function (..))
 import Numeric (showFFloat)
 import Runtime.Environment (Environment)
 import Runtime.Error (EvalError (..), displayEvalErr)
@@ -34,6 +37,20 @@ data Value
   | VCallable Callable
   deriving stock (Eq, Show)
 
+data ClassInstance = ClassInstance
+  { className :: String,
+    classFields :: M.Map String Value
+  }
+
+instance Eq ClassInstance where
+  (ClassInstance {className = c1}) == (ClassInstance {className = c2}) = c1 == c2
+
+instance Show ClassInstance where
+  show (ClassInstance {className = c}) = c ++ " instance"
+
+lookupField :: String -> ClassInstance -> Maybe Value
+lookupField fieldName (ClassInstance {classFields}) = M.lookup fieldName classFields
+
 newtype Callable = Callable CallableType
 
 type Closure = Environment Value
@@ -47,7 +64,7 @@ type MonadCallable m =
 
 data CallableType
   = UserDefinedFunction (Function Resolution) Closure
-  | UserDefinedClassInstance (Class Resolution)
+  | UserDefinedClassInstance ClassInstance
   | NativeFunction
       -- | arity
       Int
@@ -73,7 +90,7 @@ instance Show Callable where
   show :: Callable -> String
   show (Callable (UserDefinedFunction func _)) = "<fn " ++ funcName func ++ ">"
   show (Callable (NativeFunction {})) = "<native fn>"
-  show (Callable (UserDefinedClassInstance (Class name _ _))) = name <> " instance"
+  show (Callable (UserDefinedClassInstance ci)) = show ci
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False

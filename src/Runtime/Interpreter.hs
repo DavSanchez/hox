@@ -13,7 +13,6 @@ where
 import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
-import Data.Foldable (find)
 import Data.Functor (($>))
 import Language.Analysis.Resolver (programResolver, runResolver)
 import Language.Syntax.Expression
@@ -49,6 +48,7 @@ import Runtime.Interpreter.StdEnv (mkStdEnv)
 import Runtime.Value
   ( Callable (..),
     CallableType (..),
+    ClassInstance (..),
     EvalError (EvalError),
     Value (VCallable, VNil),
     arity,
@@ -57,6 +57,7 @@ import Runtime.Value
     evalLiteral,
     evalUnaryOp,
     isTruthy,
+    lookupField,
   )
 
 type Interpreter = InterpreterT IO
@@ -123,10 +124,12 @@ declareClass ::
   Class Resolution -> m ()
 declareClass cls = do
   state <- get
-  let className' = className cls
+  let Class {className = className'} = cls
   declare className' VNil state
   -- Build class object
-  declare className' (VCallable (Callable (UserDefinedClassInstance cls))) state
+  let classInstance = ClassInstance {className = className', classFields = mempty}
+      callable = Callable (UserDefinedClassInstance classInstance)
+  declare className' (VCallable callable) state
 
 declareFunction ::
   ( MonadState (ProgramState Value) m,
@@ -395,17 +398,11 @@ executeGet line objectExpr propName = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of
     -- TODO this assumes I'm looking only for methods, not fields
-    VCallable (Callable (UserDefinedClassInstance (Class _ methods _))) ->
-      case lookupMethod propName methods of
-        Just methodFunc -> do
-          env <- gets environment
-          let callable = Callable (UserDefinedFunction methodFunc env)
-          pure (VCallable callable)
+    VCallable (Callable (UserDefinedClassInstance ci)) ->
+      case lookupField propName ci of
+        Just field -> pure field
         Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
     _ -> evalError line "Only instances have properties."
-
-lookupMethod :: String -> [Function Resolution] -> Maybe (Function Resolution)
-lookupMethod name = find (\(Function fName _ _ _) -> fName == name)
 
 callCallable ::
   ( MonadError InterpreterError m,

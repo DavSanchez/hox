@@ -38,7 +38,7 @@ newtype Callable = Callable CallableType
 
 type Closure = Environment Value
 
-type CallableImpl m =
+type MonadCallable m =
   ( MonadState (ProgramState Value) m,
     MonadError InterpreterError m,
     MonadIO m
@@ -54,7 +54,7 @@ data CallableType
       -- | name
       String
       -- | implementation
-      (forall m. CallableImpl m)
+      (forall m. MonadCallable m)
 
 arity :: Callable -> Int
 arity (Callable (UserDefinedFunction func _)) = length (funcParams func)

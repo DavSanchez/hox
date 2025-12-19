@@ -58,6 +58,7 @@ import Runtime.Value
     evalUnaryOp,
     isTruthy,
     lookupField,
+    setField,
   )
 
 type Interpreter = InterpreterT IO
@@ -285,6 +286,7 @@ evaluateExpr (VariableAssignment line name expr dist) = evaluateVarAssignment li
 evaluateExpr (Logical _ op e1 e2) = evaluateLogical op e1 e2
 evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argExprs
 evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
+evaluateExpr (Set line objectExpr propName valueExpr) = executeSet line objectExpr propName valueExpr
 
 executeUnary ::
   ( MonadState (ProgramState Value) m,
@@ -397,12 +399,28 @@ executeGet ::
 executeGet line objectExpr propName = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of
-    -- TODO this assumes I'm looking only for methods, not fields
     VCallable (Callable (UserDefinedClassInstance ci)) ->
       case lookupField propName ci of
         Just field -> pure field
         Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
     _ -> evalError line "Only instances have properties."
+
+executeSet ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Int -> Expression Resolution -> String -> Expression Resolution -> m Value
+executeSet line objectExpr propName valueExpr = do
+  objectValue <- evaluateExpr objectExpr
+  case objectValue of
+    VCallable (Callable (UserDefinedClassInstance ci)) -> do
+      value <- evaluateExpr valueExpr
+      let updatedInstance = setField propName value ci
+      -- returning the updated instance?
+      -- book returns the set value, but if we do that, what do we do with the updated instance?
+      pure (VCallable (Callable (UserDefinedClassInstance updatedInstance)))
+    _ -> evalError line "Only instances have fields."
 
 callCallable ::
   ( MonadError InterpreterError m,

@@ -102,6 +102,16 @@ data Expression a
       (Expression a)
       -- | The name of the property being accessed.
       String
+  | -- | A property assignment expression (e.g., object.property = value).
+    Set
+      -- | The line number where the property assignment happens.
+      Int
+      -- | The object expression.
+      (Expression a)
+      -- | The name of the property being assigned to.
+      String
+      -- | The expression whose value is being assigned to the property.
+      (Expression a)
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression a)
   | -- | A variable (identifier).
@@ -222,18 +232,15 @@ assignment = do
   expr <- orOp
   t <- peek
   if tokenType t == EQUAL
-    then varAssign expr
+    then case expr of
+      VariableExpr lineNum name _ -> do
+        void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
+        VariableAssignment lineNum name <$> assignment <*> pure Unresolved
+      Get lineNum object propName -> do
+        void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
+        Set lineNum object propName <$> assignment
+      _ -> fail "Invalid assignment target."
     else pure expr
-
--- | Variable assignment helper (assumes left side already parsed as variable).
--- (Internal helper; prefer using 'assignment')
-varAssign :: Expression Unresolved -> TokenParser (Expression Unresolved)
-varAssign expr = do
-  case expr of
-    VariableExpr lineNum name _ -> do
-      void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
-      VariableAssignment lineNum name <$> assignment <*> pure Unresolved
-    _ -> fail "Invalid assignment target."
 
 -- Logic
 
@@ -556,6 +563,7 @@ displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> display
 displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
 displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
+displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> propName <> " " <> displayExpr value <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name _) = name
 displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"

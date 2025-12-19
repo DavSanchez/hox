@@ -12,6 +12,7 @@ module Runtime.Value
     displayEvalErr,
     ClassInstance (..),
     lookupField,
+    setField,
   )
 where
 
@@ -50,6 +51,10 @@ instance Show ClassInstance where
 
 lookupField :: String -> ClassInstance -> Maybe Value
 lookupField fieldName (ClassInstance {classFields}) = M.lookup fieldName classFields
+
+setField :: String -> Value -> ClassInstance -> ClassInstance
+setField fieldName value ci@(ClassInstance {classFields}) =
+  ci {classFields = M.insert fieldName value classFields}
 
 newtype Callable = Callable CallableType
 

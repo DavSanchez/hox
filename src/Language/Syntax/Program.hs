@@ -6,6 +6,7 @@ module Language.Syntax.Program
     Variable (..),
     Function (..),
     Class (..),
+    lookupMethod,
     FunctionKind (..),
   )
 where
@@ -14,8 +15,9 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
+import Data.Map qualified as M
 import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
-import Language.Syntax.Expression (Expression (Literal), Literal (Bool), Phase, Unresolved (..), expression)
+import Language.Syntax.Expression (Expression (Literal), Literal (Bool), Phase, Resolution, Unresolved (..), expression)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
 
 -- GADTs for AST with phase parameter
@@ -36,10 +38,13 @@ data Declaration a
 
 data Class a = Class
   { className :: String,
-    classMethods :: [Function a],
+    classMethods :: M.Map String (Function a),
     classLine :: Int
   }
   deriving stock (Show, Eq, Functor, Foldable, Traversable)
+
+lookupMethod :: String -> Class Resolution -> Maybe (Function Resolution)
+lookupMethod methodName cls = M.lookup methodName (classMethods cls)
 
 type Block a = [Declaration a]
 
@@ -118,15 +123,14 @@ classDeclaration = do
   void $ satisfy ((RIGHT_BRACE ==) . tokenType) "Expect '}' after class body."
   pure $ Class name methods l
 
-parseClassMethods :: TokenParser [Function Unresolved]
+parseClassMethods :: TokenParser (M.Map String (Function Unresolved))
 parseClassMethods = do
   t <- peek
   if tokenType t == RIGHT_BRACE
-    then pure []
+    then pure mempty
     else do
       func <- function KMethod
-      rest <- parseClassMethods
-      pure (func : rest)
+      M.insert (funcName func) func <$> parseClassMethods
 
 data FunctionKind
   = KFunction

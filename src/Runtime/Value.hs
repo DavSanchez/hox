@@ -22,7 +22,7 @@ import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
 import Data.Map qualified as M
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
-import Language.Syntax.Program (Function (..))
+import Language.Syntax.Program (Class (className), Function (..))
 import Numeric (showFFloat)
 import Runtime.Environment (Environment)
 import Runtime.Error (EvalError (..), displayEvalErr)
@@ -39,15 +39,15 @@ data Value
   deriving stock (Eq, Show)
 
 data ClassInstance = ClassInstance
-  { className :: String,
+  { class' :: Class Resolution,
     classFields :: M.Map String Value
   }
 
 instance Eq ClassInstance where
-  (ClassInstance {className = c1}) == (ClassInstance {className = c2}) = c1 == c2
+  (ClassInstance {class' = c1}) == (ClassInstance {class' = c2}) = c1 == c2
 
 instance Show ClassInstance where
-  show (ClassInstance {className = c}) = c ++ " instance"
+  show (ClassInstance {class' = c}) = className c ++ " instance"
 
 lookupField :: String -> ClassInstance -> Maybe Value
 lookupField fieldName (ClassInstance {classFields}) = M.lookup fieldName classFields

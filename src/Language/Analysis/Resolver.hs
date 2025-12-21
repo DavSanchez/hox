@@ -24,7 +24,7 @@ data ResolverState = ResolverState
   }
   deriving stock (Show, Eq)
 
-data FunctionType = TypeNone | TypeFunction
+data FunctionType = TypeNone | TypeFunction | TypeMethod
   deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool
@@ -114,7 +114,7 @@ resolveBlock block = do
 resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
 resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
-resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl func
+resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl TypeFunction func
 resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
 
 resolveClassDecl :: Class Unresolved -> Resolver (Class Resolution)
@@ -124,8 +124,7 @@ resolveClassDecl (Class className methods line) = do
     Left err -> throwError err
     Right st' -> put st'
   modify (define className)
-  -- TODO review this one
-  methods' <- mapM resolveFuncDecl methods
+  methods' <- mapM (resolveFuncDecl TypeMethod) methods
   pure (Class className methods' line)
 
 resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
@@ -158,14 +157,14 @@ withFunctionType t action = do
   modify (\s -> s {currentFunction = oldType})
   pure res
 
-resolveFuncDecl :: Function Unresolved -> Resolver (Function Resolution)
-resolveFuncDecl (Function fName fParams fBody fLine) = do
+resolveFuncDecl :: FunctionType -> Function Unresolved -> Resolver (Function Resolution)
+resolveFuncDecl fType (Function fName fParams fBody fLine) = do
   st <- get
   case declare fName fLine st of
     Left err -> throwError err
     Right st' -> put st'
   modify (define fName)
-  fBody' <- withFunctionType TypeFunction $ resolveFunction fParams fBody
+  fBody' <- withFunctionType fType $ resolveFunction fParams fBody
   pure (Function fName fParams fBody' fLine)
 
 resolveFunction :: [(String, Int)] -> [Declaration Unresolved] -> Resolver [Declaration Resolution]

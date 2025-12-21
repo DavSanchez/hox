@@ -30,6 +30,7 @@ import Language.Syntax.Program
     Program (..),
     Statement (..),
     Variable (..),
+    lookupMethod,
     parseProgram,
   )
 import Language.Syntax.Token (Token)
@@ -123,14 +124,15 @@ declareClass ::
     MonadIO m
   ) =>
   Class Resolution -> m ()
-declareClass cls = do
+declareClass cls@(Class className methods _) = do
   state <- get
-  let Class {className = className'} = cls
-  declare className' VNil state
+  declare className VNil state
   -- Build class object
-  let classInstance = ClassInstance {className = className', classFields = mempty}
+  let env = environment state
+      methods' = fmap (\f -> VCallable (Callable (UserDefinedFunction f env))) methods
+      classInstance = ClassInstance cls methods'
       callable = Callable (UserDefinedClassInstance classInstance)
-  declare className' (VCallable callable) state
+  declare className (VCallable callable) state
 
 declareFunction ::
   ( MonadState (ProgramState Value) m,
@@ -402,7 +404,11 @@ executeGet line objectExpr propName = do
     VCallable (Callable (UserDefinedClassInstance ci)) ->
       case lookupField propName ci of
         Just field -> pure field
-        Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
+        Nothing -> case lookupMethod propName (class' ci) of
+          Just methodFunc ->
+            let callable = VCallable (Callable (UserDefinedFunction methodFunc mempty)) -- no env
+             in pure callable
+          Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
     _ -> evalError line "Only instances have properties."
 
 executeSet ::

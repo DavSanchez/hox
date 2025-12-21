@@ -289,6 +289,7 @@ evaluateExpr (Logical _ op e1 e2) = evaluateLogical op e1 e2
 evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argExprs
 evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
 evaluateExpr (Set line objectExpr propName valueExpr) = executeSet line objectExpr propName valueExpr
+evaluateExpr (This line dist) = executeVariable line "this" dist
 
 executeUnary ::
   ( MonadState (ProgramState Value) m,
@@ -405,8 +406,11 @@ executeGet line objectExpr propName = do
       case lookupField propName ci of
         Just field -> pure field
         Nothing -> case lookupMethod propName (class' ci) of
-          Just methodFunc ->
-            let callable = VCallable (Callable (UserDefinedFunction methodFunc mempty)) -- no env
+          Just methodFunc -> do
+            -- Return the method binding `this` to the instance
+            st <- get
+            declare "this" objectValue st
+            let callable = VCallable (Callable (UserDefinedFunction methodFunc (environment st)))
              in pure callable
           Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
     _ -> evalError line "Only instances have properties."

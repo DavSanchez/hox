@@ -124,7 +124,11 @@ resolveClassDecl (Class className methods line) = do
     Left err -> throwError err
     Right st' -> put st'
   modify (define className)
+  modify beginScope
+  -- Bind `this` in the class scope
+  modify (define "this")
   methods' <- mapM (resolveFuncDecl TypeMethod) methods
+  modify endScope
   pure (Class className methods' line)
 
 resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
@@ -198,6 +202,7 @@ resolveExpr (BinaryOperation line op left right) = BinaryOperation line op <$> r
 resolveExpr (Call line callee args) = Call line <$> resolveExpr callee <*> mapM resolveExpr args
 resolveExpr (Get line object propName) = Get line <$> resolveExpr object <*> pure propName
 resolveExpr (Set line object propName value) = Set line <$> resolveExpr object <*> pure propName <*> resolveExpr value
+resolveExpr (This line _) = resolveLocal "this" >>= \dist -> pure (This line dist)
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right

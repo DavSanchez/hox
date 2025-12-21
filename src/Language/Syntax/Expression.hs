@@ -112,6 +112,13 @@ data Expression a
       String
       -- | The expression whose value is being assigned to the property.
       (Expression a)
+  | -- | A 'this' keyword expression.
+    This
+      -- | The line number where 'this' appears.
+      Int
+      -- | The resolution distance (depth).
+      -- `this` resolves as a variable. Thoush it should always be local (?)
+      a
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression a)
   | -- | A variable (identifier).
@@ -470,6 +477,7 @@ primary =
     <|> parseNumber
     <|> parseString
     <|> parseGrouping
+    <|> parseThis
     <|> parseVarName
 
 -- | Parses 'false'.
@@ -511,6 +519,14 @@ parseString = do
 -- (Right (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))),[Token {tokenType = EOF, line = 1}])
 parseGrouping :: TokenParser (Expression Unresolved)
 parseGrouping = Grouping <$> parens expression
+
+-- | Parses 'this' keyword as variable expression.
+-- >>> runParser parseThis (tokensOf "this")
+-- (Right (This 1 Unresolved),[Token {tokenType = EOF, line = 1}])
+parseThis :: TokenParser (Expression Unresolved)
+parseThis = do
+  Token {tokenType = THIS, line = lineNum} <- satisfy ((THIS ==) . tokenType) ("Expect " <> displayTokenType THIS <> ".")
+  pure (This lineNum Unresolved)
 
 -- | Parses variable name as expression.
 -- >>> runParser parseVarName (tokensOf "foo")
@@ -564,6 +580,7 @@ displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> disp
 displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
 displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
 displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> propName <> " " <> displayExpr value <> ")"
+displayExpr (This _ _) = "this"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name _) = name
 displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"

@@ -10,16 +10,19 @@ module Runtime.Value
     evalBinaryOp,
     EvalError (..),
     displayEvalErr,
-    ClassInstance (..),
+    LoxClass (..),
+    LoxClassInstance (..),
     lookupField,
     setField,
+    newClassInstance,
   )
 where
 
 import Control.Monad.Error.Class (MonadError)
-import Control.Monad.IO.Class (MonadIO)
+import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
+import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map qualified as M
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
 import Language.Syntax.Program (Class (className), Function (..))
@@ -36,25 +39,39 @@ data Value
   | VString String
   | VNil
   | VCallable Callable
+  | VClassInstance LoxClassInstance
   deriving stock (Eq, Show)
 
-data ClassInstance = ClassInstance
-  { class' :: Class Resolution,
-    classFields :: M.Map String Value
+data LoxClass = LoxClass
+  { classDefinition :: Class Resolution,
+    classClosure :: Closure
+  }
+  deriving stock (Eq)
+
+data LoxClassInstance = LoxClassInstance
+  { loxClass :: LoxClass,
+    instanceFields :: IORef (M.Map String Value)
   }
 
-instance Eq ClassInstance where
-  (ClassInstance {class' = c1}) == (ClassInstance {class' = c2}) = c1 == c2
+instance Eq LoxClassInstance where
+  (LoxClassInstance _ f1) == (LoxClassInstance _ f2) = f1 == f2
 
-instance Show ClassInstance where
-  show (ClassInstance {class' = c}) = className c ++ " instance"
+instance Show LoxClassInstance where
+  show (LoxClassInstance {loxClass}) = className (classDefinition loxClass) ++ " instance"
 
-lookupField :: String -> ClassInstance -> Maybe Value
-lookupField fieldName (ClassInstance {classFields}) = M.lookup fieldName classFields
+newClassInstance :: (MonadIO m) => LoxClass -> m LoxClassInstance
+newClassInstance cls = do
+  fields <- liftIO $ newIORef mempty
+  pure (LoxClassInstance cls fields)
 
-setField :: String -> Value -> ClassInstance -> ClassInstance
-setField fieldName value ci@(ClassInstance {classFields}) =
-  ci {classFields = M.insert fieldName value classFields}
+lookupField :: (MonadIO m) => String -> LoxClassInstance -> m (Maybe Value)
+lookupField fieldName (LoxClassInstance {instanceFields}) = do
+  fields <- liftIO $ readIORef instanceFields
+  pure $ M.lookup fieldName fields
+
+setField :: (MonadIO m) => String -> Value -> LoxClassInstance -> m ()
+setField fieldName value (LoxClassInstance {instanceFields}) =
+  liftIO $ modifyIORef' instanceFields (M.insert fieldName value)
 
 newtype Callable = Callable CallableType
 
@@ -69,7 +86,6 @@ type MonadCallable m =
 
 data CallableType
   = UserDefinedFunction (Function Resolution) Closure
-  | UserDefinedClassInstance ClassInstance
   | NativeFunction
       -- | arity
       Int
@@ -77,11 +93,12 @@ data CallableType
       String
       -- | implementation
       (forall m. MonadCallable m)
+  | ClassConstructor LoxClass
 
 arity :: Callable -> Int
 arity (Callable (UserDefinedFunction func _)) = length (funcParams func)
 arity (Callable (NativeFunction n _ _)) = n
-arity (Callable (UserDefinedClassInstance _)) = 0
+arity (Callable (ClassConstructor _)) = 0
 
 instance Eq Callable where
   (==) :: Callable -> Callable -> Bool
@@ -89,13 +106,14 @@ instance Eq Callable where
     case (func1, func2) of
       (UserDefinedFunction f1 _, UserDefinedFunction f2 _) -> funcName f1 == funcName f2
       (NativeFunction _ name1 _, NativeFunction _ name2 _) -> name1 == name2
+      (ClassConstructor c1, ClassConstructor c2) -> c1 == c2
       _ -> False
 
 instance Show Callable where
   show :: Callable -> String
   show (Callable (UserDefinedFunction func _)) = "<fn " ++ funcName func ++ ">"
   show (Callable (NativeFunction {})) = "<native fn>"
-  show (Callable (UserDefinedClassInstance ci)) = show ci
+  show (Callable (ClassConstructor c)) = className (classDefinition c)
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False
@@ -117,6 +135,7 @@ displayValue (VBool b) = (map toLower . show) b
 displayValue (VString s) = s
 displayValue VNil = "nil"
 displayValue (VCallable callable) = show callable
+displayValue (VClassInstance instance') = show instance'
 
 evalUnaryOp :: Int -> UnaryOperator -> Value -> Either EvalError Value
 evalUnaryOp _ UMinus (VNumber n) = Right $ VNumber (negate n)

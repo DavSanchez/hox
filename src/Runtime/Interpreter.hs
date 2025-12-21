@@ -34,6 +34,8 @@ import Language.Syntax.Program
     parseProgram,
   )
 import Language.Syntax.Token (Token)
+import Runtime.Environment (newFrame)
+import Runtime.Environment qualified as Env
 import Runtime.Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Runtime.Interpreter.Error (InterpreterError (..), handleErr)
 import Runtime.Interpreter.State
@@ -49,9 +51,10 @@ import Runtime.Interpreter.StdEnv (mkStdEnv)
 import Runtime.Value
   ( Callable (..),
     CallableType (..),
-    ClassInstance (..),
     EvalError (EvalError),
-    Value (VCallable, VNil),
+    LoxClass (..),
+    LoxClassInstance (..),
+    Value (..),
     arity,
     displayValue,
     evalBinaryOp,
@@ -59,6 +62,7 @@ import Runtime.Value
     evalUnaryOp,
     isTruthy,
     lookupField,
+    newClassInstance,
     setField,
   )
 
@@ -124,14 +128,13 @@ declareClass ::
     MonadIO m
   ) =>
   Class Resolution -> m ()
-declareClass cls@(Class className methods _) = do
+declareClass cls@(Class className _ _) = do
   state <- get
   declare className VNil state
   -- Build class object
   let env = environment state
-      methods' = fmap (\f -> VCallable (Callable (UserDefinedFunction f env))) methods
-      classInstance = ClassInstance cls methods'
-      callable = Callable (UserDefinedClassInstance classInstance)
+      loxClass = LoxClass cls env
+      callable = Callable (ClassConstructor loxClass)
   declare className (VCallable callable) state
 
 declareFunction ::
@@ -289,6 +292,7 @@ evaluateExpr (Logical _ op e1 e2) = evaluateLogical op e1 e2
 evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argExprs
 evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
 evaluateExpr (Set line objectExpr propName valueExpr) = executeSet line objectExpr propName valueExpr
+evaluateExpr (This line dist) = executeVariable line "this" dist
 
 executeUnary ::
   ( MonadState (ProgramState Value) m,
@@ -401,15 +405,35 @@ executeGet ::
 executeGet line objectExpr propName = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of
-    VCallable (Callable (UserDefinedClassInstance ci)) ->
-      case lookupField propName ci of
-        Just field -> pure field
-        Nothing -> case lookupMethod propName (class' ci) of
-          Just methodFunc ->
-            let callable = VCallable (Callable (UserDefinedFunction methodFunc mempty)) -- no env
-             in pure callable
-          Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
+    VClassInstance instance' -> do
+      field <- lookupField propName instance'
+      case field of
+        Just f -> pure f
+        Nothing -> bindMethod instance' propName line
     _ -> evalError line "Only instances have properties."
+
+bindMethod ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  LoxClassInstance ->
+  String ->
+  Int ->
+  m Value
+bindMethod instance' method line = do
+  let cls = loxClass instance'
+  case lookupMethod method (classDefinition cls) of
+    Just func -> do
+      -- Create environment with 'this' bound to instance
+      newFrame' <- newFrame
+      Env.declareInFrame "this" (VClassInstance instance') newFrame'
+      let closure = classClosure cls
+          newEnv = newFrame' : closure
+      pure $ VCallable (Callable (UserDefinedFunction func newEnv))
+    Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
+      where
+        propName = method
 
 executeSet ::
   ( MonadState (ProgramState Value) m,
@@ -420,12 +444,10 @@ executeSet ::
 executeSet line objectExpr propName valueExpr = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of
-    VCallable (Callable (UserDefinedClassInstance ci)) -> do
+    VClassInstance instance' -> do
       value <- evaluateExpr valueExpr
-      let updatedInstance = setField propName value ci
-      -- returning the updated instance?
-      -- book returns the set value, but if we do that, what do we do with the updated instance?
-      pure (VCallable (Callable (UserDefinedClassInstance updatedInstance)))
+      setField propName value instance'
+      pure value
     _ -> evalError line "Only instances have fields."
 
 callCallable ::
@@ -463,4 +485,4 @@ call (Callable (UserDefinedFunction func closure)) args = do
   modify (\ps -> ps {environment = environment state})
   pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
-call clsi@(Callable (UserDefinedClassInstance _)) _ = pure (VCallable clsi)
+call (Callable (ClassConstructor loxClass)) _ = VClassInstance <$> newClassInstance loxClass

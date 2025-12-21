@@ -1,4 +1,4 @@
-module Resolver
+module Language.Analysis.Resolver
   ( programResolver,
     runResolver,
     Resolver,
@@ -15,8 +15,8 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Expression (Expression (..), Resolution (..), Unresolved (..))
-import Program (Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
+import Language.Syntax.Expression (Expression (..), Resolution (..), Unresolved (..))
+import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
@@ -24,7 +24,7 @@ data ResolverState = ResolverState
   }
   deriving stock (Show, Eq)
 
-data FunctionType = TypeNone | TypeFunction
+data FunctionType = TypeNone | TypeFunction | TypeMethod
   deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool
@@ -112,9 +112,24 @@ resolveBlock block = do
   pure decls
 
 resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
+resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
-resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl func
+resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl TypeFunction func
 resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
+
+resolveClassDecl :: Class Unresolved -> Resolver (Class Resolution)
+resolveClassDecl (Class className methods line) = do
+  st <- get
+  case declare className line st of
+    Left err -> throwError err
+    Right st' -> put st'
+  modify (define className)
+  modify beginScope
+  -- Bind `this` in the class scope
+  modify (define "this")
+  methods' <- mapM (resolveFuncDecl TypeMethod) methods
+  modify endScope
+  pure (Class className methods' line)
 
 resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
@@ -146,14 +161,14 @@ withFunctionType t action = do
   modify (\s -> s {currentFunction = oldType})
   pure res
 
-resolveFuncDecl :: Function Unresolved -> Resolver (Function Resolution)
-resolveFuncDecl (Function fName fParams fBody fLine) = do
+resolveFuncDecl :: FunctionType -> Function Unresolved -> Resolver (Function Resolution)
+resolveFuncDecl fType (Function fName fParams fBody fLine) = do
   st <- get
   case declare fName fLine st of
     Left err -> throwError err
     Right st' -> put st'
   modify (define fName)
-  fBody' <- withFunctionType TypeFunction $ resolveFunction fParams fBody
+  fBody' <- withFunctionType fType $ resolveFunction fParams fBody
   pure (Function fName fParams fBody' fLine)
 
 resolveFunction :: [(String, Int)] -> [Declaration Unresolved] -> Resolver [Declaration Resolution]
@@ -185,6 +200,9 @@ resolveExpr (VariableAssignment line name value _) = do
   pure (VariableAssignment line name value' dist)
 resolveExpr (BinaryOperation line op left right) = BinaryOperation line op <$> resolveExpr left <*> resolveExpr right
 resolveExpr (Call line callee args) = Call line <$> resolveExpr callee <*> mapM resolveExpr args
+resolveExpr (Get line object propName) = Get line <$> resolveExpr object <*> pure propName
+resolveExpr (Set line object propName value) = Set line <$> resolveExpr object <*> pure propName <*> resolveExpr value
+resolveExpr (This line _) = resolveLocal "this" >>= \dist -> pure (This line dist)
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right

@@ -1,24 +1,25 @@
-module Interpreter.State
+module Runtime.Interpreter.State
   ( ProgramState (..),
     newProgramState,
     declare,
-    assign,
-    find,
     pushScope,
     pushClosureScope,
     popScope,
+    getVariable,
+    assignVariable,
   )
 where
 
 import Control.Monad.IO.Class (MonadIO)
-import Environment
+import Language.Syntax.Expression (Resolution (..))
+import Runtime.Environment
   ( Environment,
     Frame,
-    assignInEnv,
+    assignAtDistance,
     assignInFrame,
     declareInFrame,
-    findInEnv,
     findInFrame,
+    getAtDistance,
     newFrame,
     popFrame,
     pushFrame,
@@ -40,19 +41,21 @@ declare name val state = do
     [] -> declareInFrame name val (globals state)
     (top : _) -> declareInFrame name val top
 
-assign :: (MonadIO m) => String -> a -> ProgramState a -> m Bool
-assign name val state = do
-  foundInLocals <- assignInEnv name val (environment state)
-  if foundInLocals
-    then pure True
-    else assignInFrame name val (globals state)
+getVariable :: (MonadIO m) => String -> Resolution -> ProgramState a -> m (Maybe a)
+getVariable name distance st =
+  let env' = environment st
+      globals' = globals st
+   in case distance of
+        Local d -> getAtDistance d name env'
+        Global -> findInFrame name globals'
 
-find :: (MonadIO m) => String -> ProgramState a -> m (Maybe a)
-find name state = do
-  inLocals <- findInEnv name (environment state)
-  case inLocals of
-    Just v -> pure (Just v)
-    Nothing -> findInFrame name (globals state)
+assignVariable :: (MonadIO m) => String -> Resolution -> a -> ProgramState a -> m Bool
+assignVariable name distance val st =
+  let env' = environment st
+      globals' = globals st
+   in case distance of
+        Local d -> assignAtDistance d name val env'
+        Global -> assignInFrame name val globals'
 
 pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)
 pushScope state = do

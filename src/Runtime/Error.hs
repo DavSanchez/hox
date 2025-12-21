@@ -1,4 +1,4 @@
-module Evaluation.Error (EvalError (..), displayEvalErr) where
+module Runtime.Error (EvalError (..), displayEvalErr) where
 
 data EvalError = EvalError
   { errorLine :: Int,

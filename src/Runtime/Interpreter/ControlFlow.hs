@@ -1,4 +1,4 @@
-module Interpreter.ControlFlow (ControlFlow (..)) where
+module Runtime.Interpreter.ControlFlow (ControlFlow (..)) where
 
 import Data.Bifunctor (Bifunctor (bimap))
 

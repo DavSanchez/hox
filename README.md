@@ -12,5 +12,5 @@
 - [x] Chapter 09: Control Flow
 - [x] Chapter 10: Functions
 - [x] Chapter 11: Resolving and Binding
-- [ ] Chapter 12: Classes
+- [x] Chapter 12: Classes
 - [ ] Chapter 13: Inheritance

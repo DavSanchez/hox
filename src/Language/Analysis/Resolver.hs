@@ -20,11 +20,15 @@ import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Pro
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
-    currentFunction :: FunctionType
+    currentFunction :: FunctionType,
+    currentClass :: ClassType
   }
   deriving stock (Show, Eq)
 
-data FunctionType = TypeNone | TypeFunction | TypeMethod
+data FunctionType = FTypeNone | FTypeFunction | FTypeMethod
+  deriving stock (Show, Eq)
+
+data ClassType = CTypeNone | CTypeClass
   deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool
@@ -58,7 +62,7 @@ runResolver resolver =
    in stateAction newScope
 
 newScope :: ResolverState
-newScope = ResolverState (mempty :| []) TypeNone
+newScope = ResolverState (mempty :| []) FTypeNone CTypeNone
 
 beginScope :: ResolverState -> ResolverState
 beginScope rs = rs {scopes = mempty <| scopes rs}
@@ -114,8 +118,16 @@ resolveBlock block = do
 resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
 resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
-resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl TypeFunction func
+resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl FTypeFunction func
 resolveDeclaration (Statement stmt) = Statement <$> resolveStatement stmt
+
+withClassType :: ClassType -> Resolver a -> Resolver a
+withClassType cType action = do
+  oldType <- gets currentClass
+  modify (\s -> s {currentClass = cType})
+  res <- action
+  modify (\s -> s {currentClass = oldType})
+  pure res
 
 resolveClassDecl :: Class Unresolved -> Resolver (Class Resolution)
 resolveClassDecl (Class className methods line) = do
@@ -124,12 +136,17 @@ resolveClassDecl (Class className methods line) = do
     Left err -> throwError err
     Right st' -> put st'
   modify (define className)
+  methods' <- withClassType CTypeClass $ resolveClassMethods methods
+  pure (Class className methods' line)
+
+resolveClassMethods :: (Traversable t) => t (Function Unresolved) -> Resolver (t (Function Resolution))
+resolveClassMethods methods = do
   modify beginScope
   -- Bind `this` in the class scope
   modify (define "this")
-  methods' <- mapM (resolveFuncDecl TypeMethod) methods
+  methods' <- mapM (resolveFuncDecl FTypeMethod) methods
   modify endScope
-  pure (Class className methods' line)
+  pure methods'
 
 resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
@@ -137,7 +154,7 @@ resolveStatement (IfStmt cond thenBranch elseBranch) = IfStmt <$> resolveExpr co
 resolveStatement (PrintStmt expr) = PrintStmt <$> resolveExpr expr
 resolveStatement (ReturnStmt line maybeExpr) = do
   fType <- gets currentFunction
-  when (fType == TypeNone) $
+  when (fType == FTypeNone) $
     throwError (ResolveError "return" line "Can't return from top-level code.")
   ReturnStmt line <$> traverse resolveExpr maybeExpr
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
@@ -171,7 +188,7 @@ resolveFuncDecl fType (Function fName fParams fBody fLine) = do
   fBody' <- withFunctionType fType $ resolveFunction fParams fBody
   pure (Function fName fParams fBody' fLine)
 
-resolveFunction :: [(String, Int)] -> [Declaration Unresolved] -> Resolver [Declaration Resolution]
+resolveFunction :: (Traversable t) => t (String, Int) -> t (Declaration Unresolved) -> Resolver (t (Declaration Resolution))
 resolveFunction params body = do
   modify beginScope
   for_ params $ \(param, line) -> do
@@ -202,7 +219,11 @@ resolveExpr (BinaryOperation line op left right) = BinaryOperation line op <$> r
 resolveExpr (Call line callee args) = Call line <$> resolveExpr callee <*> mapM resolveExpr args
 resolveExpr (Get line object propName) = Get line <$> resolveExpr object <*> pure propName
 resolveExpr (Set line object propName value) = Set line <$> resolveExpr object <*> pure propName <*> resolveExpr value
-resolveExpr (This line _) = resolveLocal "this" >>= \dist -> pure (This line dist)
+resolveExpr (This line _) = do
+  cType <- gets currentClass
+  when (cType == CTypeNone) $
+    throwError (ResolveError "this" line "Can't use 'this' outside of a class.")
+  resolveLocal "this" >>= \dist -> pure (This line dist)
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right

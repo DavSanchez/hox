@@ -4,16 +4,17 @@ import Control.Monad ((>=>))
 import Data.Either (partitionEithers)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
-import Language.Parser (runParser)
+import Language.Analysis.Resolver (displayResolveError)
+import Language.Parser (displayParseErr, runParser)
 import Language.Scanner (displayErr, scanTokens)
 import Language.Syntax.Expression (Expression, Resolution (Global), Unresolved (..), displayExpr, expression)
 import Language.Syntax.Token (Token, displayToken)
+import Runtime.Error (displayEvalErr)
 import Runtime.Interpreter
   ( Interpreter,
     InterpreterError (..),
     buildTreeWalkInterpreter,
     evaluateExpr,
-    handleErr,
     runInterpreter,
   )
 import Runtime.Value (Value, displayValue)
@@ -111,3 +112,18 @@ run =
   runInterpreter >=> \case
     Left err -> handleErr err
     Right v -> pure v
+
+handleErr :: InterpreterError -> IO ()
+handleErr = \case
+  Syntax errs -> do
+    mapM_ (hPutStrLn stderr . displayErr) errs
+    exitWith (ExitFailure 65)
+  Parse err -> do
+    mapM_ (hPutStrLn stderr . displayParseErr) err
+    exitWith (ExitFailure 65)
+  Resolve err -> do
+    hPutStrLn stderr (displayResolveError err)
+    exitWith (ExitFailure 65)
+  Eval err -> do
+    hPutStrLn stderr (displayEvalErr err)
+    exitWith (ExitFailure 70)

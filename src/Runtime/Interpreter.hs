@@ -493,4 +493,17 @@ call (Callable (UserDefinedFunction func closure isInit)) args = do
         [] -> pure result
     else pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
-call (Callable (ClassConstructor loxClass)) _ = VClassInstance <$> newClassInstance loxClass
+call (Callable (ClassConstructor loxClass)) args = do
+  instance' <- newClassInstance loxClass
+  let cls = classDefinition loxClass
+  case lookupMethod "init" cls of
+    Just func -> do
+      -- Create environment with 'this' bound to instance
+      newFrame' <- newFrame
+      Env.declareInFrame "this" (VClassInstance instance') newFrame'
+      let closure = classClosure loxClass
+          newEnv = newFrame' : closure
+          -- isInit is True for initializer
+          callable = Callable (UserDefinedFunction func newEnv True)
+      call callable args
+    Nothing -> pure (VClassInstance instance')

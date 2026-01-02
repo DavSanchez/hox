@@ -79,7 +79,7 @@
                     , ("10", "chap10_functions")
                     , ("11", "chap11_resolving")
                     , ("12", "chap12_classes")
-                    -- , ("13", "chap13_inheritance")
+                    , ("13", "chap13_inheritance")
                     ]
 
                   orderedChapters :: [String]
@@ -92,7 +92,7 @@
                     , "chap10_functions"
                     , "chap11_resolving"
                     , "chap12_classes"
-                    -- , "chap13_inheritance"
+                    , "chap13_inheritance"
                     ]
 
                   getChapter :: String -> Maybe String

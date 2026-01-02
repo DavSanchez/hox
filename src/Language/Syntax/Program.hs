@@ -97,13 +97,11 @@ parseProgram' tokens = case runParser declaration tokens of
 -- | Drop the current token and keep going until we find a statement start
 synchronize :: [Token] -> [Token]
 synchronize [] = []
-synchronize [_] = []
-synchronize (_ : Token {tokenType = EOF} : _) = [] -- EOF found, stop
 synchronize (Token {tokenType = SEMICOLON} : tt) = tt -- Statement boundary after semicolon, stop
-synchronize (_ : t : tt) =
+synchronize (t : tt) =
   if tokenType t `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN]
     then t : tt -- Statement boundary start, return it
-    else synchronize (t : tt)
+    else synchronize tt
 
 declaration :: TokenParser (Declaration Unresolved)
 declaration = do
@@ -323,5 +321,11 @@ parseScopedProgram = Parser $ \tokens -> go tokens []
     go [] decls = (Right (reverse decls), [])
     go (Token {tokenType = RIGHT_BRACE} : rest) decls = (Right (reverse decls), rest)
     go ts decls = case runParser declaration ts of
-      (Left err, rest) -> (Left err, rest)
+      (Left err, rest) -> (Left err, skipToClose rest)
       (Right decl, rest) -> go rest (decl : decls)
+
+skipToClose :: [Token] -> [Token]
+skipToClose [] = []
+skipToClose (Token {tokenType = RIGHT_BRACE} : xs) = xs
+skipToClose (Token {tokenType = LEFT_BRACE} : xs) = skipToClose xs
+skipToClose (_ : xs) = skipToClose xs

@@ -9,7 +9,7 @@ module Runtime.Interpreter
   )
 where
 
-import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
+import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
@@ -235,7 +235,7 @@ executeBlock decls = do
   state <- get
   newState <- pushScope state
   put newState
-  r <- go decls
+  r <- catchError (go decls) (\e -> modify popScope >> throwError e)
   modify popScope
   pure r
   where

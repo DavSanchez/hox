@@ -25,7 +25,7 @@ data ResolverState = ResolverState
   }
   deriving stock (Show, Eq)
 
-data FunctionType = FTypeNone | FTypeFunction | FTypeMethod
+data FunctionType = FTypeNone | FTypeFunction | FTypeMethod | FTypeInitializer
   deriving stock (Show, Eq)
 
 data ClassType = CTypeNone | CTypeClass
@@ -144,7 +144,7 @@ resolveClassMethods methods = do
   modify beginScope
   -- Bind `this` in the class scope
   modify (define "this")
-  methods' <- mapM (resolveFuncDecl FTypeMethod) methods
+  methods' <- mapM (\f -> resolveFuncDecl (if funcName f == "init" then FTypeInitializer else FTypeMethod) f) methods
   modify endScope
   pure methods'
 
@@ -156,6 +156,10 @@ resolveStatement (ReturnStmt line maybeExpr) = do
   fType <- gets currentFunction
   when (fType == FTypeNone) $
     throwError (ResolveError "return" line "Can't return from top-level code.")
+  when (fType == FTypeInitializer) $
+    case maybeExpr of
+      Just _ -> throwError (ResolveError "return" line "Can't return a value from an initializer.")
+      Nothing -> pure ()
   ReturnStmt line <$> traverse resolveExpr maybeExpr
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
 resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block

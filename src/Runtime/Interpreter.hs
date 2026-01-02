@@ -144,7 +144,7 @@ declareFunction ::
   Function Resolution -> m ()
 declareFunction func = do
   env <- gets environment
-  let callable = Callable (UserDefinedFunction func env)
+  let callable = Callable (UserDefinedFunction func env False)
   state <- get
   declare (funcName func) (VCallable callable) state
 
@@ -430,7 +430,8 @@ bindMethod instance' method line = do
       Env.declareInFrame "this" (VClassInstance instance') newFrame'
       let closure = classClosure cls
           newEnv = newFrame' : closure
-      pure (Callable (UserDefinedFunction func newEnv))
+          isInit = method == "init"
+      pure (Callable (UserDefinedFunction func newEnv isInit))
     Nothing -> evalError line ("Undefined property '" <> method <> "'.")
 
 executeSet ::
@@ -465,7 +466,7 @@ callCallable line callable args = do
         else call callable args
 
 call :: Callable -> [Value] -> forall m. (MonadState (ProgramState Value) m, MonadError InterpreterError m, MonadIO m) => m Value
-call (Callable (UserDefinedFunction func closure)) args = do
+call (Callable (UserDefinedFunction func closure isInit)) args = do
   state <- get
   newState <- pushClosureScope closure state
   put newState
@@ -481,6 +482,15 @@ call (Callable (UserDefinedFunction func closure)) args = do
   result <- runFunctionBody (funcBody func)
   -- Restore the previous environment
   modify (\ps -> ps {environment = environment state})
-  pure result
+  if isInit
+    then do
+      case closure of
+        (thisFrame : _) -> do
+          maybeThis <- Env.findInFrame "this" thisFrame
+          case maybeThis of
+            Just thisVal -> pure thisVal
+            Nothing -> pure result
+        [] -> pure result
+    else pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
 call (Callable (ClassConstructor loxClass)) _ = VClassInstance <$> newClassInstance loxClass

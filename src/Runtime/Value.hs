@@ -85,7 +85,7 @@ type MonadCallable m =
   [Value] -> m Value
 
 data CallableType
-  = UserDefinedFunction (Function Resolution) Closure
+  = UserDefinedFunction (Function Resolution) Closure Bool
   | NativeFunction
       -- | arity
       Int
@@ -96,7 +96,7 @@ data CallableType
   | ClassConstructor LoxClass
 
 arity :: Callable -> Int
-arity (Callable (UserDefinedFunction func _)) = length . funcParams $ func
+arity (Callable (UserDefinedFunction func _ _)) = length . funcParams $ func
 arity (Callable (NativeFunction n _ _)) = n
 arity (Callable (ClassConstructor cls)) =
   let cMethods = (classMethods . classDefinition) cls
@@ -107,14 +107,14 @@ instance Eq Callable where
   (==) :: Callable -> Callable -> Bool
   (Callable func1) == (Callable func2) =
     case (func1, func2) of
-      (UserDefinedFunction f1 _, UserDefinedFunction f2 _) -> funcName f1 == funcName f2
+      (UserDefinedFunction f1 _ _, UserDefinedFunction f2 _ _) -> funcName f1 == funcName f2
       (NativeFunction _ name1 _, NativeFunction _ name2 _) -> name1 == name2
       (ClassConstructor c1, ClassConstructor c2) -> c1 == c2
       _ -> False
 
 instance Show Callable where
   show :: Callable -> String
-  show (Callable (UserDefinedFunction func _)) = "<fn " ++ funcName func ++ ">"
+  show (Callable (UserDefinedFunction func _ _)) = "<fn " ++ funcName func ++ ">"
   show (Callable (NativeFunction {})) = "<native fn>"
   show (Callable (ClassConstructor c)) = className (classDefinition c)
 

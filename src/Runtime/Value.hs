@@ -107,7 +107,7 @@ instance Eq Callable where
   (==) :: Callable -> Callable -> Bool
   (Callable func1) == (Callable func2) =
     case (func1, func2) of
-      (UserDefinedFunction f1 _ _, UserDefinedFunction f2 _ _) -> funcName f1 == funcName f2
+      (UserDefinedFunction f1 c1 _, UserDefinedFunction f2 c2 _) -> funcName f1 == funcName f2 && c1 == c2
       (NativeFunction _ name1 _, NativeFunction _ name2 _) -> name1 == name2
       (ClassConstructor c1, ClassConstructor c2) -> c1 == c2
       _ -> False

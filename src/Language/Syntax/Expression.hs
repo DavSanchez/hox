@@ -14,7 +14,7 @@
 --               | "(" expression ")" ;
 -- @
 --  This naturally translates to Haskell ADTs, so that's what we will use.
-module Expression
+module Language.Syntax.Expression
   ( -- * Data types
     Expression (..),
     Literal (..),
@@ -37,13 +37,13 @@ import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
 import Data.Proxy (Proxy)
-import Parser (TokenParser, peek, satisfy)
-import Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
+import Language.Parser (TokenParser, peek, satisfy)
+import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 
 -- $setup
--- >>> import Parser (runParser)
--- >>> import Scanner (scanTokens)
--- >>> import Token (Token (..), TokenType (..))
+-- >>> import Language.Parser (runParser)
+-- >>> import Language.Scanner (scanTokens)
+-- >>> import Language.Syntax.Token (Token (..), TokenType (..))
 -- >>> import Data.List.NonEmpty qualified as NE
 -- >>> let tokensOf src = [t | Right t <- NE.toList (scanTokens src)]
 
@@ -94,6 +94,31 @@ data Expression a
       (Expression a)
       -- | The list of argument expressions.
       [Expression a]
+  | -- | A property access expression (e.g., object.property).
+    Get
+      -- | The line number where the property access happens.
+      Int
+      -- | The object expression.
+      (Expression a)
+      -- | The name of the property being accessed.
+      String
+  | -- | A property assignment expression (e.g., object.property = value).
+    Set
+      -- | The line number where the property assignment happens.
+      Int
+      -- | The object expression.
+      (Expression a)
+      -- | The name of the property being assigned to.
+      String
+      -- | The expression whose value is being assigned to the property.
+      (Expression a)
+  | -- | A 'this' keyword expression.
+    This
+      -- | The line number where 'this' appears.
+      Int
+      -- | The resolution distance (depth).
+      -- `this` resolves as a variable. Thoush it should always be local (?)
+      a
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression a)
   | -- | A variable (identifier).
@@ -214,18 +239,15 @@ assignment = do
   expr <- orOp
   t <- peek
   if tokenType t == EQUAL
-    then varAssign expr
+    then case expr of
+      VariableExpr lineNum name _ -> do
+        void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
+        VariableAssignment lineNum name <$> assignment <*> pure Unresolved
+      Get lineNum object propName -> do
+        void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
+        Set lineNum object propName <$> assignment
+      _ -> fail "Invalid assignment target."
     else pure expr
-
--- | Variable assignment helper (assumes left side already parsed as variable).
--- (Internal helper; prefer using 'assignment')
-varAssign :: Expression Unresolved -> TokenParser (Expression Unresolved)
-varAssign expr = do
-  case expr of
-    VariableExpr lineNum name _ -> do
-      void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
-      VariableAssignment lineNum name <$> assignment <*> pure Unresolved
-    _ -> fail "Invalid assignment target."
 
 -- Logic
 
@@ -371,19 +393,27 @@ unary = (parseBang <|> parseMinusUnary) <*> unary <|> call
 call :: TokenParser (Expression Unresolved)
 call = do
   expr <- primary
-  t <- peek
-  if tokenType t == LEFT_PAREN
-    then finishCall expr
-    else pure expr
+  tt <- tokenType <$> peek
+  case tt of
+    LEFT_PAREN -> finishCall expr
+    DOT -> finishCall expr
+    _ -> pure expr
 
 -- | Tail-recursive call finisher (continues parsing chained calls).
 -- (Internal helper; prefer using 'call')
 finishCall :: Expression Unresolved -> TokenParser (Expression Unresolved)
 finishCall expr = do
   t <- peek
-  if tokenType t == LEFT_PAREN
-    then functionArgs >>= finishCall . Call (line t) expr
-    else pure expr
+  case tokenType t of
+    LEFT_PAREN -> functionArgs >>= finishCall . Call (line t) expr
+    DOT -> getProperty expr >>= finishCall
+    _ -> pure expr
+
+getProperty :: Expression Unresolved -> TokenParser (Expression Unresolved)
+getProperty expr = do
+  void $ satisfy ((DOT ==) . tokenType) ("Expect " <> displayTokenType DOT <> ".")
+  Token (IDENTIFIER name) lineNum <- satisfy (isIdentifier . tokenType) "Expect property name after '.'."
+  pure (Get lineNum expr name)
 
 -- | Parses argument list including parentheses.
 functionArgs :: TokenParser [Expression Unresolved]
@@ -447,6 +477,7 @@ primary =
     <|> parseNumber
     <|> parseString
     <|> parseGrouping
+    <|> parseThis
     <|> parseVarName
 
 -- | Parses 'false'.
@@ -488,6 +519,14 @@ parseString = do
 -- (Right (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))),[Token {tokenType = EOF, line = 1}])
 parseGrouping :: TokenParser (Expression Unresolved)
 parseGrouping = Grouping <$> parens expression
+
+-- | Parses 'this' keyword as variable expression.
+-- >>> runParser parseThis (tokensOf "this")
+-- (Right (This 1 Unresolved),[Token {tokenType = EOF, line = 1}])
+parseThis :: TokenParser (Expression Unresolved)
+parseThis = do
+  Token {tokenType = THIS, line = lineNum} <- satisfy ((THIS ==) . tokenType) ("Expect " <> displayTokenType THIS <> ".")
+  pure (This lineNum Unresolved)
 
 -- | Parses variable name as expression.
 -- >>> runParser parseVarName (tokensOf "foo")
@@ -539,6 +578,9 @@ displayExpr (Literal lit) = displayLit lit
 displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> displayExpr expr <> ")"
 displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
+displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
+displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> propName <> " " <> displayExpr value <> ")"
+displayExpr (This _ _) = "this"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name _) = name
 displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"

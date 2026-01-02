@@ -1,5 +1,15 @@
 # Revision history for `hox`
 
+## 0.12.0.0 -- 2025-12-XX
+
+* Chapter 12: Classes
+* Changed versioning. This project is all API changes,
+so I should be changing the correct numbers.
+
+## 0.1.11.0 -- 2025-12-08
+
+* Chapter 11: Resolving and Binding.
+
 ## 0.1.10.0 -- 2025-11-07
 
 * Chapter 10: Functions.

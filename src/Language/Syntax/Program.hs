@@ -1,10 +1,13 @@
-module Program
+module Language.Syntax.Program
   ( Program (..),
     parseProgram,
     Declaration (..),
     Statement (..),
     Variable (..),
     Function (..),
+    Class (..),
+    lookupMethod,
+    FunctionKind (..),
   )
 where
 
@@ -12,9 +15,10 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
-import Expression (Expression (Literal), Literal (Bool), Phase, Unresolved (..), expression)
-import Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
-import Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
+import Data.Map qualified as M
+import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
+import Language.Syntax.Expression (Expression (Literal), Literal (Bool), Phase, Resolution, Unresolved (..), expression)
+import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
 
 -- GADTs for AST with phase parameter
 data Program a where
@@ -25,7 +29,22 @@ deriving stock instance (Show a) => Show (Program a)
 
 deriving stock instance (Eq a) => Eq (Program a)
 
-data Declaration a = Fun (Function a) | VarDecl (Variable a) | Statement (Statement a) deriving stock (Show, Eq, Functor, Foldable, Traversable)
+data Declaration a
+  = ClassDecl (Class a)
+  | Fun (Function a)
+  | VarDecl (Variable a)
+  | Statement (Statement a)
+  deriving stock (Show, Eq, Functor, Foldable, Traversable)
+
+data Class a = Class
+  { className :: String,
+    classMethods :: M.Map String (Function a),
+    classLine :: Int
+  }
+  deriving stock (Show, Eq, Functor, Foldable, Traversable)
+
+lookupMethod :: String -> Class Resolution -> Maybe (Function Resolution)
+lookupMethod methodName cls = M.lookup methodName (classMethods cls)
 
 type Block a = [Declaration a]
 
@@ -78,31 +97,57 @@ parseProgram' tokens = case runParser declaration tokens of
 -- | Drop the current token and keep going until we find a statement start
 synchronize :: [Token] -> [Token]
 synchronize [] = []
-synchronize [_] = []
-synchronize (_ : Token {tokenType = EOF} : _) = [] -- EOF found, stop
 synchronize (Token {tokenType = SEMICOLON} : tt) = tt -- Statement boundary after semicolon, stop
-synchronize (_ : t : tt) =
+synchronize (t : tt) =
   if tokenType t `elem` [CLASS, FUN, VAR, FOR, IF, WHILE, PRINT, RETURN]
     then t : tt -- Statement boundary start, return it
-    else synchronize (t : tt)
+    else synchronize tt
 
 declaration :: TokenParser (Declaration Unresolved)
 declaration = do
   t <- peek
   case tokenType t of
-    FUN -> Fun <$> function "function"
+    CLASS -> ClassDecl <$> classDeclaration
+    FUN -> Fun <$> function KFunction
     VAR -> VarDecl <$> variable
     _ -> Statement <$> statement
 
-function :: String -> TokenParser (Function Unresolved)
+classDeclaration :: TokenParser (Class Unresolved)
+classDeclaration = do
+  void $ satisfy ((CLASS ==) . tokenType) ("Expect " <> displayTokenType CLASS <> ".")
+  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) "Expect class name."
+  void $ satisfy ((LEFT_BRACE ==) . tokenType) "Expect '{' before class body."
+  methods <- parseClassMethods
+  void $ satisfy ((RIGHT_BRACE ==) . tokenType) "Expect '}' after class body."
+  pure $ Class name methods l
+
+parseClassMethods :: TokenParser (M.Map String (Function Unresolved))
+parseClassMethods = do
+  t <- peek
+  if tokenType t == RIGHT_BRACE
+    then pure mempty
+    else do
+      func <- function KMethod
+      M.insert (funcName func) func <$> parseClassMethods
+
+data FunctionKind
+  = KFunction
+  | KMethod
+  deriving stock (Eq)
+
+displayFunctionKind :: FunctionKind -> String
+displayFunctionKind KFunction = "function"
+displayFunctionKind KMethod = "method"
+
+function :: FunctionKind -> TokenParser (Function Unresolved)
 function kind = do
-  void $ satisfy ((FUN ==) . tokenType) ("Expect " <> displayTokenType FUN <> ".")
-  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) ("Expect " <> kind <> " name.")
-  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect '(' after " <> kind <> " name.")
+  when (kind == KFunction) $ void $ satisfy ((FUN ==) . tokenType) ("Expect " <> displayTokenType FUN <> ".")
+  Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) ("Expect " <> displayFunctionKind kind <> " name.")
+  void $ satisfy ((LEFT_PAREN ==) . tokenType) ("Expect '(' after " <> displayFunctionKind kind <> " name.")
   params <- parseFunctionParameters
   when (length params >= 255) $ fail "Can't have more than 255 parameters."
   void $ satisfy ((RIGHT_PAREN ==) . tokenType) "Expect ')' after parameters."
-  void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> kind <> " body.") -- start function body
+  void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> displayFunctionKind kind <> " body.") -- start function body
   body <- parseScopedProgram
   pure $ Function name params body l
 
@@ -276,5 +321,11 @@ parseScopedProgram = Parser $ \tokens -> go tokens []
     go [] decls = (Right (reverse decls), [])
     go (Token {tokenType = RIGHT_BRACE} : rest) decls = (Right (reverse decls), rest)
     go ts decls = case runParser declaration ts of
-      (Left err, rest) -> (Left err, rest)
+      (Left err, rest) -> (Left err, skipToClose rest)
       (Right decl, rest) -> go rest (decl : decls)
+
+skipToClose :: [Token] -> [Token]
+skipToClose [] = []
+skipToClose (Token {tokenType = RIGHT_BRACE} : xs) = xs
+skipToClose (Token {tokenType = LEFT_BRACE} : xs) = skipToClose xs
+skipToClose (_ : xs) = skipToClose xs

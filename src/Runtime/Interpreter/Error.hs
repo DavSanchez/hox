@@ -1,16 +1,15 @@
-module Interpreter.Error
+module Runtime.Interpreter.Error
   ( InterpreterError (..),
     handleErr,
   )
 where
 
-import Evaluation.Error (EvalError, displayEvalErr)
-import GHC.IO.Handle.Text (hPutStrLn)
-import Parser (ParseError, displayParseErr)
-import Resolver (ResolveError, displayResolveError)
-import Scanner.Error (SyntaxError, displayErr)
+import Language.Analysis.Resolver (ResolveError, displayResolveError)
+import Language.Parser (ParseError, displayParseErr)
+import Language.Scanner.Error (SyntaxError, displayErr)
+import Runtime.Error (EvalError, displayEvalErr)
 import System.Exit (ExitCode (ExitFailure), exitWith)
-import System.IO (stderr)
+import System.IO (hPutStrLn, stderr)
 
 -- Error handling
 data InterpreterError

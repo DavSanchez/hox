@@ -6,7 +6,6 @@ module Runtime.Interpreter
     interpreterFailure,
     evaluateExpr,
     InterpreterError (..),
-    handleErr,
   )
 where
 
@@ -37,7 +36,7 @@ import Language.Syntax.Token (Token)
 import Runtime.Environment (newFrame)
 import Runtime.Environment qualified as Env
 import Runtime.Interpreter.ControlFlow (ControlFlow (Break, Continue))
-import Runtime.Interpreter.Error (InterpreterError (..), handleErr)
+import Runtime.Interpreter.Error (InterpreterError (..))
 import Runtime.Interpreter.State
   ( ProgramState (environment),
     assignVariable,

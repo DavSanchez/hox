@@ -409,7 +409,7 @@ executeGet line objectExpr propName = do
       field <- lookupField propName instance'
       case field of
         Just f -> pure f
-        Nothing -> bindMethod instance' propName line
+        Nothing -> VCallable <$> bindMethod instance' propName line
     _ -> evalError line "Only instances have properties."
 
 bindMethod ::
@@ -420,7 +420,7 @@ bindMethod ::
   LoxClassInstance ->
   String ->
   Int ->
-  m Value
+  m Callable
 bindMethod instance' method line = do
   let cls = loxClass instance'
   case lookupMethod method (classDefinition cls) of
@@ -430,10 +430,8 @@ bindMethod instance' method line = do
       Env.declareInFrame "this" (VClassInstance instance') newFrame'
       let closure = classClosure cls
           newEnv = newFrame' : closure
-      pure $ VCallable (Callable (UserDefinedFunction func newEnv))
-    Nothing -> evalError line ("Undefined property '" <> propName <> "'.")
-      where
-        propName = method
+      pure (Callable (UserDefinedFunction func newEnv))
+    Nothing -> evalError line ("Undefined property '" <> method <> "'.")
 
 executeSet ::
   ( MonadState (ProgramState Value) m,

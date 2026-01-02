@@ -25,7 +25,7 @@ import Data.Char (toLower)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map qualified as M
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
-import Language.Syntax.Program (Class (className), Function (..))
+import Language.Syntax.Program (Class (..), Function (..))
 import Numeric (showFFloat)
 import Runtime.Environment (Environment)
 import Runtime.Error (EvalError (..), displayEvalErr)
@@ -96,9 +96,12 @@ data CallableType
   | ClassConstructor LoxClass
 
 arity :: Callable -> Int
-arity (Callable (UserDefinedFunction func _)) = length (funcParams func)
+arity (Callable (UserDefinedFunction func _)) = length . funcParams $ func
 arity (Callable (NativeFunction n _ _)) = n
-arity (Callable (ClassConstructor _)) = 0
+arity (Callable (ClassConstructor cls)) =
+  let cMethods = (classMethods . classDefinition) cls
+      ctor = M.lookup "init" cMethods
+   in maybe 0 (length . funcParams) ctor
 
 instance Eq Callable where
   (==) :: Callable -> Callable -> Bool

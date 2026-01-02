@@ -1,3 +1,6 @@
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE UndecidableInstances #-}
+
 -- |
 --  This module would contain the types representing the expression AST of Lox.
 --
@@ -22,8 +25,8 @@ module Language.Syntax.Expression
     UnaryOperator (..),
     BinaryOperator (..),
     Resolution (..),
-    Unresolved (..),
-    Phase,
+    NotResolved (..),
+    Phase (..),
 
     -- * Parsing
     expression,
@@ -36,7 +39,7 @@ where
 import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
-import Data.Proxy (Proxy)
+import Data.Kind (Type)
 import Language.Parser (TokenParser, peek, satisfy)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 
@@ -47,27 +50,22 @@ import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isId
 -- >>> import Data.List.NonEmpty qualified as NE
 -- >>> let tokensOf src = [t | Right t <- NE.toList (scanTokens src)]
 
--- | A helper type to seal the `Phase` class.
--- It is not exported, so users cannot construct it.
-data Sealed = Sealed
+-- | Represents the phase of the AST: parsed but unresolved, or resolved.
+--
+-- We use a type-level tag to distinguish between the two phases.
+data Phase = Unresolved | Resolved
+  deriving stock (Show, Eq)
 
--- | A type class to restrict the phases of the AST.
-class Phase a where
-  -- | This method prevents external instances because 'Sealed' is not exported.
-  _sealed :: Proxy a -> Sealed
-
-instance Phase Unresolved where
-  _sealed _ = Sealed
-
-instance Phase Resolution where
-  _sealed _ = Sealed
+type family ResolutionInfo (p :: Phase) :: Type where
+  ResolutionInfo 'Unresolved = NotResolved
+  ResolutionInfo 'Resolved = Resolution
 
 -- | Represents an expression in the AST.
-data Expression a
+data Expression (p :: Phase)
   = -- | A literal value.
     Literal Literal
   | -- | Logical expression
-    Logical Int LogicalOperator (Expression a) (Expression a)
+    Logical Int LogicalOperator (Expression p) (Expression p)
   | -- | A unary operation.
     UnaryOperation
       -- | Line number where the operator appears.
@@ -75,7 +73,7 @@ data Expression a
       -- | The unary operator.
       UnaryOperator
       -- | The operand expression.
-      (Expression a)
+      (Expression p)
   | -- | A binary operation.
     BinaryOperation
       -- | Line number where the operator appears.
@@ -83,23 +81,23 @@ data Expression a
       -- | The binary operator.
       BinaryOperator
       -- | Left operand expression.
-      (Expression a)
+      (Expression p)
       -- | Right operand expression.
-      (Expression a)
+      (Expression p)
   | -- | A function call
     Call
       -- | The line number where the call happens.
       Int
       -- | The callee expression.
-      (Expression a)
+      (Expression p)
       -- | The list of argument expressions.
-      [Expression a]
+      [Expression p]
   | -- | A property access expression (e.g., object.property).
     Get
       -- | The line number where the property access happens.
       Int
       -- | The object expression.
-      (Expression a)
+      (Expression p)
       -- | The name of the property being accessed.
       String
   | -- | A property assignment expression (e.g., object.property = value).
@@ -107,20 +105,20 @@ data Expression a
       -- | The line number where the property assignment happens.
       Int
       -- | The object expression.
-      (Expression a)
+      (Expression p)
       -- | The name of the property being assigned to.
       String
       -- | The expression whose value is being assigned to the property.
-      (Expression a)
+      (Expression p)
   | -- | A 'this' keyword expression.
     This
       -- | The line number where 'this' appears.
       Int
       -- | The resolution distance (depth).
       -- `this` resolves as a variable. Thoush it should always be local (?)
-      a
+      (ResolutionInfo p)
   | -- | A grouped expression, e.g. @(a + b)@.
-    Grouping (Expression a)
+    Grouping (Expression p)
   | -- | A variable (identifier).
     VariableExpr
       -- | The line number where the variable appears.
@@ -128,17 +126,22 @@ data Expression a
       -- | The name of the variable.
       String
       -- | The resolution distance (depth).
-      a
+      (ResolutionInfo p)
   | VariableAssignment
       -- | The line number where the assignment happens.
       Int
       -- | The name of the variable being assigned to.
       String
       -- | The expression whose value is being assigned to the variable.
-      (Expression a)
+      (Expression p)
       -- | The resolution distance (depth).
-      a
-  deriving stock (Show, Eq, Ord, Functor, Foldable, Traversable)
+      (ResolutionInfo p)
+
+deriving stock instance (Show (ResolutionInfo p)) => Show (Expression p)
+
+deriving stock instance (Eq (ResolutionInfo p)) => Eq (Expression p)
+
+deriving stock instance (Ord (ResolutionInfo p)) => Ord (Expression p)
 
 -- | Represents the resolution status of a variable.
 data Resolution
@@ -149,7 +152,7 @@ data Resolution
   deriving stock (Show, Eq, Ord)
 
 -- | Represents an unresolved variable.
-data Unresolved = Unresolved
+data NotResolved = NotResolved
   deriving stock (Show, Eq, Ord)
 
 -- | Represents a literal value in the AST.
@@ -225,16 +228,16 @@ data BinaryOperator
 -- >>> runParser expression (tokensOf "1 + 2 * 3")
 -- (Right (BinaryOperation 1 Plus (Literal (Number 1.0)) (BinaryOperation 1 Star (Literal (Number 2.0)) (Literal (Number 3.0)))),[Token {tokenType = EOF, line = 1}])
 -- >>> runParser expression (tokensOf "a = b = 1")
--- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (Literal (Number 1.0)) Unresolved) Unresolved),[Token {tokenType = EOF, line = 1}])
+-- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (Literal (Number 1.0)) NotResolved) NotResolved),[Token {tokenType = EOF, line = 1}])
 -- >>> runParser expression (tokensOf "foo(1)(2)(3)")
--- (Right (Call 1 (Call 1 (Call 1 (VariableExpr 1 "foo" Unresolved) [Literal (Number 1.0)]) [Literal (Number 2.0)]) [Literal (Number 3.0)]),[Token {tokenType = EOF, line = 1}])
-expression :: TokenParser (Expression Unresolved)
+-- (Right (Call 1 (Call 1 (Call 1 (VariableExpr 1 "foo" NotResolved) [Literal (Number 1.0)]) [Literal (Number 2.0)]) [Literal (Number 3.0)]),[Token {tokenType = EOF, line = 1}])
+expression :: TokenParser (Expression 'Unresolved)
 expression = assignment
 
 -- | Assignment parser (handles right-associative '=' after an l-value).
 -- >>> runParser assignment (tokensOf "a = b = c")
--- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (VariableExpr 1 "c" Unresolved) Unresolved) Unresolved),[Token {tokenType = EOF, line = 1}])
-assignment :: TokenParser (Expression Unresolved)
+-- (Right (VariableAssignment 1 "a" (VariableAssignment 1 "b" (VariableExpr 1 "c" NotResolved) NotResolved) NotResolved),[Token {tokenType = EOF, line = 1}])
+assignment :: TokenParser (Expression 'Unresolved)
 assignment = do
   expr <- orOp
   t <- peek
@@ -242,7 +245,7 @@ assignment = do
     then case expr of
       VariableExpr lineNum name _ -> do
         void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
-        VariableAssignment lineNum name <$> assignment <*> pure Unresolved
+        VariableAssignment lineNum name <$> assignment <*> pure NotResolved
       Get lineNum object propName -> do
         void $ satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".")
         Set lineNum object propName <$> assignment
@@ -254,27 +257,27 @@ assignment = do
 -- | Logical OR parser.
 -- >>> runParser orOp (tokensOf "true or false or true")
 -- (Right (Logical 1 Or (Logical 1 Or (Literal (Bool True)) (Literal (Bool False))) (Literal (Bool True))),[Token {tokenType = EOF, line = 1}])
-orOp :: TokenParser (Expression Unresolved)
+orOp :: TokenParser (Expression 'Unresolved)
 orOp = leftAssociative andOp parseOr
 
 -- | Consumes a single 'or' operator.
 -- >>> let (Right f, _) = runParser parseOr (tokensOf "or")
 -- >>> displayExpr (f (Literal (Bool True)) (Literal (Bool False)))
 -- "(or true false)"
-parseOr :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseOr :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseOr = satisfy ((OR ==) . tokenType) ("Expect " <> displayTokenType OR <> ".") >>= \t -> pure (Logical (line t) Or)
 
 -- | Consumes a single 'and' operator.
 -- >>> let (Right f, _) = runParser parseAnd (tokensOf "and")
 -- >>> displayExpr (f (Literal (Bool True)) (Literal (Bool False)))
 -- "(and true false)"
-parseAnd :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseAnd :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseAnd = satisfy ((AND ==) . tokenType) ("Expect " <> displayTokenType AND <> ".") >>= \t -> pure (Logical (line t) And)
 
 -- | Logical AND parser.
 -- >>> runParser andOp (tokensOf "true and false and true")
 -- (Right (Logical 1 And (Logical 1 And (Literal (Bool True)) (Literal (Bool False))) (Literal (Bool True))),[Token {tokenType = EOF, line = 1}])
-andOp :: TokenParser (Expression Unresolved)
+andOp :: TokenParser (Expression 'Unresolved)
 andOp = leftAssociative equality parseAnd
 
 -- Equality
@@ -282,21 +285,21 @@ andOp = leftAssociative equality parseAnd
 -- | Equality / inequality chain parser.
 -- >>> runParser equality (tokensOf "1 == 2 != 3")
 -- (Right (BinaryOperation 1 BangEqual (BinaryOperation 1 EqualEqual (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))),[Token {tokenType = EOF, line = 1}])
-equality :: TokenParser (Expression Unresolved)
+equality :: TokenParser (Expression 'Unresolved)
 equality = leftAssociative comparison (parseEq <|> parseNeq)
 
 -- | Parses '==' operator.
 -- >>> let (Right f, _) = runParser parseEq (tokensOf "==")
 -- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
 -- "(== 1.0 2.0)"
-parseEq :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseEq :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseEq = satisfy ((EQUAL_EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) EqualEqual)
 
 -- | Parses '!=' operator.
 -- >>> let (Right f, _) = runParser parseNeq (tokensOf "!=")
 -- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
 -- "(!= 1.0 2.0)"
-parseNeq :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseNeq :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseNeq = satisfy ((BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType BANG_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) BangEqual)
 
 -- Comparison
@@ -304,35 +307,35 @@ parseNeq = satisfy ((BANG_EQUAL ==) . tokenType) ("Expect " <> displayTokenType 
 -- | Comparison chain parser (<, <=, >, >=).
 -- >>> runParser comparison (tokensOf "1 < 2 <= 3")
 -- (Right (BinaryOperation 1 LessEqual (BinaryOperation 1 Less (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))),[Token {tokenType = EOF, line = 1}])
-comparison :: TokenParser (Expression Unresolved)
+comparison :: TokenParser (Expression 'Unresolved)
 comparison = leftAssociative term (parseGT <|> parseGTE <|> parseLT <|> parseLTE)
 
 -- | Parses '>' operator.
 -- >>> let (Right f, _) = runParser parseGT (tokensOf ">")
 -- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 1)))
 -- "(> 2.0 1.0)"
-parseGT :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseGT :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseGT = satisfy ((GREATER ==) . tokenType) ("Expect " <> displayTokenType GREATER <> ".") >>= \token -> pure (BinaryOperation (line token) Greater)
 
 -- | Parses '>=' operator.
 -- >>> let (Right f, _) = runParser parseGTE (tokensOf ">=")
 -- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 1)))
 -- "(>= 2.0 1.0)"
-parseGTE :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseGTE :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseGTE = satisfy ((GREATER_EQUAL ==) . tokenType) ("Expect " <> displayTokenType GREATER_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) GreaterEqual)
 
 -- | Parses '<' operator.
 -- >>> let (Right f, _) = runParser parseLT (tokensOf "<")
 -- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
 -- "(< 1.0 2.0)"
-parseLT :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseLT :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseLT = satisfy ((LESS ==) . tokenType) ("Expect " <> displayTokenType LESS <> ".") >>= \token -> pure (BinaryOperation (line token) Less)
 
 -- | Parses '<=' operator.
 -- >>> let (Right f, _) = runParser parseLTE (tokensOf "<=")
 -- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
 -- "(<= 1.0 2.0)"
-parseLTE :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseLTE :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseLTE = satisfy ((LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType LESS_EQUAL <> ".") >>= \token -> pure (BinaryOperation (line token) LessEqual)
 
 -- Terms
@@ -340,21 +343,21 @@ parseLTE = satisfy ((LESS_EQUAL ==) . tokenType) ("Expect " <> displayTokenType 
 -- | Addition / subtraction left-associative chain.
 -- >>> runParser term (tokensOf "1 + 2 - 3 + 4")
 -- (Right (BinaryOperation 1 Plus (BinaryOperation 1 BMinus (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0))) (Literal (Number 3.0))) (Literal (Number 4.0))),[Token {tokenType = EOF, line = 1}])
-term :: TokenParser (Expression Unresolved)
+term :: TokenParser (Expression 'Unresolved)
 term = leftAssociative factor (parsePlus <|> parseMinus)
 
 -- | Parses '+' operator.
 -- >>> let (Right f, _) = runParser parsePlus (tokensOf "+")
 -- >>> displayExpr (f (Literal (Number 1)) (Literal (Number 2)))
 -- "(+ 1.0 2.0)"
-parsePlus :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parsePlus :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parsePlus = satisfy ((PLUS ==) . tokenType) ("Expect " <> displayTokenType PLUS <> ".") >>= \token -> pure (BinaryOperation (line token) Plus)
 
 -- | Parses '-' operator (binary minus).
 -- >>> let (Right f, _) = runParser parseMinus (tokensOf "-")
 -- >>> displayExpr (f (Literal (Number 3)) (Literal (Number 1)))
 -- "(- 3.0 1.0)"
-parseMinus :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseMinus :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseMinus = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (BinaryOperation (line token) BMinus)
 
 -- Factors
@@ -362,21 +365,21 @@ parseMinus = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MIN
 -- | Multiplication / division left-associative chain.
 -- >>> runParser factor (tokensOf "2 * 3 / 4")
 -- (Right (BinaryOperation 1 Slash (BinaryOperation 1 Star (Literal (Number 2.0)) (Literal (Number 3.0))) (Literal (Number 4.0))),[Token {tokenType = EOF, line = 1}])
-factor :: TokenParser (Expression Unresolved)
+factor :: TokenParser (Expression 'Unresolved)
 factor = leftAssociative unary (parseMul <|> parseDiv)
 
 -- | Parses '*' operator.
 -- >>> let (Right f, _) = runParser parseMul (tokensOf "*")
 -- >>> displayExpr (f (Literal (Number 2)) (Literal (Number 3)))
 -- "(* 2.0 3.0)"
-parseMul :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseMul :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseMul = satisfy ((STAR ==) . tokenType) ("Expect " <> displayTokenType STAR <> ".") >>= \token -> pure (BinaryOperation (line token) Star)
 
 -- | Parses '/' operator.
 -- >>> let (Right f, _) = runParser parseDiv (tokensOf "/")
 -- >>> displayExpr (f (Literal (Number 6)) (Literal (Number 2)))
 -- "(/ 6.0 2.0)"
-parseDiv :: TokenParser (Expression Unresolved -> Expression Unresolved -> Expression Unresolved)
+parseDiv :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved -> Expression 'Unresolved)
 parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH <> ".") >>= \token -> pure (BinaryOperation (line token) Slash)
 
 -- Unary expressions
@@ -384,13 +387,13 @@ parseDiv = satisfy ((SLASH ==) . tokenType) ("Expect " <> displayTokenType SLASH
 -- | Unary prefix parser for '!' and '-'.
 -- >>> runParser unary (tokensOf "!-5")
 -- (Right (UnaryOperation 1 Bang (UnaryOperation 1 UMinus (Literal (Number 5.0)))),[Token {tokenType = EOF, line = 1}])
-unary :: TokenParser (Expression Unresolved)
+unary :: TokenParser (Expression 'Unresolved)
 unary = (parseBang <|> parseMinusUnary) <*> unary <|> call
 
 -- | Function call (handles nested calls).
 -- >>> runParser call (tokensOf "foo(1)(2)(3)")
--- (Right (Call 1 (Call 1 (Call 1 (VariableExpr 1 "foo" Unresolved) [Literal (Number 1.0)]) [Literal (Number 2.0)]) [Literal (Number 3.0)]),[Token {tokenType = EOF, line = 1}])
-call :: TokenParser (Expression Unresolved)
+-- (Right (Call 1 (Call 1 (Call 1 (VariableExpr 1 "foo" NotResolved) [Literal (Number 1.0)]) [Literal (Number 2.0)]) [Literal (Number 3.0)]),[Token {tokenType = EOF, line = 1}])
+call :: TokenParser (Expression 'Unresolved)
 call = do
   expr <- primary
   tt <- tokenType <$> peek
@@ -401,7 +404,7 @@ call = do
 
 -- | Tail-recursive call finisher (continues parsing chained calls).
 -- (Internal helper; prefer using 'call')
-finishCall :: Expression Unresolved -> TokenParser (Expression Unresolved)
+finishCall :: Expression 'Unresolved -> TokenParser (Expression 'Unresolved)
 finishCall expr = do
   t <- peek
   case tokenType t of
@@ -409,14 +412,14 @@ finishCall expr = do
     DOT -> getProperty expr >>= finishCall
     _ -> pure expr
 
-getProperty :: Expression Unresolved -> TokenParser (Expression Unresolved)
+getProperty :: Expression 'Unresolved -> TokenParser (Expression 'Unresolved)
 getProperty expr = do
   void $ satisfy ((DOT ==) . tokenType) ("Expect " <> displayTokenType DOT <> ".")
   Token (IDENTIFIER name) lineNum <- satisfy (isIdentifier . tokenType) "Expect property name after '.'."
   pure (Get lineNum expr name)
 
 -- | Parses argument list including parentheses.
-functionArgs :: TokenParser [Expression Unresolved]
+functionArgs :: TokenParser [Expression 'Unresolved]
 functionArgs =
   satisfy ((LEFT_PAREN ==) . tokenType) ("Expect " <> displayTokenType LEFT_PAREN <> ".")
     *> argumentList
@@ -424,14 +427,14 @@ functionArgs =
 
 -- | Parses arguments (comma separated) without consuming closing ')'.
 -- (Internal helper; prefer 'functionArgs')
-argumentList :: TokenParser [Expression Unresolved]
+argumentList :: TokenParser [Expression 'Unresolved]
 argumentList = do
   t <- peek
   if tokenType t == RIGHT_PAREN
     then pure []
     else go 0 []
   where
-    go :: Int -> [Expression Unresolved] -> TokenParser [Expression Unresolved]
+    go :: Int -> [Expression 'Unresolved] -> TokenParser [Expression 'Unresolved]
     go n acc = do
       -- Enforce limit before consuming the next argument so the error
       -- is emitted for the offending identifier token.
@@ -452,14 +455,14 @@ argumentList = do
 -- >>> let (Right f, _) = runParser parseBang (tokensOf "!")
 -- >>> displayExpr (f (Literal (Bool True)))
 -- "(! true)"
-parseBang :: TokenParser (Expression Unresolved -> Expression Unresolved)
+parseBang :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved)
 parseBang = satisfy ((BANG ==) . tokenType) ("Expect " <> displayTokenType BANG <> ".") >>= \token -> pure (UnaryOperation (line token) Bang)
 
 -- | Parses unary '-'.
 -- >>> let (Right f, _) = runParser parseMinusUnary (tokensOf "-")
 -- >>> displayExpr (f (Literal (Number 5)))
 -- "(- 5.0)"
-parseMinusUnary :: TokenParser (Expression Unresolved -> Expression Unresolved)
+parseMinusUnary :: TokenParser (Expression 'Unresolved -> Expression 'Unresolved)
 parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenType MINUS <> ".") >>= \token -> pure (UnaryOperation (line token) UMinus)
 
 -- Primary expressions
@@ -468,8 +471,8 @@ parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenTyp
 -- >>> runParser primary (tokensOf "(1 + 2)")
 -- (Right (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))),[Token {tokenType = EOF, line = 1}])
 -- >>> runParser primary (tokensOf "identifier")
--- (Right (VariableExpr 1 "identifier" Unresolved),[Token {tokenType = EOF, line = 1}])
-primary :: TokenParser (Expression Unresolved)
+-- (Right (VariableExpr 1 "identifier" NotResolved),[Token {tokenType = EOF, line = 1}])
+primary :: TokenParser (Expression 'Unresolved)
 primary =
   parseFalse
     <|> parseTrue
@@ -483,25 +486,25 @@ primary =
 -- | Parses 'false'.
 -- >>> runParser parseFalse (tokensOf "false")
 -- (Right (Literal (Bool False)),[Token {tokenType = EOF, line = 1}])
-parseFalse :: TokenParser (Expression Unresolved)
+parseFalse :: TokenParser (Expression 'Unresolved)
 parseFalse = satisfy ((FALSE ==) . tokenType) ("Expect " <> displayTokenType FALSE <> ".") >> pure (Literal (Bool False))
 
 -- | Parses 'true'.
 -- >>> runParser parseTrue (tokensOf "true")
 -- (Right (Literal (Bool True)),[Token {tokenType = EOF, line = 1}])
-parseTrue :: TokenParser (Expression Unresolved)
+parseTrue :: TokenParser (Expression 'Unresolved)
 parseTrue = satisfy ((TRUE ==) . tokenType) ("Expect " <> displayTokenType TRUE <> ".") >> pure (Literal (Bool True))
 
 -- | Parses 'nil'.
 -- >>> runParser parseNil (tokensOf "nil")
 -- (Right (Literal Nil),[Token {tokenType = EOF, line = 1}])
-parseNil :: TokenParser (Expression Unresolved)
+parseNil :: TokenParser (Expression 'Unresolved)
 parseNil = satisfy ((NIL ==) . tokenType) ("Expect " <> displayTokenType NIL <> ".") >> pure (Literal Nil)
 
 -- | Parses numeric literal.
 -- >>> runParser parseNumber (tokensOf "42")
 -- (Right (Literal (Number 42.0)),[Token {tokenType = EOF, line = 1}])
-parseNumber :: TokenParser (Expression Unresolved)
+parseNumber :: TokenParser (Expression 'Unresolved)
 parseNumber = do
   Token (NUMBER _ n) _ <- satisfy (isNumber . tokenType) "a number"
   pure (Literal (Number n))
@@ -509,7 +512,7 @@ parseNumber = do
 -- | Parses string literal.
 -- >>> runParser parseString (tokensOf "\"hello\"")
 -- (Right (Literal (String "hello")),[Token {tokenType = EOF, line = 1}])
-parseString :: TokenParser (Expression Unresolved)
+parseString :: TokenParser (Expression 'Unresolved)
 parseString = do
   Token (STRING _ s) _ <- satisfy (isString . tokenType) "a string"
   pure (Literal (String s))
@@ -517,24 +520,24 @@ parseString = do
 -- | Parses parenthesized expression.
 -- >>> runParser parseGrouping (tokensOf "(1 + 2)")
 -- (Right (Grouping (BinaryOperation 1 Plus (Literal (Number 1.0)) (Literal (Number 2.0)))),[Token {tokenType = EOF, line = 1}])
-parseGrouping :: TokenParser (Expression Unresolved)
+parseGrouping :: TokenParser (Expression 'Unresolved)
 parseGrouping = Grouping <$> parens expression
 
 -- | Parses 'this' keyword as variable expression.
 -- >>> runParser parseThis (tokensOf "this")
--- (Right (This 1 Unresolved),[Token {tokenType = EOF, line = 1}])
-parseThis :: TokenParser (Expression Unresolved)
+-- (Right (This 1 NotResolved),[Token {tokenType = EOF, line = 1}])
+parseThis :: TokenParser (Expression 'Unresolved)
 parseThis = do
   Token {tokenType = THIS, line = lineNum} <- satisfy ((THIS ==) . tokenType) ("Expect " <> displayTokenType THIS <> ".")
-  pure (This lineNum Unresolved)
+  pure (This lineNum NotResolved)
 
 -- | Parses variable name as expression.
 -- >>> runParser parseVarName (tokensOf "foo")
--- (Right (VariableExpr 1 "foo" Unresolved),[Token {tokenType = EOF, line = 1}])
-parseVarName :: TokenParser (Expression Unresolved)
+-- (Right (VariableExpr 1 "foo" NotResolved),[Token {tokenType = EOF, line = 1}])
+parseVarName :: TokenParser (Expression 'Unresolved)
 parseVarName = do
   Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "Expect expression."
-  pure (VariableExpr lineNum name Unresolved)
+  pure (VariableExpr lineNum name NotResolved)
 
 -- Helpers
 

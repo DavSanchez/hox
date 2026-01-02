@@ -6,7 +6,7 @@ import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Language.Parser (runParser)
 import Language.Scanner (displayErr, scanTokens)
-import Language.Syntax.Expression (Expression, Resolution (Global), Unresolved (..), displayExpr, expression)
+import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (Global), displayExpr, expression)
 import Language.Syntax.Token (Token, displayToken)
 import Runtime.Interpreter
   ( Interpreter,
@@ -69,19 +69,32 @@ handleChap04Out :: Either InterpreterError [Token] -> IO ()
 handleChap04Out = either handleErr (mapM_ (putStrLn . displayToken))
 
 -- Chapter 06 operations
-runChapter06 :: [Token] -> Either InterpreterError (Expression Unresolved)
+runChapter06 :: [Token] -> Either InterpreterError (Expression 'Unresolved)
 runChapter06 s =
   let (result, _) = runParser expression s
    in case result of
         Left parseErr -> Left (Parse $ singleton parseErr)
-        Right expr -> Right (fmap (const Unresolved) expr)
+        Right expr -> Right expr
 
-handleChap06Out :: Either InterpreterError (Expression Unresolved) -> IO ()
+handleChap06Out :: Either InterpreterError (Expression 'Unresolved) -> IO ()
 handleChap06Out = either handleErr (putStrLn . displayExpr)
 
 -- Chapter 07 operations
-runChapter07 :: Expression Unresolved -> IO (Either InterpreterError Value)
-runChapter07 expr = runInterpreter $ evaluateExpr (fmap (const Global) expr)
+runChapter07 :: Expression 'Unresolved -> IO (Either InterpreterError Value)
+runChapter07 expr = runInterpreter $ evaluateExpr (resolveGlobal expr)
+  where
+    resolveGlobal :: Expression 'Unresolved -> Expression 'Resolved
+    resolveGlobal (Literal l) = Literal l
+    resolveGlobal (Logical line op left right) = Logical line op (resolveGlobal left) (resolveGlobal right)
+    resolveGlobal (UnaryOperation line op expr') = UnaryOperation line op (resolveGlobal expr')
+    resolveGlobal (BinaryOperation line op left right) = BinaryOperation line op (resolveGlobal left) (resolveGlobal right)
+    resolveGlobal (Call line callee args) = Call line (resolveGlobal callee) (map resolveGlobal args)
+    resolveGlobal (Get line obj name) = Get line (resolveGlobal obj) name
+    resolveGlobal (Set line obj name val) = Set line (resolveGlobal obj) name (resolveGlobal val)
+    resolveGlobal (This line _) = This line Global
+    resolveGlobal (Grouping expr') = Grouping (resolveGlobal expr')
+    resolveGlobal (VariableExpr line name _) = VariableExpr line name Global
+    resolveGlobal (VariableAssignment line name val _) = VariableAssignment line name (resolveGlobal val) Global
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . displayValue)

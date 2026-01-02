@@ -19,9 +19,9 @@ import Language.Syntax.Expression
   ( BinaryOperator,
     Expression (..),
     LogicalOperator (..),
+    Phase (..),
     Resolution (..),
     UnaryOperator,
-    Unresolved (..),
   )
 import Language.Syntax.Program
   ( Class (..),
@@ -105,7 +105,7 @@ programInterpreter ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Program Unresolved -> m ()
+  Program 'Unresolved -> m ()
 programInterpreter prog = do
   let (resolverResult, _) = runResolver (programResolver prog)
   case resolverResult of
@@ -117,7 +117,7 @@ interpretDecl ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Declaration Resolution -> m ()
+  Declaration 'Resolved -> m ()
 interpretDecl (ClassDecl cls) = declareClass cls
 interpretDecl (Fun function) = declareFunction function
 interpretDecl (VarDecl var) = declareVariable var
@@ -127,7 +127,7 @@ declareClass ::
   ( MonadState (ProgramState Value) m,
     MonadIO m
   ) =>
-  Class Resolution -> m ()
+  Class 'Resolved -> m ()
 declareClass cls@(Class className _ _) = do
   state <- get
   declare className VNil state
@@ -141,7 +141,7 @@ declareFunction ::
   ( MonadState (ProgramState Value) m,
     MonadIO m
   ) =>
-  Function Resolution -> m ()
+  Function 'Resolved -> m ()
 declareFunction func = do
   env <- gets environment
   let callable = Callable (UserDefinedFunction func env False)
@@ -153,7 +153,7 @@ runFunctionBody ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  [Declaration Resolution] -> m Value
+  [Declaration 'Resolved] -> m Value
 runFunctionBody [] = pure VNil
 runFunctionBody (d : ds) =
   interpretDeclF d >>= \case
@@ -165,7 +165,7 @@ interpretDeclF ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Declaration Resolution -> m (ControlFlow Value ())
+  Declaration 'Resolved -> m (ControlFlow Value ())
 interpretDeclF (ClassDecl c) = declareClass c $> Continue ()
 interpretDeclF (Statement s) = interpretStatementCF s
 interpretDeclF (VarDecl v) = declareVariable v $> Continue ()
@@ -176,7 +176,7 @@ declareVariable ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Variable Resolution -> m ()
+  Variable 'Resolved -> m ()
 declareVariable (Variable {varName, varInitializer}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
@@ -189,7 +189,7 @@ interpretStatement ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Statement Resolution -> m ()
+  Statement 'Resolved -> m ()
 interpretStatement s =
   interpretStatementCF s >>= \case
     Continue () -> pure ()
@@ -200,7 +200,7 @@ interpretStatementCF ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Statement Resolution -> m (ControlFlow Value ())
+  Statement 'Resolved -> m (ControlFlow Value ())
 interpretStatementCF (PrintStmt expr) = interpretPrint expr $> Continue ()
 interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
 interpretStatementCF (IfStmt expr thenBranch elseBranch) = executeIf expr thenBranch elseBranch
@@ -213,9 +213,9 @@ executeIf ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Expression Resolution ->
-  Statement Resolution ->
-  Maybe (Statement Resolution) ->
+  Expression 'Resolved ->
+  Statement 'Resolved ->
+  Maybe (Statement 'Resolved) ->
   m (ControlFlow Value ())
 executeIf expr thenBranch elseBranch = do
   cond <- isTruthy <$> evaluateExpr expr
@@ -230,7 +230,7 @@ executeBlock ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  [Declaration Resolution] ->
+  [Declaration 'Resolved] ->
   m (ControlFlow Value ())
 executeBlock decls = do
   state <- get
@@ -252,8 +252,8 @@ executeWhile ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Expression Resolution ->
-  Statement Resolution ->
+  Expression 'Resolved ->
+  Statement 'Resolved ->
   m (ControlFlow Value ())
 executeWhile expr stmt = loop
   where
@@ -272,7 +272,7 @@ interpretPrint ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Expression Resolution -> m ()
+  Expression 'Resolved -> m ()
 interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 
 -- | Evaluates an expression and returns a value or an error message in the monad.
@@ -281,7 +281,7 @@ evaluateExpr ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Expression Resolution -> m Value
+  Expression 'Resolved -> m Value
 evaluateExpr (Literal lit) = pure $ evalLiteral lit
 evaluateExpr (Grouping expr) = evaluateExpr expr
 evaluateExpr (UnaryOperation line op e) = executeUnary line op e
@@ -301,7 +301,7 @@ executeUnary ::
   ) =>
   Int ->
   UnaryOperator ->
-  Expression Resolution ->
+  Expression 'Resolved ->
   m Value
 executeUnary line op e = do
   v <- evaluateExpr e
@@ -314,8 +314,8 @@ executeBinary ::
   ) =>
   Int ->
   BinaryOperator ->
-  Expression Resolution ->
-  Expression Resolution ->
+  Expression 'Resolved ->
+  Expression 'Resolved ->
   m Value
 executeBinary line op e1 e2 = do
   v1 <- evaluateExpr e1
@@ -345,7 +345,7 @@ evaluateVarAssignment ::
   ) =>
   Int ->
   String ->
-  Expression Resolution ->
+  Expression 'Resolved ->
   Resolution ->
   m Value
 evaluateVarAssignment line name expr dist = do
@@ -367,8 +367,8 @@ evaluateLogical ::
     MonadIO m
   ) =>
   LogicalOperator ->
-  Expression Resolution ->
-  Expression Resolution ->
+  Expression 'Resolved ->
+  Expression 'Resolved ->
   m Value
 evaluateLogical op e1 e2 =
   evaluateExpr e1
@@ -383,8 +383,8 @@ executeCall ::
     MonadIO m
   ) =>
   Int ->
-  Expression Resolution ->
-  [Expression Resolution] ->
+  Expression 'Resolved ->
+  [Expression 'Resolved] ->
   m Value
 executeCall line calleeExpr argExprs = do
   callee <- evaluateExpr calleeExpr
@@ -399,7 +399,7 @@ executeGet ::
     MonadIO m
   ) =>
   Int ->
-  Expression Resolution ->
+  Expression 'Resolved ->
   String ->
   m Value
 executeGet line objectExpr propName = do
@@ -439,7 +439,7 @@ executeSet ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Int -> Expression Resolution -> String -> Expression Resolution -> m Value
+  Int -> Expression 'Resolved -> String -> Expression 'Resolved -> m Value
 executeSet line objectExpr propName valueExpr = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of

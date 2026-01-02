@@ -15,7 +15,7 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Language.Syntax.Expression (Expression (..), Resolution (..), Unresolved (..))
+import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (..))
 import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
 data ResolverState = ResolverState
@@ -105,17 +105,17 @@ resolveLocal name = do
         else pure Global
     Nothing -> pure Global
 
-programResolver :: Program Unresolved -> Resolver (Program Resolution)
+programResolver :: Program 'Unresolved -> Resolver (Program 'Resolved)
 programResolver (Program decls) = Program <$> mapM resolveDeclaration decls
 
-resolveBlock :: [Declaration Unresolved] -> Resolver [Declaration Resolution]
+resolveBlock :: [Declaration 'Unresolved] -> Resolver [Declaration 'Resolved]
 resolveBlock block = do
   modify beginScope
   decls <- mapM resolveDeclaration block
   modify endScope
   pure decls
 
-resolveDeclaration :: Declaration Unresolved -> Resolver (Declaration Resolution)
+resolveDeclaration :: Declaration 'Unresolved -> Resolver (Declaration 'Resolved)
 resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
 resolveDeclaration (VarDecl var) = VarDecl <$> resolveVarDecl var
 resolveDeclaration (Fun func) = Fun <$> resolveFuncDecl FTypeFunction func
@@ -129,7 +129,7 @@ withClassType cType action = do
   modify (\s -> s {currentClass = oldType})
   pure res
 
-resolveClassDecl :: Class Unresolved -> Resolver (Class Resolution)
+resolveClassDecl :: Class 'Unresolved -> Resolver (Class 'Resolved)
 resolveClassDecl (Class className methods line) = do
   st <- get
   case declare className line st of
@@ -139,7 +139,7 @@ resolveClassDecl (Class className methods line) = do
   methods' <- withClassType CTypeClass $ resolveClassMethods methods
   pure (Class className methods' line)
 
-resolveClassMethods :: (Traversable t) => t (Function Unresolved) -> Resolver (t (Function Resolution))
+resolveClassMethods :: (Traversable t) => t (Function 'Unresolved) -> Resolver (t (Function 'Resolved))
 resolveClassMethods methods = do
   modify beginScope
   -- Bind `this` in the class scope
@@ -148,7 +148,7 @@ resolveClassMethods methods = do
   modify endScope
   pure methods'
 
-resolveStatement :: Statement Unresolved -> Resolver (Statement Resolution)
+resolveStatement :: Statement 'Unresolved -> Resolver (Statement 'Resolved)
 resolveStatement (ExprStmt expr) = ExprStmt <$> resolveExpr expr
 resolveStatement (IfStmt cond thenBranch elseBranch) = IfStmt <$> resolveExpr cond <*> resolveStatement thenBranch <*> traverse resolveStatement elseBranch
 resolveStatement (PrintStmt expr) = PrintStmt <$> resolveExpr expr
@@ -164,7 +164,7 @@ resolveStatement (ReturnStmt line maybeExpr) = do
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
 resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block
 
-resolveVarDecl :: Variable Unresolved -> Resolver (Variable Resolution)
+resolveVarDecl :: Variable 'Unresolved -> Resolver (Variable 'Resolved)
 resolveVarDecl (Variable vName vValue vLine) = do
   st <- get
   case declare vName vLine st of
@@ -182,7 +182,7 @@ withFunctionType t action = do
   modify (\s -> s {currentFunction = oldType})
   pure res
 
-resolveFuncDecl :: FunctionType -> Function Unresolved -> Resolver (Function Resolution)
+resolveFuncDecl :: FunctionType -> Function 'Unresolved -> Resolver (Function 'Resolved)
 resolveFuncDecl fType (Function fName fParams fBody fLine) = do
   st <- get
   case declare fName fLine st of
@@ -192,7 +192,11 @@ resolveFuncDecl fType (Function fName fParams fBody fLine) = do
   fBody' <- withFunctionType fType $ resolveFunction fParams fBody
   pure (Function fName fParams fBody' fLine)
 
-resolveFunction :: (Traversable t) => t (String, Int) -> t (Declaration Unresolved) -> Resolver (t (Declaration Resolution))
+resolveFunction ::
+  (Traversable t) =>
+  t (String, Int) ->
+  t (Declaration 'Unresolved) ->
+  Resolver (t (Declaration 'Resolved))
 resolveFunction params body = do
   modify beginScope
   for_ params $ \(param, line) -> do
@@ -205,7 +209,7 @@ resolveFunction params body = do
   modify endScope
   pure body'
 
-resolveExpr :: Expression Unresolved -> Resolver (Expression Resolution)
+resolveExpr :: Expression 'Unresolved -> Resolver (Expression 'Resolved)
 resolveExpr (VariableExpr line name _) = do
   scopesList <- gets scopes
   let currentScope = NE.head scopesList

@@ -91,7 +91,7 @@
                     , "chap09_control"
                     , "chap10_functions"
                     , "chap11_resolving"
-                    -- , "chap12_classes"
+                    , "chap12_classes"
                     -- , "chap13_inheritance"
                     ]
 

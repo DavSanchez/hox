@@ -24,7 +24,7 @@ import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map qualified as M
-import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Resolution, UnaryOperator (..))
+import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Phase (Resolved), UnaryOperator (..))
 import Language.Syntax.Program (Class (..), Function (..))
 import Numeric (showFFloat)
 import Runtime.Environment (Environment)
@@ -43,7 +43,7 @@ data Value
   deriving stock (Eq, Show)
 
 data LoxClass = LoxClass
-  { classDefinition :: Class Resolution,
+  { classDefinition :: Class 'Resolved,
     classClosure :: Closure
   }
   deriving stock (Eq)
@@ -85,7 +85,7 @@ type MonadCallable m =
   [Value] -> m Value
 
 data CallableType
-  = UserDefinedFunction (Function Resolution) Closure Bool
+  = UserDefinedFunction (Function 'Resolved) Closure Bool
   | NativeFunction
       -- | arity
       Int

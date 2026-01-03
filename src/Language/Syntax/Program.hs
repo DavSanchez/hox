@@ -24,9 +24,9 @@ import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isId
 
 newtype Program (p :: Phase) = Program [Declaration p]
 
-deriving stock instance (Show (Declaration p)) => Show (Program p)
+deriving stock instance (Show (Expression p)) => Show (Program p)
 
-deriving stock instance (Eq (Declaration p)) => Eq (Program p)
+deriving stock instance (Eq (Expression p)) => Eq (Program p)
 
 data Declaration (p :: Phase)
   = ClassDecl (Class p)

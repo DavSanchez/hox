@@ -115,7 +115,6 @@ data Expression (p :: Phase)
       -- | The line number where 'this' appears.
       Int
       -- | The resolution distance (depth).
-      -- `this` resolves as a variable. Thoush it should always be local (?)
       (ResolutionInfo p)
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression p)

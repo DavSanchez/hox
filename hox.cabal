@@ -104,6 +104,11 @@ common common-options
       -Wdata-kinds-tc
       -Wdefaulted-exception-context
       -Wincomplete-record-selectors
+      -Wdeprecated-type-abstractions
+
+  if impl(ghc >=9.12)
+    ghc-options:
+      -Wview-pattern-signatures
 
 library
   -- Import common warning flags.

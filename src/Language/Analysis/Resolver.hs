@@ -15,6 +15,7 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
+import Data.Maybe (isJust)
 import Language.Analysis.Error (ResolveError (..), displayResolveError)
 import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (..))
 import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
@@ -29,7 +30,7 @@ data ResolverState = ResolverState
 data FunctionType = FTypeNone | FTypeFunction | FTypeMethod | FTypeInitializer
   deriving stock (Show, Eq)
 
-data ClassType = CTypeNone | CTypeClass
+data ClassType = CTypeNone | CTypeClass | CTypeSubclass
   deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool
@@ -123,9 +124,17 @@ resolveClassDecl (Class className methods line superClass) = do
     Left err -> throwError err
     Right st' -> put st'
   modify (define className)
+
+  when (isJust superClass) $ modify (\s -> s {currentClass = CTypeSubclass})
   resolvedSuperClass <- mapM resolveExpr superClass
   when (hasOwnClassName resolvedSuperClass) $ throwError (ResolveError className line "A class can't inherit from itself.")
-  methods' <- withClassType CTypeClass $ resolveClassMethods methods
+  when (isJust resolvedSuperClass) $ modify (define "super" . beginScope)
+
+  let classType = if isJust superClass then CTypeSubclass else CTypeClass
+  methods' <- withClassType classType $ resolveClassMethods methods
+
+  when (isJust resolvedSuperClass) $ modify endScope
+
   pure (Class className methods' line resolvedSuperClass)
   where
     hasOwnClassName superClassExpr = case superClassExpr of
@@ -225,6 +234,15 @@ resolveExpr (This line _) = do
   when (cType == CTypeNone) $
     throwError (ResolveError "this" line "Can't use 'this' outside of a class.")
   resolveLocal "this" >>= \dist -> pure (This line dist)
+resolveExpr (Super line methodName _) = do
+  cType <- gets currentClass
+  when (cType == CTypeNone) $
+    throwError $
+      ResolveError "super" line "Can't use 'super' outside of a class."
+  when (cType /= CTypeSubclass) $
+    throwError $
+      ResolveError "super" line "Can't use 'super' in a class with no superclass."
+  Super line methodName <$> resolveLocal "super"
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right

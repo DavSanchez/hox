@@ -94,6 +94,7 @@ runChapter07 expr = runInterpreter $ evaluateExpr (resolveGlobal expr)
     resolveGlobal (Get line obj name) = Get line (resolveGlobal obj) name
     resolveGlobal (Set line obj name val) = Set line (resolveGlobal obj) name (resolveGlobal val)
     resolveGlobal (This line _) = This line Global
+    resolveGlobal (Super line method _) = Super line method Global
     resolveGlobal (Grouping expr') = Grouping (resolveGlobal expr')
     resolveGlobal (VariableExpr line name _) = VariableExpr line name Global
     resolveGlobal (VariableAssignment line name val _) = VariableAssignment line name (resolveGlobal val) Global

@@ -126,6 +126,7 @@ library
 
   -- Modules included in this library but not exported.
   other-modules:
+    Language.Analysis.Error
     Language.Scanner.Error
     Language.Scanner.Internal
     Language.Scanner.Naive
@@ -135,7 +136,6 @@ library
     Runtime.Interpreter.Error
     Runtime.Interpreter.State
     Runtime.Interpreter.StdEnv
-    Language.Analysis.Error
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

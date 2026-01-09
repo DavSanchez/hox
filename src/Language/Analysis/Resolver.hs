@@ -4,6 +4,7 @@ module Language.Analysis.Resolver
     Resolver,
     ResolverState (..),
     ResolveError,
+    displayResolveError,
   )
 where
 
@@ -14,7 +15,7 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
-import Language.Analysis.Error (ResolveError (..))
+import Language.Analysis.Error (ResolveError (..), displayResolveError)
 import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (..))
 import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 

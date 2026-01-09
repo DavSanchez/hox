@@ -2,7 +2,7 @@ module Language.Parser
   ( TokenParser,
     Parser (Parser, runParser),
     ParseError (..),
-    displayParseErr,
+    displayParseError,
     satisfy,
     peek,
     consume,
@@ -11,7 +11,7 @@ where
 
 import Control.Applicative (Alternative (..))
 import Data.Functor (void)
-import Language.Scanner.Error (SyntaxError (..), displayErr)
+import Language.Scanner.Error (SyntaxError (..), displaySyntaxError)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType)
 
 -- | Basic generic parser type. For an error type `e`, an input type `s`, and an output type `a`.
@@ -33,10 +33,10 @@ data ParseError = ParseError
   }
   deriving stock (Show, Eq)
 
-displayParseErr :: ParseError -> String
-displayParseErr (ParseError (Just (Token EOF line)) msg) = displayErr (Error msg line " at end")
-displayParseErr (ParseError (Just (Token tType line)) msg) = displayErr (Error msg line (" at '" <> displayTokenType tType <> "'"))
-displayParseErr (ParseError Nothing msg) = displayErr (Error msg 0 " at unknown") -- catchall... should not happen
+displayParseError :: ParseError -> String
+displayParseError (ParseError (Just (Token EOF line)) msg) = displaySyntaxError (Error msg line " at end")
+displayParseError (ParseError (Just (Token tType line)) msg) = displaySyntaxError (Error msg line (" at '" <> displayTokenType tType <> "'"))
+displayParseError (ParseError Nothing msg) = displaySyntaxError (Error msg 0 " at unknown") -- catchall... should not happen
 
 -- | Concrete type for our program parser.
 --

@@ -1,4 +1,4 @@
-module Language.Scanner.Error (SyntaxError (..), displayErr) where
+module Language.Scanner.Error (SyntaxError (..), displaySyntaxError) where
 
 data SyntaxError = Error
   { errorMessage :: String,
@@ -7,5 +7,5 @@ data SyntaxError = Error
   }
   deriving stock (Show, Eq)
 
-displayErr :: SyntaxError -> String
-displayErr (Error msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg
+displaySyntaxError :: SyntaxError -> String
+displaySyntaxError (Error msg line w) = "[line " <> show line <> "] Error" <> w <> ": " <> msg

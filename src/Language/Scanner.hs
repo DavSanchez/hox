@@ -1,13 +1,13 @@
 module Language.Scanner
   ( scanTokens,
-    displayErr,
+    displaySyntaxError,
     SyntaxError (..),
   )
 where
 
 import Data.List.NonEmpty (NonEmpty)
 import Data.List.NonEmpty qualified as NE
-import Language.Scanner.Error (SyntaxError (..), displayErr)
+import Language.Scanner.Error (SyntaxError (..), displaySyntaxError)
 import Language.Scanner.Internal (TokenResult)
 import Language.Scanner.Naive (naiveScanTokens)
 

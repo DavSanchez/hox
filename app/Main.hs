@@ -4,9 +4,9 @@ import Control.Monad ((>=>))
 import Data.Either (partitionEithers)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
-import Language.Analysis.Error (displayResolveError)
-import Language.Parser (displayParseErr, runParser)
-import Language.Scanner (displayErr, scanTokens)
+import Language.Analysis.Resolver (displayResolveError)
+import Language.Parser (displayParseError, runParser)
+import Language.Scanner (displaySyntaxError, scanTokens)
 import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (Global), displayExpr, expression)
 import Language.Syntax.Token (Token, displayToken)
 import Runtime.Error (displayEvalErr)
@@ -113,7 +113,7 @@ handleChap08Out = run
 treeWalkInterpreter :: String -> IO ()
 treeWalkInterpreter src = do
   let (errs, toks) = partitionEithers $ toList $ scanTokens src
-  mapM_ (hPutStrLn stderr . displayErr) errs
+  mapM_ (hPutStrLn stderr . displaySyntaxError) errs
   run (buildTreeWalkInterpreter (Right toks))
   -- If there were scanner errors, exit with 65 after running,
   -- so both scanner and parser errors can be emitted.
@@ -130,10 +130,10 @@ run =
 handleErr :: InterpreterError -> IO ()
 handleErr = \case
   Syntax errs -> do
-    mapM_ (hPutStrLn stderr . displayErr) errs
+    mapM_ (hPutStrLn stderr . displaySyntaxError) errs
     exitWith (ExitFailure 65)
   Parse err -> do
-    mapM_ (hPutStrLn stderr . displayParseErr) err
+    mapM_ (hPutStrLn stderr . displayParseError) err
     exitWith (ExitFailure 65)
   Resolve err -> do
     hPutStrLn stderr (displayResolveError err)

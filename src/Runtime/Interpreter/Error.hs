@@ -1,6 +1,6 @@
 module Runtime.Interpreter.Error (InterpreterError (..)) where
 
-import Language.Analysis.Resolver (ResolveError)
+import Language.Analysis.Error (ResolveError)
 import Language.Parser (ParseError)
 import Language.Scanner.Error (SyntaxError)
 import Runtime.Error (EvalError)

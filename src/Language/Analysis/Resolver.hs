@@ -4,7 +4,6 @@ module Language.Analysis.Resolver
     Resolver,
     ResolverState (..),
     ResolveError,
-    displayResolveError,
   )
 where
 
@@ -15,6 +14,7 @@ import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
+import Language.Analysis.Error (ResolveError (..))
 import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (..))
 import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
 
@@ -32,20 +32,6 @@ data ClassType = CTypeNone | CTypeClass
   deriving stock (Show, Eq)
 
 type Scope = M.Map String Bool
-
-data ResolveError
-  = ResolveError
-      -- | Lexeme
-      String
-      -- | Line number
-      Int
-      -- | Error message
-      String
-  deriving stock (Show, Eq)
-
-displayResolveError :: ResolveError -> String
-displayResolveError (ResolveError name line msg) =
-  "[line " ++ show line ++ "] Error at '" ++ name ++ "': " ++ msg
 
 newtype Resolver a = Resolver {runResolverT :: ExceptT ResolveError (State ResolverState) a}
   deriving newtype
@@ -130,14 +116,20 @@ withClassType cType action = do
   pure res
 
 resolveClassDecl :: Class 'Unresolved -> Resolver (Class 'Resolved)
-resolveClassDecl (Class className methods line) = do
+resolveClassDecl (Class className methods line superClass) = do
   st <- get
   case declare className line st of
     Left err -> throwError err
     Right st' -> put st'
   modify (define className)
+  resolvedSuperClass <- mapM resolveExpr superClass
+  when (hasOwnClassName resolvedSuperClass) $ throwError (ResolveError className line "A class can't inherit from itself.")
   methods' <- withClassType CTypeClass $ resolveClassMethods methods
-  pure (Class className methods' line)
+  pure (Class className methods' line resolvedSuperClass)
+  where
+    hasOwnClassName superClassExpr = case superClassExpr of
+      Just (VariableExpr _ name _) -> name == className
+      _ -> False
 
 resolveClassMethods :: (Traversable t) => t (Function 'Unresolved) -> Resolver (t (Function 'Resolved))
 resolveClassMethods methods = do

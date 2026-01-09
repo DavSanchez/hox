@@ -135,6 +135,7 @@ library
     Runtime.Interpreter.Error
     Runtime.Interpreter.State
     Runtime.Interpreter.StdEnv
+    Language.Analysis.Error
 
   -- LANGUAGE extensions used by modules in this package.
   -- other-extensions:

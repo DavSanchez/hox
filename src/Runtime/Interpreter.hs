@@ -127,7 +127,7 @@ declareClass ::
     MonadIO m
   ) =>
   Class 'Resolved -> m ()
-declareClass cls@(Class className _ _) = do
+declareClass cls@(Class className _ _ _) = do
   state <- get
   declare className VNil state
   -- Build class object

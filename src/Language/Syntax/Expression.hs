@@ -25,6 +25,7 @@ module Language.Syntax.Expression
     UnaryOperator (..),
     BinaryOperator (..),
     Resolution (..),
+    LocalResolution (..),
     NotResolved (..),
     Phase (..),
 
@@ -42,6 +43,7 @@ import Data.Functor (void)
 import Data.Kind (Type)
 import Language.Parser (TokenParser, peek, satisfy)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
+import Numeric.Natural (Natural)
 
 -- $setup
 -- >>> import Language.Parser (runParser)
@@ -59,6 +61,10 @@ data Phase = Unresolved | Resolved
 type family ResolutionInfo (p :: Phase) :: Type where
   ResolutionInfo 'Unresolved = NotResolved
   ResolutionInfo 'Resolved = Resolution
+
+type family LocalPhase (p :: Phase) :: Type where
+  LocalPhase 'Unresolved = NotResolved
+  LocalPhase 'Resolved = LocalResolution
 
 -- | Represents an expression in the AST.
 data Expression (p :: Phase)
@@ -115,15 +121,17 @@ data Expression (p :: Phase)
       -- | The line number where 'this' appears.
       Int
       -- | The resolution distance (depth).
-      (ResolutionInfo p)
+      (LocalPhase p)
   | -- | A `super` keyword expression.
     Super
       -- | The line number where `super` happens.
       Int
       -- | The name of the method being accessed.
       String
-      -- | The resolution distance (depth).
-      (ResolutionInfo p)
+      -- | The resolution distance (depth) for the superclass.
+      (LocalPhase p)
+      -- | The resolution distance (depth) for the object (this).
+      (LocalPhase p)
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression p)
   | -- | A variable (identifier).
@@ -144,17 +152,22 @@ data Expression (p :: Phase)
       -- | The resolution distance (depth).
       (ResolutionInfo p)
 
-deriving stock instance (Show (ResolutionInfo p)) => Show (Expression p)
+deriving stock instance (Show (ResolutionInfo p), Show (LocalPhase p)) => Show (Expression p)
 
-deriving stock instance (Eq (ResolutionInfo p)) => Eq (Expression p)
+deriving stock instance (Eq (ResolutionInfo p), Eq (LocalPhase p)) => Eq (Expression p)
 
 -- | Represents the resolution status of a variable.
 data Resolution
   = -- | The variable is global (not resolved to a specific depth).
     Global
   | -- | The variable is local, found at a specific depth (number of scopes up).
-    Local Int
+    Local LocalResolution
   deriving stock (Show, Eq)
+
+-- | Represents a local resolution (always resolved to a specific depth).
+newtype LocalResolution = LocalResolution Natural
+  deriving stock (Show, Eq)
+  deriving newtype (Enum)
 
 -- | Represents an unresolved variable.
 data NotResolved = NotResolved
@@ -550,13 +563,13 @@ parseVarName = do
 
 -- | Parses 'super' keyword as expression.
 -- >>> runParser parseSuper (tokensOf "super.mymethod")
--- (Right (Super 1 "mymethod" NotResolved),[Token {tokenType = EOF, line = 1}])
+-- (Right (Super 1 "mymethod" NotResolved NotResolved),[Token {tokenType = EOF, line = 1}])
 parseSuper :: TokenParser (Expression 'Unresolved)
 parseSuper = do
   Token {tokenType = SUPER, line = lineNum} <- satisfy ((SUPER ==) . tokenType) ("Expect " <> displayTokenType SUPER <> ".")
   void $ satisfy ((DOT ==) . tokenType) "Expect '.' after 'super'."
   Token {tokenType = IDENTIFIER methodName} <- satisfy (isIdentifier . tokenType) "Expect superclass method name."
-  pure (Super lineNum methodName NotResolved)
+  pure (Super lineNum methodName NotResolved NotResolved)
 
 -- Helpers
 
@@ -603,7 +616,7 @@ displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwo
 displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
 displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> propName <> " " <> displayExpr value <> ")"
 displayExpr (This _ _) = "this"
-displayExpr (Super _ methodName _) = "(super " <> methodName <> ")"
+displayExpr (Super _ methodName _ _) = "(super " <> methodName <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name _) = name
 displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"

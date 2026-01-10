@@ -7,7 +7,14 @@ import Data.List.NonEmpty (toList)
 import Language.Analysis.Resolver (displayResolveError)
 import Language.Parser (displayParseError, runParser)
 import Language.Scanner (displaySyntaxError, scanTokens)
-import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (Global), displayExpr, expression)
+import Language.Syntax.Expression
+  ( Expression (..),
+    LocalResolution (..),
+    Phase (..),
+    Resolution (Global),
+    displayExpr,
+    expression,
+  )
 import Language.Syntax.Token (Token, displayToken)
 import Runtime.Error (displayEvalErr)
 import Runtime.Interpreter
@@ -93,8 +100,8 @@ runChapter07 expr = runInterpreter $ evaluateExpr (resolveGlobal expr)
     resolveGlobal (Call line callee args) = Call line (resolveGlobal callee) (map resolveGlobal args)
     resolveGlobal (Get line obj name) = Get line (resolveGlobal obj) name
     resolveGlobal (Set line obj name val) = Set line (resolveGlobal obj) name (resolveGlobal val)
-    resolveGlobal (This line _) = This line Global
-    resolveGlobal (Super line method _) = Super line method Global
+    resolveGlobal (This line _) = This line (LocalResolution 0)
+    resolveGlobal (Super line method _ _) = Super line method (LocalResolution 0) (LocalResolution 0)
     resolveGlobal (Grouping expr') = Grouping (resolveGlobal expr')
     resolveGlobal (VariableExpr line name _) = VariableExpr line name Global
     resolveGlobal (VariableAssignment line name val _) = VariableAssignment line name (resolveGlobal val) Global

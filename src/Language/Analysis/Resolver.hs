@@ -16,8 +16,21 @@ import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
 import Data.Maybe (isJust)
 import Language.Analysis.Error (ResolveError (..), displayResolveError)
-import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (..))
-import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Program (..), Statement (..), Variable (..))
+import Language.Syntax.Expression
+  ( Expression (..),
+    LocalResolution (..),
+    Phase (..),
+    Resolution (..),
+  )
+import Language.Syntax.Program
+  ( Class (..),
+    Declaration (..),
+    Function (..),
+    Program (..),
+    Statement (..),
+    Variable (..),
+  )
+import Numeric.Natural (Natural)
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
@@ -87,7 +100,7 @@ define name rs@ResolverState {scopes = currentScope :| rest} =
 resolveLocal :: String -> Resolver Resolution
 resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
-  let findScopeIndex :: [Scope] -> Int -> Maybe Int
+  let findScopeIndex :: [Scope] -> Natural -> Maybe Natural
       findScopeIndex [] _ = Nothing
       findScopeIndex (s : ss) i =
         if M.member name s
@@ -96,9 +109,9 @@ resolveLocal name = do
 
   case findScopeIndex scopesList 0 of
     Just distance -> do
-      let isGlobal = distance == length scopesList - 1
+      let isGlobal = fromEnum distance == (length scopesList - 1)
       if not isGlobal
-        then pure (Local distance)
+        then pure (Local (LocalResolution distance))
         else pure Global
     Nothing -> pure Global
 
@@ -231,15 +244,26 @@ resolveExpr (This line _) = do
   cType <- gets currentClass
   when (cType == CTypeNone) $
     reportError (ResolveError "this" line "Can't use 'this' outside of a class.")
-  resolveLocal "this" >>= \dist -> pure (This line dist)
-resolveExpr (Super line methodName _) = do
+  dist <- resolveLocal "this"
+  pure (This line (toLocal dist))
+resolveExpr (Super line methodName _ _) = do
   cType <- gets currentClass
   case cType of
     CTypeNone -> reportError (ResolveError "super" line "Can't use 'super' outside of a class.")
     CTypeClass -> reportError (ResolveError "super" line "Can't use 'super' in a class with no superclass.")
     CTypeSubclass -> pure ()
-  Super line methodName <$> resolveLocal "super"
+  distSuper <- resolveLocal "super"
+  distThis <- resolveLocal "this"
+  pure (Super line methodName (toLocal distSuper) (toLocal distThis))
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)
 resolveExpr (Logical line op left right) = Logical line op <$> resolveExpr left <*> resolveExpr right
 resolveExpr (UnaryOperation line op operand) = UnaryOperation line op <$> resolveExpr operand
+
+-- | Coverts a computed global-aware resolution to a local-only one.
+--
+-- Intended to be used for `this` and `super` variants where
+-- global resolution is not applicable (cannot happen).
+toLocal :: Resolution -> LocalResolution
+toLocal (Local n) = n
+toLocal Global = LocalResolution 0

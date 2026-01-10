@@ -310,10 +310,10 @@ evaluateExpr (Logical _ op e1 e2) = evaluateLogical op e1 e2
 evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argExprs
 evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
 evaluateExpr (Set line objectExpr propName valueExpr) = executeSet line objectExpr propName valueExpr
-evaluateExpr (This line dist) = executeVariable line "this" dist
-evaluateExpr (Super line method dist) = do
-  superClass <- executeVariable line "super" dist
-  object <- executeVariable line "this" (reduceDistance dist)
+evaluateExpr (This line dist) = executeVariable line "this" (Local dist)
+evaluateExpr (Super line method distSuper distThis) = do
+  superClass <- executeVariable line "super" (Local distSuper)
+  object <- executeVariable line "this" (Local distThis)
 
   case (superClass, object) of
     (VCallable (Callable (ClassConstructor cls _)), VClassInstance ins) -> do
@@ -321,9 +321,6 @@ evaluateExpr (Super line method dist) = do
         Just (m, definingClass) -> VCallable <$> bindMethod m ins definingClass
         Nothing -> evalError line $ "Undefined property '" <> method <> "'."
     _ -> evalError line "Invalid use of 'super' (object or subclass mismatch)." -- flaw in my type model
-  where
-    reduceDistance Global = Global
-    reduceDistance (Local n) = Local (n - 1) -- ... but going below 0 here does not make sense no?
 
 executeUnary ::
   ( MonadState (ProgramState Value) m,
@@ -502,7 +499,7 @@ callCallable ::
   Callable ->
   [Value] ->
   m Value
-callCallable line callable args = do
+callCallable line callable args =
   let expectedArity = arity callable
       actualArity = length args
    in if actualArity /= expectedArity

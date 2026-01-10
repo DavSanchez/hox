@@ -11,7 +11,7 @@ module Runtime.Interpreter.State
 where
 
 import Control.Monad.IO.Class (MonadIO)
-import Language.Syntax.Expression (Resolution (..))
+import Language.Syntax.Expression (LocalResolution (LocalResolution), Resolution (..))
 import Runtime.Environment
   ( Environment,
     Frame,
@@ -46,7 +46,7 @@ getVariable name distance st =
   let env' = environment st
       globals' = globals st
    in case distance of
-        Local d -> getAtDistance (fromEnum d) name env'
+        Local (LocalResolution d) -> getAtDistance d name env'
         Global -> findInFrame name globals'
 
 assignVariable :: (MonadIO m) => String -> Resolution -> a -> ProgramState a -> m Bool
@@ -54,7 +54,7 @@ assignVariable name distance val st =
   let env' = environment st
       globals' = globals st
    in case distance of
-        Local d -> assignAtDistance (fromEnum d) name val env'
+        Local (LocalResolution d) -> assignAtDistance d name val env'
         Global -> assignInFrame name val globals'
 
 pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)

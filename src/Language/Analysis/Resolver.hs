@@ -109,7 +109,7 @@ resolveLocal name = do
 
   case findScopeIndex scopesList 0 of
     Just distance -> do
-      let isGlobal = fromEnum distance == (length scopesList - 1)
+      let isGlobal = toInteger distance == toInteger (length scopesList - 1)
       if not isGlobal
         then pure (Local (LocalResolution distance))
         else pure Global

@@ -8,7 +8,6 @@ module Language.Syntax.Program
     Variable (..),
     Function (..),
     Class (..),
-    lookupMethod,
     FunctionKind (..),
   )
 where
@@ -19,14 +18,14 @@ import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
 import Data.Map qualified as M
 import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
-import Language.Syntax.Expression (Expression (Literal), Literal (Bool), Phase (..), expression)
+import Language.Syntax.Expression (Expression (..), Literal (Bool), NotResolved (..), Phase (..), expression)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
 
 newtype Program (p :: Phase) = Program [Declaration p]
 
-deriving stock instance (Show (Declaration p)) => Show (Program p)
+deriving stock instance (Show (Expression p)) => Show (Program p)
 
-deriving stock instance (Eq (Declaration p)) => Eq (Program p)
+deriving stock instance (Eq (Expression p)) => Eq (Program p)
 
 data Declaration (p :: Phase)
   = ClassDecl (Class p)
@@ -41,15 +40,13 @@ deriving stock instance (Show (Expression p)) => Show (Declaration p)
 data Class (p :: Phase) = Class
   { className :: String,
     classMethods :: M.Map String (Function p),
-    classLine :: Int
+    classLine :: Int,
+    superClass :: Maybe (Expression p)
   }
 
 deriving stock instance (Eq (Expression p)) => Eq (Class p)
 
 deriving stock instance (Show (Expression p)) => Show (Class p)
-
-lookupMethod :: String -> Class 'Resolved -> Maybe (Function 'Resolved)
-lookupMethod methodName cls = M.lookup methodName (classMethods cls)
 
 type Block (p :: Phase) = [Declaration p]
 
@@ -130,10 +127,21 @@ classDeclaration :: TokenParser (Class 'Unresolved)
 classDeclaration = do
   void $ satisfy ((CLASS ==) . tokenType) ("Expect " <> displayTokenType CLASS <> ".")
   Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) "Expect class name."
+  superClassName <- parseSuperClass
   void $ satisfy ((LEFT_BRACE ==) . tokenType) "Expect '{' before class body."
   methods <- parseClassMethods
   void $ satisfy ((RIGHT_BRACE ==) . tokenType) "Expect '}' after class body."
-  pure $ Class name methods l
+  pure $ Class name methods l superClassName
+
+parseSuperClass :: TokenParser (Maybe (Expression 'Unresolved))
+parseSuperClass = do
+  t <- peek
+  if tokenType t == LESS
+    then do
+      void $ satisfy ((LESS ==) . tokenType) ("Expect " <> displayTokenType LESS <> " before superclass name.")
+      Token {tokenType = IDENTIFIER superName} <- satisfy (isIdentifier . tokenType) "Expect superclass name."
+      pure (Just $ VariableExpr 0 superName NotResolved)
+    else pure Nothing
 
 parseClassMethods :: TokenParser (M.Map String (Function 'Unresolved))
 parseClassMethods = do

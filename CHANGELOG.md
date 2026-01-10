@@ -1,6 +1,10 @@
 # Revision history for `hox`
 
-## 0.12.0.0 -- 2025-12-XX
+## 0.13.0.0 -- 2026-01-XX
+
+* Chapter 13: Inheritance
+
+## 0.12.0.0 -- 2026-01-02
 
 * Chapter 12: Classes
 * Changed versioning. This project is all API changes,

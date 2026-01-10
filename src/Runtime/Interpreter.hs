@@ -9,7 +9,8 @@ module Runtime.Interpreter
   )
 where
 
-import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
+import Control.Monad ((>=>))
+import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
@@ -29,11 +30,10 @@ import Language.Syntax.Program
     Program (..),
     Statement (..),
     Variable (..),
-    lookupMethod,
     parseProgram,
   )
 import Language.Syntax.Token (Token)
-import Runtime.Environment (newFrame)
+import Runtime.Environment (declareInFrame, newFrame)
 import Runtime.Environment qualified as Env
 import Runtime.Interpreter.ControlFlow (ControlFlow (Break, Continue))
 import Runtime.Interpreter.Error (InterpreterError (..))
@@ -61,6 +61,7 @@ import Runtime.Value
     evalUnaryOp,
     isTruthy,
     lookupField,
+    lookupMethod,
     newClassInstance,
     setField,
   )
@@ -106,10 +107,18 @@ programInterpreter ::
   ) =>
   Program 'Unresolved -> m ()
 programInterpreter prog = do
-  let (resolverResult, _) = runResolver (programResolver prog)
-  case resolverResult of
-    Left err -> throwError (Resolve err)
-    Right (Program decls) -> mapM_ interpretDecl decls
+  let (resolvedProg, errors) = runResolver (programResolver prog)
+  if null errors
+    then interpretProgram resolvedProg
+    else throwError (Resolve errors)
+
+interpretProgram ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Program 'Resolved -> m ()
+interpretProgram (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
   ( MonadState (ProgramState Value) m,
@@ -124,17 +133,27 @@ interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareClass ::
   ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
     MonadIO m
   ) =>
   Class 'Resolved -> m ()
-declareClass cls@(Class className _ _) = do
+declareClass cls@(Class className _ l superClass) = do
+  superClass' <- mapM (evaluateExpr >=> asClass) superClass
   state <- get
   declare className VNil state
   -- Build class object
-  let env = environment state
-      loxClass = LoxClass cls env
-      callable = Callable (ClassConstructor loxClass)
+  env <- case superClass' of
+    Just sC -> do
+      frame <- newFrame
+      declareInFrame "super" (VCallable (Callable (ClassConstructor sC Nothing))) frame
+      pure (frame : environment state)
+    Nothing -> pure $ environment state
+  let loxClass = LoxClass cls env superClass'
+      callable = Callable (ClassConstructor loxClass superClass')
   declare className (VCallable callable) state
+  where
+    asClass (VCallable (Callable (ClassConstructor superC _))) = pure superC
+    asClass _ = evalError l "Superclass must be a class."
 
 declareFunction ::
   ( MonadState (ProgramState Value) m,
@@ -235,7 +254,7 @@ executeBlock decls = do
   state <- get
   newState <- pushScope state
   put newState
-  r <- go decls
+  r <- catchError (go decls) (\e -> modify popScope >> throwError e)
   modify popScope
   pure r
   where
@@ -292,6 +311,19 @@ evaluateExpr (Call line calleeExpr argExprs) = executeCall line calleeExpr argEx
 evaluateExpr (Get line objectExpr propName) = executeGet line objectExpr propName
 evaluateExpr (Set line objectExpr propName valueExpr) = executeSet line objectExpr propName valueExpr
 evaluateExpr (This line dist) = executeVariable line "this" dist
+evaluateExpr (Super line method dist) = do
+  superClass <- executeVariable line "super" dist
+  object <- executeVariable line "this" (reduceDistance dist)
+
+  case (superClass, object) of
+    (VCallable (Callable (ClassConstructor cls _)), VClassInstance ins) -> do
+      case lookupMethod method cls of
+        Just (m, definingClass) -> VCallable <$> bindMethod m ins definingClass
+        Nothing -> evalError line $ "Undefined property '" <> method <> "'."
+    _ -> evalError line "Invalid use of 'super' (object or subclass mismatch)." -- flaw in my type model
+  where
+    reduceDistance Global = Global
+    reduceDistance (Local n) = Local (n - 1) -- ... but going below 0 here does not make sense no?
 
 executeUnary ::
   ( MonadState (ProgramState Value) m,
@@ -408,30 +440,43 @@ executeGet line objectExpr propName = do
       field <- lookupField propName instance'
       case field of
         Just f -> pure f
-        Nothing -> VCallable <$> bindMethod instance' propName line
+        Nothing -> do
+          let LoxClassInstance {loxClass = cls} = instance'
+          case lookupMethod propName cls of
+            Just (func, definingClass) -> VCallable <$> bindMethod func instance' definingClass
+            Nothing -> evalError line $ "Undefined property '" <> propName <> "'."
     _ -> evalError line "Only instances have properties."
 
-bindMethod ::
-  ( MonadState (ProgramState Value) m,
-    MonadError InterpreterError m,
-    MonadIO m
-  ) =>
-  LoxClassInstance ->
-  String ->
-  Int ->
-  m Callable
-bindMethod instance' method line = do
-  let cls = loxClass instance'
-  case lookupMethod method (classDefinition cls) of
-    Just func -> do
-      -- Create environment with 'this' bound to instance
-      newFrame' <- newFrame
-      Env.declareInFrame "this" (VClassInstance instance') newFrame'
-      let closure = classClosure cls
-          newEnv = newFrame' : closure
-          isInit = method == "init"
-      pure (Callable (UserDefinedFunction func newEnv isInit))
-    Nothing -> evalError line ("Undefined property '" <> method <> "'.")
+bindMethod :: (MonadIO m) => Function Resolved -> LoxClassInstance -> LoxClass -> m Callable
+bindMethod func clsInstance definingClass = do
+  newFrame' <- newFrame
+  Env.declareInFrame "this" (VClassInstance clsInstance) newFrame'
+  let closure = classClosure definingClass
+      newEnv = newFrame' : closure
+      isInit = funcName func == "init"
+  pure (Callable (UserDefinedFunction func newEnv isInit))
+
+-- bindMethod ::
+--   ( MonadState (ProgramState Value) m,
+--     MonadError InterpreterError m,
+--     MonadIO m
+--   ) =>
+--   LoxClassInstance ->
+--   String ->
+--   Int ->
+--   m Callable
+-- bindMethod instance' method line = do
+--   let LoxClassInstance {loxClass = cls, superClass = sCls} = instance'
+--   case lookupMethod method (classDefinition cls) (classDefinition <$> sCls) of
+--     Just func -> do
+--       -- Create environment with 'this' bound to instance
+--       newFrame' <- newFrame
+--       Env.declareInFrame "this" (VClassInstance instance') newFrame'
+--       let closure = classClosure cls
+--           newEnv = newFrame' : closure
+--           isInit = method == "init"
+--       pure (Callable (UserDefinedFunction func newEnv isInit))
+--     Nothing -> evalError line ("Undefined property '" <> method <> "'.")
 
 executeSet ::
   ( MonadState (ProgramState Value) m,
@@ -492,11 +537,10 @@ call (Callable (UserDefinedFunction func closure isInit)) args = do
         [] -> pure result
     else pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
-call (Callable (ClassConstructor loxClass)) args = do
-  instance' <- newClassInstance loxClass
-  let cls = classDefinition loxClass
-  case lookupMethod "init" cls of
-    Just func -> do
+call (Callable (ClassConstructor loxClass superClass)) args = do
+  instance' <- newClassInstance loxClass superClass
+  case lookupMethod "init" loxClass of
+    Just (func, _) -> do
       -- Create environment with 'this' bound to instance
       newFrame' <- newFrame
       Env.declareInFrame "this" (VClassInstance instance') newFrame'

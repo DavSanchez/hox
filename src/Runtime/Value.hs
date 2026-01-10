@@ -15,6 +15,7 @@ module Runtime.Value
     lookupField,
     setField,
     newClassInstance,
+    lookupMethod,
   )
 where
 
@@ -44,25 +45,27 @@ data Value
 
 data LoxClass = LoxClass
   { classDefinition :: Class 'Resolved,
-    classClosure :: Closure
+    classClosure :: Closure,
+    classSuper :: Maybe LoxClass
   }
   deriving stock (Eq)
 
 data LoxClassInstance = LoxClassInstance
   { loxClass :: LoxClass,
-    instanceFields :: IORef (M.Map String Value)
+    instanceFields :: IORef (M.Map String Value),
+    superClass :: Maybe SuperClass
   }
 
 instance Eq LoxClassInstance where
-  (LoxClassInstance _ f1) == (LoxClassInstance _ f2) = f1 == f2
+  (LoxClassInstance _ f1 _) == (LoxClassInstance _ f2 _) = f1 == f2
 
 instance Show LoxClassInstance where
   show (LoxClassInstance {loxClass}) = className (classDefinition loxClass) ++ " instance"
 
-newClassInstance :: (MonadIO m) => LoxClass -> m LoxClassInstance
-newClassInstance cls = do
+newClassInstance :: (MonadIO m) => LoxClass -> Maybe SuperClass -> m LoxClassInstance
+newClassInstance cls sCls = do
   fields <- liftIO $ newIORef mempty
-  pure (LoxClassInstance cls fields)
+  pure (LoxClassInstance cls fields sCls)
 
 lookupField :: (MonadIO m) => String -> LoxClassInstance -> m (Maybe Value)
 lookupField fieldName (LoxClassInstance {instanceFields}) = do
@@ -76,6 +79,22 @@ setField fieldName value (LoxClassInstance {instanceFields}) =
 newtype Callable = Callable CallableType
 
 type Closure = Environment Value
+
+-- | Looks up a method by name in a Lox class, considering inheritance.
+--
+-- Returns both the method and the class where it was defined.
+lookupMethod ::
+  String ->
+  LoxClass ->
+  Maybe (Function 'Resolved, LoxClass)
+lookupMethod methodName cls@(LoxClass {classDefinition, classSuper}) =
+  case M.lookup methodName (classMethods classDefinition) of
+    Just func -> Just (func, cls)
+    Nothing -> do
+      super <- classSuper
+      lookupMethod methodName super
+
+type SuperClass = LoxClass
 
 type MonadCallable m =
   ( MonadState (ProgramState Value) m,
@@ -93,15 +112,15 @@ data CallableType
       String
       -- | implementation
       (forall m. MonadCallable m)
-  | ClassConstructor LoxClass
+  | ClassConstructor LoxClass (Maybe SuperClass)
 
 arity :: Callable -> Int
 arity (Callable (UserDefinedFunction func _ _)) = length . funcParams $ func
 arity (Callable (NativeFunction n _ _)) = n
-arity (Callable (ClassConstructor cls)) =
-  let cMethods = (classMethods . classDefinition) cls
-      ctor = M.lookup "init" cMethods
-   in maybe 0 (length . funcParams) ctor
+arity (Callable (ClassConstructor cls _)) =
+  case lookupMethod "init" cls of
+    Just (func, _) -> length (funcParams func)
+    Nothing -> 0
 
 instance Eq Callable where
   (==) :: Callable -> Callable -> Bool
@@ -109,14 +128,14 @@ instance Eq Callable where
     case (func1, func2) of
       (UserDefinedFunction f1 c1 _, UserDefinedFunction f2 c2 _) -> funcName f1 == funcName f2 && c1 == c2
       (NativeFunction _ name1 _, NativeFunction _ name2 _) -> name1 == name2
-      (ClassConstructor c1, ClassConstructor c2) -> c1 == c2
+      (ClassConstructor c1 _, ClassConstructor c2 _) -> c1 == c2
       _ -> False
 
 instance Show Callable where
   show :: Callable -> String
   show (Callable (UserDefinedFunction func _ _)) = "<fn " ++ funcName func ++ ">"
   show (Callable (NativeFunction {})) = "<native fn>"
-  show (Callable (ClassConstructor c)) = className (classDefinition c)
+  show (Callable (ClassConstructor c _)) = className (classDefinition c)
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False

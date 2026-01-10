@@ -13,4 +13,4 @@
 - [x] Chapter 10: Functions
 - [x] Chapter 11: Resolving and Binding
 - [x] Chapter 12: Classes
-- [ ] Chapter 13: Inheritance
+- [x] Chapter 13: Inheritance

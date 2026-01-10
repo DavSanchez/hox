@@ -5,8 +5,8 @@ import Data.Either (partitionEithers)
 import Data.List (singleton)
 import Data.List.NonEmpty (toList)
 import Language.Analysis.Resolver (displayResolveError)
-import Language.Parser (displayParseErr, runParser)
-import Language.Scanner (displayErr, scanTokens)
+import Language.Parser (displayParseError, runParser)
+import Language.Scanner (displaySyntaxError, scanTokens)
 import Language.Syntax.Expression (Expression (..), Phase (..), Resolution (Global), displayExpr, expression)
 import Language.Syntax.Token (Token, displayToken)
 import Runtime.Error (displayEvalErr)
@@ -41,7 +41,8 @@ main = do
           `elem` [ "--chap09_control",
                    "--chap10_functions",
                    "--chap11_resolving",
-                   "--chap12_classes"
+                   "--chap12_classes",
+                   "--chap13_inheritance"
                  ] ->
           readFile' script >>= treeWalkInterpreter
     [script] -> readFile' script >>= treeWalkInterpreter
@@ -93,6 +94,7 @@ runChapter07 expr = runInterpreter $ evaluateExpr (resolveGlobal expr)
     resolveGlobal (Get line obj name) = Get line (resolveGlobal obj) name
     resolveGlobal (Set line obj name val) = Set line (resolveGlobal obj) name (resolveGlobal val)
     resolveGlobal (This line _) = This line Global
+    resolveGlobal (Super line method _) = Super line method Global
     resolveGlobal (Grouping expr') = Grouping (resolveGlobal expr')
     resolveGlobal (VariableExpr line name _) = VariableExpr line name Global
     resolveGlobal (VariableAssignment line name val _) = VariableAssignment line name (resolveGlobal val) Global
@@ -112,7 +114,7 @@ handleChap08Out = run
 treeWalkInterpreter :: String -> IO ()
 treeWalkInterpreter src = do
   let (errs, toks) = partitionEithers $ toList $ scanTokens src
-  mapM_ (hPutStrLn stderr . displayErr) errs
+  mapM_ (hPutStrLn stderr . displaySyntaxError) errs
   run (buildTreeWalkInterpreter (Right toks))
   -- If there were scanner errors, exit with 65 after running,
   -- so both scanner and parser errors can be emitted.
@@ -129,13 +131,13 @@ run =
 handleErr :: InterpreterError -> IO ()
 handleErr = \case
   Syntax errs -> do
-    mapM_ (hPutStrLn stderr . displayErr) errs
+    mapM_ (hPutStrLn stderr . displaySyntaxError) errs
     exitWith (ExitFailure 65)
   Parse err -> do
-    mapM_ (hPutStrLn stderr . displayParseErr) err
+    mapM_ (hPutStrLn stderr . displayParseError) err
     exitWith (ExitFailure 65)
-  Resolve err -> do
-    hPutStrLn stderr (displayResolveError err)
+  Resolve errs -> do
+    mapM_ (hPutStrLn stderr . displayResolveError) errs
     exitWith (ExitFailure 65)
   Eval err -> do
     hPutStrLn stderr (displayEvalErr err)

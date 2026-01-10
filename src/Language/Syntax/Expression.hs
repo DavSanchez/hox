@@ -115,7 +115,14 @@ data Expression (p :: Phase)
       -- | The line number where 'this' appears.
       Int
       -- | The resolution distance (depth).
-      -- `this` resolves as a variable. Thoush it should always be local (?)
+      (ResolutionInfo p)
+  | -- | A `super` keyword expression.
+    Super
+      -- | The line number where `super` happens.
+      Int
+      -- | The name of the method being accessed.
+      String
+      -- | The resolution distance (depth).
       (ResolutionInfo p)
   | -- | A grouped expression, e.g. @(a + b)@.
     Grouping (Expression p)
@@ -141,29 +148,27 @@ deriving stock instance (Show (ResolutionInfo p)) => Show (Expression p)
 
 deriving stock instance (Eq (ResolutionInfo p)) => Eq (Expression p)
 
-deriving stock instance (Ord (ResolutionInfo p)) => Ord (Expression p)
-
 -- | Represents the resolution status of a variable.
 data Resolution
   = -- | The variable is global (not resolved to a specific depth).
     Global
   | -- | The variable is local, found at a specific depth (number of scopes up).
     Local Int
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq)
 
 -- | Represents an unresolved variable.
 data NotResolved = NotResolved
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq)
 
 -- | Represents a literal value in the AST.
 data Literal = Number Double | String String | Bool Bool | Nil
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq)
 
 -- | Represents a logical operator in the AST.
 data LogicalOperator
   = Or
   | And
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq)
 
 -- | Represents a unary operator in the AST.
 data UnaryOperator
@@ -171,7 +176,7 @@ data UnaryOperator
     UMinus
   | -- | Logical NOT (`!`) operator
     Bang
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq)
 
 -- | Represents a binary operator in the AST.
 data BinaryOperator
@@ -195,7 +200,7 @@ data BinaryOperator
     Star
   | -- | Division (`/`) operator
     Slash
-  deriving stock (Show, Eq, Ord)
+  deriving stock (Show, Eq)
 
 -- (Token constructors imported once in $setup for doctests.)
 
@@ -473,15 +478,19 @@ parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenTyp
 -- >>> runParser primary (tokensOf "identifier")
 -- (Right (VariableExpr 1 "identifier" NotResolved),[Token {tokenType = EOF, line = 1}])
 primary :: TokenParser (Expression 'Unresolved)
-primary =
-  parseFalse
-    <|> parseTrue
-    <|> parseNil
-    <|> parseNumber
-    <|> parseString
-    <|> parseGrouping
-    <|> parseThis
-    <|> parseVarName
+primary = do
+  t <- peek
+  case tokenType t of
+    FALSE -> parseFalse
+    TRUE -> parseTrue
+    NIL -> parseNil
+    NUMBER _ _ -> parseNumber
+    STRING _ _ -> parseString
+    LEFT_PAREN -> parseGrouping
+    THIS -> parseThis
+    SUPER -> parseSuper
+    IDENTIFIER _ -> parseVarName
+    _ -> fail "Expect expression."
 
 -- | Parses 'false'.
 -- >>> runParser parseFalse (tokensOf "false")
@@ -539,6 +548,16 @@ parseVarName = do
   Token {tokenType = IDENTIFIER name, line = lineNum} <- satisfy (isIdentifier . tokenType) "Expect expression."
   pure (VariableExpr lineNum name NotResolved)
 
+-- | Parses 'super' keyword as expression.
+-- >>> runParser parseSuper (tokensOf "super.mymethod")
+-- (Right (Super 1 "mymethod" NotResolved),[Token {tokenType = EOF, line = 1}])
+parseSuper :: TokenParser (Expression 'Unresolved)
+parseSuper = do
+  Token {tokenType = SUPER, line = lineNum} <- satisfy ((SUPER ==) . tokenType) ("Expect " <> displayTokenType SUPER <> ".")
+  void $ satisfy ((DOT ==) . tokenType) "Expect '.' after 'super'."
+  Token {tokenType = IDENTIFIER methodName} <- satisfy (isIdentifier . tokenType) "Expect superclass method name."
+  pure (Super lineNum methodName NotResolved)
+
 -- Helpers
 
 -- | Utility: parses '(' p ')'.
@@ -584,6 +603,7 @@ displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwo
 displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
 displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> propName <> " " <> displayExpr value <> ")"
 displayExpr (This _ _) = "this"
+displayExpr (Super _ methodName _) = "(super " <> methodName <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
 displayExpr (VariableExpr _ name _) = name
 displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"

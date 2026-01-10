@@ -9,7 +9,6 @@ module Language.Analysis.Resolver
 where
 
 import Control.Monad (when)
-import Control.Monad.Except (ExceptT, MonadError (throwError), runExceptT)
 import Control.Monad.State (MonadState (..), State, gets, modify, runState)
 import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
@@ -23,7 +22,8 @@ import Language.Syntax.Program (Class (..), Declaration (..), Function (..), Pro
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
     currentFunction :: FunctionType,
-    currentClass :: ClassType
+    currentClass :: ClassType,
+    resolveErrors :: [ResolveError]
   }
   deriving stock (Show, Eq)
 
@@ -35,22 +35,24 @@ data ClassType = CTypeNone | CTypeClass | CTypeSubclass
 
 type Scope = M.Map String Bool
 
-newtype Resolver a = Resolver {runResolverT :: ExceptT ResolveError (State ResolverState) a}
+newtype Resolver a = Resolver {runResolverT :: State ResolverState a}
   deriving newtype
     ( Functor,
       Applicative,
       Monad,
-      MonadState ResolverState,
-      MonadError ResolveError
+      MonadState ResolverState
     )
 
-runResolver :: Resolver a -> (Either ResolveError a, ResolverState)
+runResolver :: Resolver a -> (a, [ResolveError])
 runResolver resolver =
-  let stateAction = runState (runExceptT (runResolverT resolver))
-   in stateAction newScope
+  let (result, finalState) = runState (runResolverT resolver) newScope
+   in (result, reverse (resolveErrors finalState))
 
 newScope :: ResolverState
-newScope = ResolverState (mempty :| []) FTypeNone CTypeNone
+newScope = ResolverState (mempty :| []) FTypeNone CTypeNone []
+
+reportError :: ResolveError -> Resolver ()
+reportError err = modify (\s -> s {resolveErrors = err : resolveErrors s})
 
 beginScope :: ResolverState -> ResolverState
 beginScope rs = rs {scopes = mempty <| scopes rs}
@@ -60,6 +62,13 @@ endScope rs =
   case scopes rs of
     single@(_ :| []) -> rs {scopes = single}
     (_ :| (x : xs)) -> rs {scopes = x :| xs}
+
+declareSafe :: String -> Int -> Resolver ()
+declareSafe name line = do
+  st <- get
+  case declare name line st of
+    Left err -> reportError err
+    Right st' -> put st'
 
 declare :: String -> Int -> ResolverState -> Either ResolveError ResolverState
 declare name line rs@ResolverState {scopes = currentScope :| rest} =
@@ -119,15 +128,12 @@ withClassType cType action = do
 
 resolveClassDecl :: Class 'Unresolved -> Resolver (Class 'Resolved)
 resolveClassDecl (Class className methods line superClass) = do
-  st <- get
-  case declare className line st of
-    Left err -> throwError err
-    Right st' -> put st'
+  declareSafe className line
   modify (define className)
 
   when (isJust superClass) $ modify (\s -> s {currentClass = CTypeSubclass})
   resolvedSuperClass <- mapM resolveExpr superClass
-  when (hasOwnClassName resolvedSuperClass) $ throwError (ResolveError className line "A class can't inherit from itself.")
+  when (hasOwnClassName resolvedSuperClass) $ reportError (ResolveError className line "A class can't inherit from itself.")
   when (isJust resolvedSuperClass) $ modify (define "super" . beginScope)
 
   let classType = if isJust superClass then CTypeSubclass else CTypeClass
@@ -157,10 +163,10 @@ resolveStatement (PrintStmt expr) = PrintStmt <$> resolveExpr expr
 resolveStatement (ReturnStmt line maybeExpr) = do
   fType <- gets currentFunction
   when (fType == FTypeNone) $
-    throwError (ResolveError "return" line "Can't return from top-level code.")
+    reportError (ResolveError "return" line "Can't return from top-level code.")
   when (fType == FTypeInitializer) $
     case maybeExpr of
-      Just _ -> throwError (ResolveError "return" line "Can't return a value from an initializer.")
+      Just _ -> reportError (ResolveError "return" line "Can't return a value from an initializer.")
       Nothing -> pure ()
   ReturnStmt line <$> traverse resolveExpr maybeExpr
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
@@ -168,10 +174,7 @@ resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block
 
 resolveVarDecl :: Variable 'Unresolved -> Resolver (Variable 'Resolved)
 resolveVarDecl (Variable vName vValue vLine) = do
-  st <- get
-  case declare vName vLine st of
-    Left err -> throwError err
-    Right st' -> put st'
+  declareSafe vName vLine
   vValue' <- traverse resolveExpr vValue
   modify (define vName)
   pure (Variable vName vValue' vLine)
@@ -186,10 +189,7 @@ withFunctionType t action = do
 
 resolveFuncDecl :: FunctionType -> Function 'Unresolved -> Resolver (Function 'Resolved)
 resolveFuncDecl fType (Function fName fParams fBody fLine) = do
-  st <- get
-  case declare fName fLine st of
-    Left err -> throwError err
-    Right st' -> put st'
+  declareSafe fName fLine
   modify (define fName)
   fBody' <- withFunctionType fType $ resolveFunction fParams fBody
   pure (Function fName fParams fBody' fLine)
@@ -202,10 +202,7 @@ resolveFunction ::
 resolveFunction params body = do
   modify beginScope
   for_ params $ \(param, line) -> do
-    st <- get
-    case declare param line st of
-      Left err -> throwError err
-      Right st' -> put st'
+    declareSafe param line
     modify (define param)
   body' <- mapM resolveDeclaration body
   modify endScope
@@ -217,10 +214,11 @@ resolveExpr (VariableExpr line name _) = do
   let currentScope = NE.head scopesList
       isGlobal = length scopesList == 1
   case M.lookup name currentScope of
-    Just False | not isGlobal -> throwError $ ResolveError name line "Can't read local variable in its own initializer."
-    _ -> do
-      dist <- resolveLocal name
-      pure (VariableExpr line name dist)
+    Just False | not isGlobal -> reportError (ResolveError name line "Can't read local variable in its own initializer.")
+    _ -> pure ()
+
+  dist <- resolveLocal name
+  pure (VariableExpr line name dist)
 resolveExpr (VariableAssignment line name value _) = do
   value' <- resolveExpr value
   dist <- resolveLocal name
@@ -232,16 +230,14 @@ resolveExpr (Set line object propName value) = Set line <$> resolveExpr object <
 resolveExpr (This line _) = do
   cType <- gets currentClass
   when (cType == CTypeNone) $
-    throwError (ResolveError "this" line "Can't use 'this' outside of a class.")
+    reportError (ResolveError "this" line "Can't use 'this' outside of a class.")
   resolveLocal "this" >>= \dist -> pure (This line dist)
 resolveExpr (Super line methodName _) = do
   cType <- gets currentClass
-  when (cType == CTypeNone) $
-    throwError $
-      ResolveError "super" line "Can't use 'super' outside of a class."
-  when (cType /= CTypeSubclass) $
-    throwError $
-      ResolveError "super" line "Can't use 'super' in a class with no superclass."
+  case cType of
+    CTypeNone -> reportError (ResolveError "super" line "Can't use 'super' outside of a class.")
+    CTypeClass -> reportError (ResolveError "super" line "Can't use 'super' in a class with no superclass.")
+    CTypeSubclass -> pure ()
   Super line methodName <$> resolveLocal "super"
 resolveExpr (Grouping expr) = Grouping <$> resolveExpr expr
 resolveExpr (Literal lit) = pure (Literal lit)

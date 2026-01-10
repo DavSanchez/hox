@@ -107,10 +107,18 @@ programInterpreter ::
   ) =>
   Program 'Unresolved -> m ()
 programInterpreter prog = do
-  let (resolverResult, _) = runResolver (programResolver prog)
-  case resolverResult of
-    Left err -> throwError (Resolve err)
-    Right (Program decls) -> mapM_ interpretDecl decls
+  let (resolvedProg, errors) = runResolver (programResolver prog)
+  if null errors
+    then interpretProgram resolvedProg
+    else throwError (Resolve errors)
+
+interpretProgram ::
+  ( MonadState (ProgramState Value) m,
+    MonadError InterpreterError m,
+    MonadIO m
+  ) =>
+  Program 'Resolved -> m ()
+interpretProgram (Program decls) = mapM_ interpretDecl decls
 
 interpretDecl ::
   ( MonadState (ProgramState Value) m,

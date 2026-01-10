@@ -9,6 +9,6 @@ import Runtime.Error (EvalError)
 data InterpreterError
   = Syntax [SyntaxError]
   | Parse [ParseError]
-  | Resolve ResolveError
+  | Resolve [ResolveError]
   | Eval EvalError
   deriving stock (Show, Eq)

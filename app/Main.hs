@@ -136,8 +136,8 @@ handleErr = \case
   Parse err -> do
     mapM_ (hPutStrLn stderr . displayParseError) err
     exitWith (ExitFailure 65)
-  Resolve err -> do
-    hPutStrLn stderr (displayResolveError err)
+  Resolve errs -> do
+    mapM_ (hPutStrLn stderr . displayResolveError) errs
     exitWith (ExitFailure 65)
   Eval err -> do
     hPutStrLn stderr (displayEvalErr err)

@@ -46,7 +46,7 @@ getVariable name distance st =
   let env' = environment st
       globals' = globals st
    in case distance of
-        Local d -> getAtDistance d name env'
+        Local d -> getAtDistance (fromEnum d) name env'
         Global -> findInFrame name globals'
 
 assignVariable :: (MonadIO m) => String -> Resolution -> a -> ProgramState a -> m Bool
@@ -54,7 +54,7 @@ assignVariable name distance val st =
   let env' = environment st
       globals' = globals st
    in case distance of
-        Local d -> assignAtDistance d name val env'
+        Local d -> assignAtDistance (fromEnum d) name val env'
         Global -> assignInFrame name val globals'
 
 pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)

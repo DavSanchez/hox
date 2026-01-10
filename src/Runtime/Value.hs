@@ -15,6 +15,7 @@ module Runtime.Value
     lookupField,
     setField,
     newClassInstance,
+    lookupMethod,
   )
 where
 
@@ -44,7 +45,8 @@ data Value
 
 data LoxClass = LoxClass
   { classDefinition :: Class 'Resolved,
-    classClosure :: Closure
+    classClosure :: Closure,
+    classSuper :: Maybe LoxClass
   }
   deriving stock (Eq)
 
@@ -78,6 +80,20 @@ newtype Callable = Callable CallableType
 
 type Closure = Environment Value
 
+-- | Looks up a method by name in a Lox class, considering inheritance.
+--
+-- Returns both the method and the class where it was defined.
+lookupMethod ::
+  String ->
+  LoxClass ->
+  Maybe (Function 'Resolved, LoxClass)
+lookupMethod methodName cls@(LoxClass {classDefinition, classSuper}) =
+  case M.lookup methodName (classMethods classDefinition) of
+    Just func -> Just (func, cls)
+    Nothing -> do
+      super <- classSuper
+      lookupMethod methodName super
+
 type SuperClass = LoxClass
 
 type MonadCallable m =
@@ -102,9 +118,9 @@ arity :: Callable -> Int
 arity (Callable (UserDefinedFunction func _ _)) = length . funcParams $ func
 arity (Callable (NativeFunction n _ _)) = n
 arity (Callable (ClassConstructor cls _)) =
-  let cMethods = (classMethods . classDefinition) cls
-      ctor = M.lookup "init" cMethods
-   in maybe 0 (length . funcParams) ctor
+  case lookupMethod "init" cls of
+    Just (func, _) -> length (funcParams func)
+    Nothing -> 0
 
 instance Eq Callable where
   (==) :: Callable -> Callable -> Bool

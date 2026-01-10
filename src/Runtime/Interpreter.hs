@@ -30,7 +30,6 @@ import Language.Syntax.Program
     Program (..),
     Statement (..),
     Variable (..),
-    lookupMethod,
     parseProgram,
   )
 import Language.Syntax.Token (Token)
@@ -62,6 +61,7 @@ import Runtime.Value
     evalUnaryOp,
     isTruthy,
     lookupField,
+    lookupMethod,
     newClassInstance,
     setField,
   )
@@ -140,7 +140,7 @@ declareClass cls@(Class className _ l superClass) = do
       declareInFrame "super" (VCallable (Callable (ClassConstructor sC Nothing))) frame
       pure (frame : environment state)
     Nothing -> pure $ environment state
-  let loxClass = LoxClass cls env
+  let loxClass = LoxClass cls env superClass'
       callable = Callable (ClassConstructor loxClass superClass')
   declare className (VCallable callable) state
   where
@@ -308,10 +308,11 @@ evaluateExpr (Super line method dist) = do
   object <- executeVariable line "this" (reduceDistance dist)
 
   case (superClass, object) of
-    (VCallable (Callable (ClassConstructor cls sCls)), VClassInstance ins) -> case lookupMethod method (classDefinition cls) (classDefinition <$> sCls) of
-      Just m -> VCallable <$> bindMethod m ins
-      Nothing -> evalError line $ "Undefined property '" <> method <> "'."
-    _ -> undefined -- no class, what do?
+    (VCallable (Callable (ClassConstructor cls _)), VClassInstance ins) -> do
+      case lookupMethod method cls of
+        Just (m, definingClass) -> VCallable <$> bindMethod m ins definingClass
+        Nothing -> evalError line $ "Undefined property '" <> method <> "'."
+    _ -> evalError line "Invalid use of 'super' (object or subclass mismatch)." -- flaw in my type model
   where
     reduceDistance Global = Global
     reduceDistance (Local n) = Local (n - 1) -- ... but going below 0 here does not make sense no?
@@ -432,17 +433,17 @@ executeGet line objectExpr propName = do
       case field of
         Just f -> pure f
         Nothing -> do
-          let LoxClassInstance {loxClass = cls, superClass = sCls} = instance'
-          case lookupMethod propName (classDefinition cls) (classDefinition <$> sCls) of
-            Just func -> VCallable <$> bindMethod func instance'
+          let LoxClassInstance {loxClass = cls} = instance'
+          case lookupMethod propName cls of
+            Just (func, definingClass) -> VCallable <$> bindMethod func instance' definingClass
             Nothing -> evalError line $ "Undefined property '" <> propName <> "'."
     _ -> evalError line "Only instances have properties."
 
-bindMethod :: (MonadIO m) => Function Resolved -> LoxClassInstance -> m Callable
-bindMethod func clsInstance = do
+bindMethod :: (MonadIO m) => Function Resolved -> LoxClassInstance -> LoxClass -> m Callable
+bindMethod func clsInstance definingClass = do
   newFrame' <- newFrame
   Env.declareInFrame "this" (VClassInstance clsInstance) newFrame'
-  let closure = classClosure . loxClass $ clsInstance
+  let closure = classClosure definingClass
       newEnv = newFrame' : closure
       isInit = funcName func == "init"
   pure (Callable (UserDefinedFunction func newEnv isInit))
@@ -530,10 +531,8 @@ call (Callable (UserDefinedFunction func closure isInit)) args = do
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
 call (Callable (ClassConstructor loxClass superClass)) args = do
   instance' <- newClassInstance loxClass superClass
-  let cls = classDefinition loxClass
-      maybeSuperCls = classDefinition <$> superClass
-  case lookupMethod "init" cls maybeSuperCls of
-    Just func -> do
+  case lookupMethod "init" loxClass of
+    Just (func, _) -> do
       -- Create environment with 'this' bound to instance
       newFrame' <- newFrame
       Env.declareInFrame "this" (VClassInstance instance') newFrame'

@@ -8,7 +8,6 @@ module Language.Syntax.Program
     Variable (..),
     Function (..),
     Class (..),
-    lookupMethod,
     FunctionKind (..),
   )
 where
@@ -48,11 +47,6 @@ data Class (p :: Phase) = Class
 deriving stock instance (Eq (Expression p)) => Eq (Class p)
 
 deriving stock instance (Show (Expression p)) => Show (Class p)
-
-lookupMethod :: String -> Class 'Resolved -> Maybe (Class 'Resolved) -> Maybe (Function 'Resolved)
-lookupMethod methodName cls sCls =
-  M.lookup methodName (classMethods cls)
-    <|> (sCls >>= \super -> M.lookup methodName (classMethods super))
 
 type Block (p :: Phase) = [Declaration p]
 

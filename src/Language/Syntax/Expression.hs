@@ -478,16 +478,19 @@ parseMinusUnary = satisfy ((MINUS ==) . tokenType) ("Expect " <> displayTokenTyp
 -- >>> runParser primary (tokensOf "identifier")
 -- (Right (VariableExpr 1 "identifier" NotResolved),[Token {tokenType = EOF, line = 1}])
 primary :: TokenParser (Expression 'Unresolved)
-primary =
-  parseFalse
-    <|> parseTrue
-    <|> parseNil
-    <|> parseNumber
-    <|> parseString
-    <|> parseGrouping
-    <|> parseThis
-    <|> parseSuper
-    <|> parseVarName
+primary = do
+  t <- peek
+  case tokenType t of
+    FALSE -> parseFalse
+    TRUE -> parseTrue
+    NIL -> parseNil
+    NUMBER _ _ -> parseNumber
+    STRING _ _ -> parseString
+    LEFT_PAREN -> parseGrouping
+    THIS -> parseThis
+    SUPER -> parseSuper
+    IDENTIFIER _ -> parseVarName
+    _ -> fail "Expect expression."
 
 -- | Parses 'false'.
 -- >>> runParser parseFalse (tokensOf "false")

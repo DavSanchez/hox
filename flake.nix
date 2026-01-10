@@ -46,13 +46,15 @@
           }:
           let
             dart2 = inputs.oldDartNixpkgs.legacyPackages.${system}.dart;
+            haskellPackages = pkgs.haskell.packages.ghc9123; # GHC 9.12.3
             crafting-interpreters-script =
               interpreter:
               pkgs.writers.writeHaskellBin "crafting-interpreters-script"
                 {
-                  libraries = [
-                    pkgs.haskellPackages.shh
-                    pkgs.haskellPackages.temporary
+                  ghc = haskellPackages.ghc;
+                  libraries = with haskellPackages; [
+                    shh
+                    temporary
                   ];
                 }
                 ''
@@ -125,7 +127,6 @@
                       echo "--------------------------------------------------------------------------------"
                       dart "tool/bin/test.dart" target "--interpreter" "${pkgs.lib.getExe interpreter}" "--arguments" ("--" ++ target)
                 '';
-            haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
             hoxPkg = haskellPackages.callPackage ./hox.nix { };
             ghcWithDeps = haskellPackages.ghcWithPackages (p: hoxPkg.propagatedBuildInputs);
             doctestScript = pkgs.writeShellApplication {

@@ -1,3 +1,5 @@
+{-# LANGUAGE PatternSynonyms #-}
+
 module Runtime.Interpreter
   ( Interpreter,
     buildTreeWalkInterpreter,
@@ -35,7 +37,7 @@ import Language.Syntax.Program
 import Language.Syntax.Token (Token)
 import Runtime.Environment (declareInFrame, newFrame)
 import Runtime.Environment qualified as Env
-import Runtime.Interpreter.ControlFlow (ControlFlow (Break, Continue))
+import Runtime.Interpreter.ControlFlow (ControlFlow (Continue), pattern Return)
 import Runtime.Interpreter.Error (InterpreterError (..))
 import Runtime.Interpreter.State
   ( ProgramState (environment),
@@ -175,7 +177,7 @@ runFunctionBody ::
 runFunctionBody [] = pure VNil
 runFunctionBody (d : ds) =
   interpretDeclF d >>= \case
-    Break v -> pure v
+    Return v -> pure v
     Continue () -> runFunctionBody ds
 
 interpretDeclF ::
@@ -211,7 +213,7 @@ interpretStatement ::
 interpretStatement s =
   interpretStatementCF s >>= \case
     Continue () -> pure ()
-    Break _ -> evalError 0 "Return statement outside of function."
+    Return _ -> evalError 0 "Return statement outside of function."
 
 interpretStatementCF ::
   ( MonadState (ProgramState Value) m,
@@ -224,7 +226,7 @@ interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
 interpretStatementCF (IfStmt expr thenBranch elseBranch) = executeIf expr thenBranch elseBranch
 interpretStatementCF (BlockStmt decls) = executeBlock decls
 interpretStatementCF (WhileStmt expr stmt) = executeWhile expr stmt
-interpretStatementCF (ReturnStmt _ maybeExpr) = Break <$> maybe (pure VNil) evaluateExpr maybeExpr
+interpretStatementCF (ReturnStmt _ maybeExpr) = Return <$> maybe (pure VNil) evaluateExpr maybeExpr
 
 executeIf ::
   ( MonadState (ProgramState Value) m,
@@ -262,7 +264,7 @@ executeBlock decls = do
     go (d : ds) = do
       cf <- interpretDeclF d
       case cf of
-        Break v -> pure (Break v)
+        Return v -> pure (Return v)
         Continue () -> go ds
 
 executeWhile ::
@@ -282,7 +284,7 @@ executeWhile expr stmt = loop
         else do
           cf <- interpretStatementCF stmt
           case cf of
-            Break v -> pure (Break v)
+            Return v -> pure (Return v)
             Continue () -> loop
 
 interpretPrint ::

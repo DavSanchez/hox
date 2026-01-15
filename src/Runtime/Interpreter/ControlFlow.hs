@@ -1,11 +1,19 @@
-module Runtime.Interpreter.ControlFlow (ControlFlow (..)) where
+{-# LANGUAGE PatternSynonyms #-}
+
+module Runtime.Interpreter.ControlFlow (ControlFlow (..), pattern Return) where
 
 import Data.Bifunctor (Bifunctor (bimap))
+
+{-# COMPLETE Return, Continue #-}
 
 data ControlFlow b c
   = Break b
   | Continue c
   deriving stock (Show, Eq)
+
+-- | Pattern synonym for 'Break' to represent a return value in control flow.
+pattern Return :: b -> ControlFlow b c
+pattern Return x = Break x
 
 instance Functor (ControlFlow b) where
   fmap :: (a -> c) -> ControlFlow b a -> ControlFlow b c

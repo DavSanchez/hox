@@ -44,6 +44,25 @@ jobs:
       - name: Chapter ${{ matrix.test-chapter }} tests from Crafting Interpreters
         run: nix run .#hox-tests -- ${{ matrix.test-chapter }}
 
+  benchmarks:
+    runs-on: ${{ matrix.os }}
+    name: 📊 Benchmarks (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v16
+        with:
+          name: hox
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run benchmarks
+        run: nix develop .# --command cabal bench
+
   check-all-green:
     name: 🟢 All required checks and tests pass
     if: always()
@@ -51,6 +70,7 @@ jobs:
     needs:
       - nix-checks
       - crafting-interpreter-tests
+      - benchmarks
     steps:
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@release/v1

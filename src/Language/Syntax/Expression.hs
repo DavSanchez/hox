@@ -41,6 +41,7 @@ import Control.Applicative (Alternative (many, (<|>)))
 import Data.Char (toLower)
 import Data.Functor (void)
 import Data.Kind (Type)
+import Data.Text (Text, unpack)
 import Language.Parser (TokenParser, peek, satisfy)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
 import Numeric.Natural (Natural)
@@ -105,7 +106,7 @@ data Expression (p :: Phase)
       -- | The object expression.
       (Expression p)
       -- | The name of the property being accessed.
-      String
+      Text
   | -- | A property assignment expression (e.g., object.property = value).
     Set
       -- | The line number where the property assignment happens.
@@ -113,7 +114,7 @@ data Expression (p :: Phase)
       -- | The object expression.
       (Expression p)
       -- | The name of the property being assigned to.
-      String
+      Text
       -- | The expression whose value is being assigned to the property.
       (Expression p)
   | -- | A 'this' keyword expression.
@@ -127,7 +128,7 @@ data Expression (p :: Phase)
       -- | The line number where `super` happens.
       Int
       -- | The name of the method being accessed.
-      String
+      Text
       -- | The resolution distance (depth) for the superclass.
       (LocalPhase p)
       -- | The resolution distance (depth) for the object (this).
@@ -139,14 +140,14 @@ data Expression (p :: Phase)
       -- | The line number where the variable appears.
       Int
       -- | The name of the variable.
-      String
+      Text
       -- | The resolution distance (depth).
       (ResolutionInfo p)
   | VariableAssignment
       -- | The line number where the assignment happens.
       Int
       -- | The name of the variable being assigned to.
-      String
+      Text
       -- | The expression whose value is being assigned to the variable.
       (Expression p)
       -- | The resolution distance (depth).
@@ -174,7 +175,7 @@ data NotResolved = NotResolved
   deriving stock (Show, Eq)
 
 -- | Represents a literal value in the AST.
-data Literal = Number Double | String String | Bool Bool | Nil
+data Literal = Number Double | String Text | Bool Bool | Nil
   deriving stock (Show, Eq)
 
 -- | Represents a logical operator in the AST.
@@ -613,13 +614,13 @@ displayExpr (Literal lit) = displayLit lit
 displayExpr (UnaryOperation _ op expr) = "(" <> displayUnOp op <> " " <> displayExpr expr <> ")"
 displayExpr (BinaryOperation _ op e1 e2) = "(" <> displayBinOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 displayExpr (Call _ callee args) = "(call " <> displayExpr callee <> " " <> unwords (map displayExpr args) <> ")"
-displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> propName <> ")"
-displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> propName <> " " <> displayExpr value <> ")"
+displayExpr (Get _ object propName) = "(get " <> displayExpr object <> " " <> unpack propName <> ")"
+displayExpr (Set _ object propName value) = "(set " <> displayExpr object <> " " <> unpack propName <> " " <> displayExpr value <> ")"
 displayExpr (This _ _) = "this"
-displayExpr (Super _ methodName _ _) = "(super " <> methodName <> ")"
+displayExpr (Super _ methodName _ _) = "(super " <> unpack methodName <> ")"
 displayExpr (Grouping expr) = "(group " <> displayExpr expr <> ")"
-displayExpr (VariableExpr _ name _) = name
-displayExpr (VariableAssignment _ name expr _) = "(= " <> name <> " " <> displayExpr expr <> ")"
+displayExpr (VariableExpr _ name _) = unpack name
+displayExpr (VariableAssignment _ name expr _) = "(= " <> unpack name <> " " <> displayExpr expr <> ")"
 displayExpr (Logical _ op e1 e2) = "(" <> displayLogicOp op <> " " <> displayExpr e1 <> " " <> displayExpr e2 <> ")"
 
 displayBinOp :: BinaryOperator -> String
@@ -644,6 +645,6 @@ displayLogicOp And = "and"
 
 displayLit :: Literal -> String
 displayLit (Number n) = show n
-displayLit (String s) = "String " <> s
+displayLit (String s) = "String " <> unpack s
 displayLit (Bool b) = (map toLower . show) b
 displayLit Nil = "nil"

@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Runtime.Value
   ( Value (..),
     displayValue,
@@ -25,6 +27,7 @@ import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map qualified as M
+import Data.Text (Text, unpack)
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Phase (Resolved), UnaryOperator (..))
 import Language.Syntax.Program (Class (..), Function (..))
 import Numeric (showFFloat)
@@ -37,7 +40,7 @@ import Runtime.Interpreter.State (ProgramState (..))
 data Value
   = VNumber Double
   | VBool Bool
-  | VString String
+  | VString Text
   | VNil
   | VCallable Callable
   | VClassInstance LoxClassInstance
@@ -52,7 +55,7 @@ data LoxClass = LoxClass
 
 data LoxClassInstance = LoxClassInstance
   { loxClass :: LoxClass,
-    instanceFields :: IORef (M.Map String Value),
+    instanceFields :: IORef (M.Map Text Value),
     superClass :: Maybe SuperClass
   }
 
@@ -60,19 +63,19 @@ instance Eq LoxClassInstance where
   (LoxClassInstance _ f1 _) == (LoxClassInstance _ f2 _) = f1 == f2
 
 instance Show LoxClassInstance where
-  show (LoxClassInstance {loxClass}) = className (classDefinition loxClass) ++ " instance"
+  show (LoxClassInstance {loxClass}) = unpack (className (classDefinition loxClass)) ++ " instance"
 
 newClassInstance :: (MonadIO m) => LoxClass -> Maybe SuperClass -> m LoxClassInstance
 newClassInstance cls sCls = do
   fields <- liftIO $ newIORef mempty
   pure (LoxClassInstance cls fields sCls)
 
-lookupField :: (MonadIO m) => String -> LoxClassInstance -> m (Maybe Value)
+lookupField :: (MonadIO m) => Text -> LoxClassInstance -> m (Maybe Value)
 lookupField fieldName (LoxClassInstance {instanceFields}) = do
   fields <- liftIO $ readIORef instanceFields
   pure $ M.lookup fieldName fields
 
-setField :: (MonadIO m) => String -> Value -> LoxClassInstance -> m ()
+setField :: (MonadIO m) => Text -> Value -> LoxClassInstance -> m ()
 setField fieldName value (LoxClassInstance {instanceFields}) =
   liftIO $ modifyIORef' instanceFields (M.insert fieldName value)
 
@@ -84,7 +87,7 @@ type Closure = Environment Value
 --
 -- Returns both the method and the class where it was defined.
 lookupMethod ::
-  String ->
+  Text ->
   LoxClass ->
   Maybe (Function 'Resolved, LoxClass)
 lookupMethod methodName cls@(LoxClass {classDefinition, classSuper}) =
@@ -109,7 +112,7 @@ data CallableType
       -- | arity
       Int
       -- | name
-      String
+      Text
       -- | implementation
       (forall m. MonadCallable m)
   | ClassConstructor LoxClass (Maybe SuperClass)
@@ -133,9 +136,9 @@ instance Eq Callable where
 
 instance Show Callable where
   show :: Callable -> String
-  show (Callable (UserDefinedFunction func _ _)) = "<fn " ++ funcName func ++ ">"
+  show (Callable (UserDefinedFunction func _ _)) = "<fn " ++ unpack (funcName func) ++ ">"
   show (Callable (NativeFunction {})) = "<native fn>"
-  show (Callable (ClassConstructor c _)) = className (classDefinition c)
+  show (Callable (ClassConstructor c _)) = unpack (className (classDefinition c))
 
 isTruthy :: Value -> Bool
 isTruthy VNil = False
@@ -154,7 +157,7 @@ displayValue (VNumber n) =
         then if isNegativeZero n then "-0" else show integer
         else showFFloat Nothing n "" -- Otherwise, print as floating-point number
 displayValue (VBool b) = (map toLower . show) b
-displayValue (VString s) = s
+displayValue (VString s) = unpack s
 displayValue VNil = "nil"
 displayValue (VCallable callable) = show callable
 displayValue (VClassInstance instance') = show instance'
@@ -182,7 +185,7 @@ evalBinaryOp _ BMinus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 - n2)
 evalBinaryOp line BMinus _ _ = Left $ EvalError line "Operands must be numbers."
 -- Summation only works for two numbers (sum) or two strings (concatenation)
 evalBinaryOp _ Plus (VNumber n1) (VNumber n2) = Right $ VNumber (n1 + n2)
-evalBinaryOp _ Plus (VString s1) (VString s2) = Right $ VString (s1 ++ s2)
+evalBinaryOp _ Plus (VString s1) (VString s2) = Right $ VString (s1 <> s2)
 evalBinaryOp line Plus _ _ = Left $ EvalError line "Operands must be two numbers or two strings."
 -- Division and multiplication, with error handling for division by zero
 evalBinaryOp line Slash (VNumber n1) (VNumber n2)

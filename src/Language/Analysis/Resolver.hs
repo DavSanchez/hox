@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Language.Analysis.Resolver
   ( programResolver,
     runResolver,
@@ -15,6 +17,7 @@ import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
 import Data.Map qualified as M
 import Data.Maybe (isJust)
+import Data.Text (Text)
 import Language.Analysis.Error (ResolveError (..), displayResolveError)
 import Language.Syntax.Expression
   ( Expression (..),
@@ -46,7 +49,7 @@ data FunctionType = FTypeNone | FTypeFunction | FTypeMethod | FTypeInitializer
 data ClassType = CTypeNone | CTypeClass | CTypeSubclass
   deriving stock (Show, Eq)
 
-type Scope = M.Map String Bool
+type Scope = M.Map Text Bool
 
 newtype Resolver a = Resolver {runResolverT :: State ResolverState a}
   deriving newtype
@@ -76,14 +79,14 @@ endScope rs =
     single@(_ :| []) -> rs {scopes = single}
     (_ :| (x : xs)) -> rs {scopes = x :| xs}
 
-declareSafe :: String -> Int -> Resolver ()
+declareSafe :: Text -> Int -> Resolver ()
 declareSafe name line = do
   st <- get
   case declare name line st of
     Left err -> reportError err
     Right st' -> put st'
 
-declare :: String -> Int -> ResolverState -> Either ResolveError ResolverState
+declare :: Text -> Int -> ResolverState -> Either ResolveError ResolverState
 declare name line rs@ResolverState {scopes = currentScope :| rest} =
   let alreadyDeclared = M.member name currentScope
       updatedScope = M.insert name False currentScope
@@ -92,12 +95,12 @@ declare name line rs@ResolverState {scopes = currentScope :| rest} =
         then Left $ ResolveError name line "Already a variable with this name in this scope."
         else Right $ rs {scopes = updatedScope :| rest}
 
-define :: String -> ResolverState -> ResolverState
+define :: Text -> ResolverState -> ResolverState
 define name rs@ResolverState {scopes = currentScope :| rest} =
   let updatedScope = M.insert name True currentScope
    in rs {scopes = updatedScope :| rest}
 
-resolveLocal :: String -> Resolver Resolution
+resolveLocal :: Text -> Resolver Resolution
 resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
   let findScopeIndex :: [Scope] -> Natural -> Maybe Natural
@@ -209,7 +212,7 @@ resolveFuncDecl fType (Function fName fParams fBody fLine) = do
 
 resolveFunction ::
   (Traversable t) =>
-  t (String, Int) ->
+  t (Text, Int) ->
   t (Declaration 'Unresolved) ->
   Resolver (t (Declaration 'Resolved))
 resolveFunction params body = do

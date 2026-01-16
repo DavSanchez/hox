@@ -143,6 +143,7 @@ library
   build-depends:
     containers,
     mtl,
+    text,
     time,
 
   -- Directories containing source files.

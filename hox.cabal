@@ -118,7 +118,6 @@ library
     Language.Analysis.Resolver
     Language.Parser
     Language.Scanner
-    Language.Scanner.Internal
     Language.Syntax.Expression
     Language.Syntax.Program
     Language.Syntax.Token
@@ -131,6 +130,7 @@ library
     Language.Analysis.Error
     Language.Scanner.Error
     Language.Scanner.Naive
+    Language.Scanner.Types
     Runtime.Environment
     Runtime.Interpreter.ControlFlow
     Runtime.Interpreter.Error

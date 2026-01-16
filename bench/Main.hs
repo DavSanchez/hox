@@ -1,8 +1,7 @@
 module Main (main) where
 
 import Data.List.NonEmpty (NonEmpty (..))
-import Language.Scanner (scanTokens)
-import Language.Scanner.Internal (TokenResult)
+import Language.Scanner (TokenResult, scanTokens)
 import Language.Syntax.Program (parseProgram)
 import Language.Syntax.Token (Token)
 import Runtime.Interpreter (buildTreeWalkInterpreter, runInterpreter)

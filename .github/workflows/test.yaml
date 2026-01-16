@@ -73,7 +73,7 @@ jobs:
       - name: Store and Compare Benchmarks
         uses: benchmark-action/github-action-benchmark@v1
         with:
-          name: Hox Benchmarks
+          name: Hox Benchmarks (${{ matrix.os }})
           tool: "customSmallerIsBetter"
           output-file-path: hox-bench-results.json
           github-token: ${{ secrets.GITHUB_TOKEN }}

@@ -11,6 +11,7 @@ module Runtime.Interpreter.State
 where
 
 import Control.Monad.IO.Class (MonadIO)
+import Data.Text (Text)
 import Language.Syntax.Expression (LocalResolution (LocalResolution), Resolution (..))
 import Runtime.Environment
   ( Environment,
@@ -35,13 +36,13 @@ newProgramState = do
   g <- newFrame
   pure $ ProgramState {environment = [], globals = g}
 
-declare :: (MonadIO m) => String -> a -> ProgramState a -> m ()
+declare :: (MonadIO m) => Text -> a -> ProgramState a -> m ()
 declare name val state = do
   case environment state of
     [] -> declareInFrame name val (globals state)
     (top : _) -> declareInFrame name val top
 
-getVariable :: (MonadIO m) => String -> Resolution -> ProgramState a -> m (Maybe a)
+getVariable :: (MonadIO m) => Text -> Resolution -> ProgramState a -> m (Maybe a)
 getVariable name distance st =
   let env' = environment st
       globals' = globals st
@@ -49,7 +50,7 @@ getVariable name distance st =
         Local (LocalResolution d) -> getAtDistance d name env'
         Global -> findInFrame name globals'
 
-assignVariable :: (MonadIO m) => String -> Resolution -> a -> ProgramState a -> m Bool
+assignVariable :: (MonadIO m) => Text -> Resolution -> a -> ProgramState a -> m Bool
 assignVariable name distance val st =
   let env' = environment st
       globals' = globals st

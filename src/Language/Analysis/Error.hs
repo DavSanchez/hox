@@ -1,9 +1,11 @@
 module Language.Analysis.Error (ResolveError (..), displayResolveError) where
 
+import Data.Text (Text, unpack)
+
 data ResolveError
   = ResolveError
       -- | Lexeme
-      String
+      Text
       -- | Line number
       Int
       -- | Error message
@@ -12,4 +14,4 @@ data ResolveError
 
 displayResolveError :: ResolveError -> String
 displayResolveError (ResolveError name line msg) =
-  "[line " ++ show line ++ "] Error at '" ++ name ++ "': " ++ msg
+  "[line " ++ show line ++ "] Error at '" ++ unpack name ++ "': " ++ msg

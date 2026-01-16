@@ -9,6 +9,8 @@ module Language.Syntax.Token
   )
 where
 
+import Data.Text (Text, unpack)
+
 data TokenType
   = -- Single character tokens
     LEFT_PAREN
@@ -33,7 +35,7 @@ data TokenType
   | LESS_EQUAL
   | -- Literals
     IDENTIFIER Lexeme
-  | STRING Lexeme String
+  | STRING Lexeme Text
   | NUMBER Lexeme Double
   | -- Keywords
     AND
@@ -67,7 +69,7 @@ isIdentifier :: TokenType -> Bool
 isIdentifier (IDENTIFIER _) = True
 isIdentifier _ = False
 
-type Lexeme = String
+type Lexeme = Text
 
 data Token = Token
   { tokenType :: TokenType,
@@ -76,14 +78,15 @@ data Token = Token
   deriving stock (Show, Eq)
 
 -- |  Pretty print a token the way the book expects
--- >>> displayToken (Token (IDENTIFIER "foo") 1)
+-- >>> import Data.Text
+-- >>> displayToken (Token (IDENTIFIER (pack "foo")) 1)
 -- "IDENTIFIER foo null"
--- >>> displayToken (Token (NUMBER "42" 42.0) 1)
+-- >>> displayToken (Token (NUMBER (pack "42") 42.0) 1)
 -- "NUMBER 42 42.0"
 displayToken :: Token -> String
-displayToken (Token (IDENTIFIER s) _) = "IDENTIFIER " <> s <> " null"
-displayToken (Token (STRING l s) _) = "STRING " <> l <> " " <> s
-displayToken (Token (NUMBER l n) _) = "NUMBER " <> l <> " " <> show n
+displayToken (Token (IDENTIFIER s) _) = "IDENTIFIER " <> unpack s <> " null"
+displayToken (Token (STRING l s) _) = "STRING " <> unpack l <> " " <> unpack s
+displayToken (Token (NUMBER l n) _) = "NUMBER " <> unpack l <> " " <> show n
 displayToken (Token LEFT_PAREN _) = "LEFT_PAREN ( null"
 displayToken (Token RIGHT_PAREN _) = "RIGHT_PAREN ) null"
 displayToken (Token LEFT_BRACE _) = "LEFT_BRACE { null"
@@ -122,9 +125,9 @@ displayToken (Token WHILE _) = "WHILE while null"
 displayToken (Token EOF _) = "EOF  null"
 
 displayTokenType :: TokenType -> String
-displayTokenType (IDENTIFIER s) = s
-displayTokenType (STRING s _) = s
-displayTokenType (NUMBER s _) = s
+displayTokenType (IDENTIFIER s) = unpack s
+displayTokenType (STRING s _) = unpack s
+displayTokenType (NUMBER s _) = unpack s
 displayTokenType LEFT_PAREN = "("
 displayTokenType RIGHT_PAREN = ")"
 displayTokenType LEFT_BRACE = "{"

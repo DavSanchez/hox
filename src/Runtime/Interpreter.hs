@@ -1,3 +1,4 @@
+{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Runtime.Interpreter
@@ -16,6 +17,7 @@ import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runEx
 import Control.Monad.IO.Class (MonadIO (liftIO))
 import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
+import Data.Text (Text, pack)
 import Language.Analysis.Resolver (programResolver, runResolver)
 import Language.Syntax.Expression
   ( BinaryOperator,
@@ -87,7 +89,7 @@ runInterpreter' programState interpreter = runExceptT (evalStateT (runInterprete
 interpreterFailure :: InterpreterError -> Interpreter a
 interpreterFailure = throwError
 
-evalError :: (MonadError InterpreterError m) => Int -> String -> m a
+evalError :: (MonadError InterpreterError m) => Int -> Text -> m a
 evalError line msg = throwError (Eval (EvalError line msg))
 
 newtype InterpreterT m a = Interpreter
@@ -358,7 +360,7 @@ executeVariable ::
     MonadIO m
   ) =>
   Int ->
-  String ->
+  Text ->
   Resolution ->
   m Value
 executeVariable line name dist = do
@@ -374,7 +376,7 @@ evaluateVarAssignment ::
     MonadIO m
   ) =>
   Int ->
-  String ->
+  Text ->
   Expression 'Resolved ->
   Resolution ->
   m Value
@@ -430,7 +432,7 @@ executeGet ::
   ) =>
   Int ->
   Expression 'Resolved ->
-  String ->
+  Text ->
   m Value
 executeGet line objectExpr propName = do
   objectValue <- evaluateExpr objectExpr
@@ -482,7 +484,7 @@ executeSet ::
     MonadError InterpreterError m,
     MonadIO m
   ) =>
-  Int -> Expression 'Resolved -> String -> Expression 'Resolved -> m Value
+  Int -> Expression 'Resolved -> Text -> Expression 'Resolved -> m Value
 executeSet line objectExpr propName valueExpr = do
   objectValue <- evaluateExpr objectExpr
   case objectValue of
@@ -505,7 +507,7 @@ callCallable line callable args =
   let expectedArity = arity callable
       actualArity = length args
    in if actualArity /= expectedArity
-        then evalError line ("Expected " <> show expectedArity <> " arguments but got " <> show (length args) <> ".")
+        then evalError line ("Expected " <> pack (show expectedArity) <> " arguments but got " <> pack (show (length args)) <> ".")
         else call callable args
 
 call :: Callable -> [Value] -> forall m. (MonadState (ProgramState Value) m, MonadError InterpreterError m, MonadIO m) => m Value

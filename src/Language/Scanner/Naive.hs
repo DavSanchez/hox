@@ -3,6 +3,7 @@ module Language.Scanner.Naive (naiveScanTokens) where
 import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
+import Data.Text (pack)
 import Language.Scanner.Error (SyntaxError (..))
 import Language.Scanner.Types (TokenResult)
 import Language.Syntax.Token (Token (..), TokenType (..))
@@ -101,7 +102,7 @@ naiveScanTokens ('"' : ss) l tt =
           naiveScanTokens
             (drop (length stringContent + 1 {- For the closing quote -}) ss)
             (l + newLinesInString)
-            (validToken (STRING (show stringContent) stringContent) l : tt)
+            (validToken (STRING (pack $ show stringContent) (pack stringContent)) l : tt)
 -- Number literals
 naiveScanTokens input@(c : ss) l tt
   | isDigit c =
@@ -115,13 +116,13 @@ naiveScanTokens input@(c : ss) l tt
             _ -> ""
           numberStr = integerPart ++ decimalPart
           numParseResult = case readMaybe @Double numberStr of
-            Just n -> validToken (NUMBER numberStr n) l
+            Just n -> validToken (NUMBER (pack numberStr) n) l
             Nothing -> syntaxError ("Attempted to parse an invalid number: " ++ numberStr) l ""
        in naiveScanTokens (drop (length numberStr) input) l (numParseResult : tt)
   -- reserved words and identifiers
   | isAlpha c =
       let identifier = c : takeWhile isAlphaNum ss
-          tokenType = fromMaybe (IDENTIFIER identifier) (lookup identifier keywords)
+          tokenType = fromMaybe (IDENTIFIER (pack identifier)) (lookup identifier keywords)
        in naiveScanTokens (drop (length identifier) input) l (validToken tokenType l : tt)
 -- If we reach here, it means we encountered an unexpected character
 naiveScanTokens (_ : ss) line tt = naiveScanTokens ss line (syntaxError "Unexpected character." line "" : tt)

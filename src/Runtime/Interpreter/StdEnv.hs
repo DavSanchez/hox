@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Runtime.Interpreter.StdEnv (mkStdEnv) where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)

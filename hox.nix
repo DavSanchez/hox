@@ -1,13 +1,13 @@
 { mkDerivation, base, containers, lib, mtl, tasty, tasty-bench
-, tasty-hunit, tasty-quickcheck, time
+, tasty-hunit, tasty-quickcheck, text, time
 }:
 mkDerivation {
   pname = "hox";
-  version = "0.13.0.0";
+  version = "1.1.0.0";
   src = ./.;
   isLibrary = true;
   isExecutable = true;
-  libraryHaskellDepends = [ base containers mtl time ];
+  libraryHaskellDepends = [ base containers mtl text time ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [ base tasty tasty-hunit tasty-quickcheck ];
   benchmarkHaskellDepends = [ base tasty-bench ];

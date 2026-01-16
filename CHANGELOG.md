@@ -1,6 +1,11 @@
 # Revision history for `hox`
 
-## 0.13.0.0 -- 2026-01-XX
+## 1.1.0.0 -- 2026-01-16
+
+* Performance improvements: set up a baseline
+* Performance improvements: replace `String` with `Text` except in the `Scanner`.
+
+## 0.13.0.0 -- 2026-01-10
 
 * Chapter 13: Inheritance
 

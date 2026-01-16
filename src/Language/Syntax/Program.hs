@@ -17,6 +17,7 @@ import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
 import Data.Map qualified as M
+import Data.Text (Text)
 import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
 import Language.Syntax.Expression (Expression (..), Literal (Bool), NotResolved (..), Phase (..), expression)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
@@ -38,8 +39,8 @@ deriving stock instance (Eq (Expression p)) => Eq (Declaration p)
 deriving stock instance (Show (Expression p)) => Show (Declaration p)
 
 data Class (p :: Phase) = Class
-  { className :: String,
-    classMethods :: M.Map String (Function p),
+  { className :: Text,
+    classMethods :: M.Map Text (Function p),
     classLine :: Int,
     superClass :: Maybe (Expression p)
   }
@@ -51,8 +52,8 @@ deriving stock instance (Show (Expression p)) => Show (Class p)
 type Block (p :: Phase) = [Declaration p]
 
 data Function (p :: Phase) = Function
-  { funcName :: String,
-    funcParams :: [(String, Int)],
+  { funcName :: Text,
+    funcParams :: [(Text, Int)],
     funcBody :: Block p,
     funcLine :: Int
   }
@@ -62,7 +63,7 @@ deriving stock instance (Eq (Expression p)) => Eq (Function p)
 deriving stock instance (Show (Expression p)) => Show (Function p)
 
 data Variable (p :: Phase) = Variable
-  { varName :: String,
+  { varName :: Text,
     varInitializer :: Maybe (Expression p),
     varLine :: Int
   }
@@ -143,7 +144,7 @@ parseSuperClass = do
       pure (Just $ VariableExpr 0 superName NotResolved)
     else pure Nothing
 
-parseClassMethods :: TokenParser (M.Map String (Function 'Unresolved))
+parseClassMethods :: TokenParser (M.Map Text (Function 'Unresolved))
 parseClassMethods = do
   t <- peek
   if tokenType t == RIGHT_BRACE
@@ -173,14 +174,14 @@ function kind = do
   body <- parseScopedProgram
   pure $ Function name params body l
 
-parseFunctionParameters :: TokenParser [(String, Int)]
+parseFunctionParameters :: TokenParser [(Text, Int)]
 parseFunctionParameters = do
   t <- peek
   if tokenType t == RIGHT_PAREN
     then pure []
     else go 0 []
   where
-    go :: Int -> [(String, Int)] -> TokenParser [(String, Int)]
+    go :: Int -> [(Text, Int)] -> TokenParser [(Text, Int)]
     go n acc = do
       -- Check limit before consuming the next parameter so the error is emitted
       -- for the offending identifier token.
@@ -216,7 +217,7 @@ withInitializer = Just <$> (satisfy ((EQUAL ==) . tokenType) ("Expect " <> displ
 noInitializer :: TokenParser (Maybe (Expression 'Unresolved))
 noInitializer = pure Nothing
 
-variableName :: TokenParser (String, Int)
+variableName :: TokenParser (Text, Int)
 variableName = do
   Token {tokenType = IDENTIFIER name, line = l} <- satisfy (isIdentifier . tokenType) "Expect variable name."
   pure (name, l)

@@ -190,10 +190,10 @@
               };
             };
 
-            packages = rec {
-              default = hox;
+            packages = {
+              default = hoxPkg;
               hox = hoxPkg;
-              hox-test = pkgs.haskell.lib.overrideCabal hox (drv: {
+              hox-test = pkgs.haskell.lib.overrideCabal hoxPkg (drv: {
                 # Tests are enabled by default
                 # Copy test binary to output bin directory
                 postInstall = (drv.postInstall or "") + ''
@@ -201,7 +201,7 @@
                 '';
                 mainProgram = "hox-test";
               });
-              hox-bench = pkgs.haskell.lib.overrideCabal hox (drv: {
+              hox-bench = pkgs.haskell.lib.overrideCabal hoxPkg (drv: {
                 # Configure to build benchmarks
                 doBenchmark = true;
                 # Copy benchmark binary to output bin directory

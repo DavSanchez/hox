@@ -42,7 +42,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Chapter ${{ matrix.test-chapter }} tests from Crafting Interpreters
-        run: nix run .#hox-tests -- ${{ matrix.test-chapter }}
+        run: nix run .#hox-crafting-interpreters-tests -- ${{ matrix.test-chapter }}
 
   benchmarks:
     runs-on: ${{ matrix.os }}
@@ -61,7 +61,7 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Run benchmarks
-        run: nix develop .# --command cabal bench
+        run: nix run .#hox-bench
 
   check-all-green:
     name: 🟢 All required checks and tests pass

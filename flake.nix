@@ -152,7 +152,7 @@
           in
           {
             apps = {
-              hox-tests = {
+              hox-crafting-interpreters-tests = {
                 type = "app";
                 program = "${crafting-interpreters-script self'.packages.hox}/bin/crafting-interpreters-script";
                 meta.description = "Run the Crafting Interpreters test suite. Usage: nix run .#tests -- [chapters...]";
@@ -193,6 +193,23 @@
             packages = rec {
               default = hox;
               hox = hoxPkg;
+              hox-test = pkgs.haskell.lib.overrideCabal hox (drv: {
+                # Tests are enabled by default
+                # Copy test binary to output bin directory
+                postInstall = (drv.postInstall or "") + ''
+                  install -D dist/build/hox-test/hox-test $out/bin/hox-test
+                '';
+                mainProgram = "hox-test";
+              });
+              hox-bench = pkgs.haskell.lib.overrideCabal hox (drv: {
+                # Configure to build benchmarks
+                doBenchmark = true;
+                # Copy benchmark binary to output bin directory
+                postInstall = (drv.postInstall or "") + ''
+                  install -D dist/build/hox-bench/hox-bench $out/bin/hox-bench
+                '';
+                mainProgram = "hox-bench";
+              });
             };
 
             # Git hooks

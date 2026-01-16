@@ -1,7 +1,11 @@
 name: CI
-run-name: ${{ github.actor }} is testing his implementation of Lox 🚀
+run-name: ${{ github.actor }} is testing Hox, his Haskell implementation of Lox 🚀
 
 on: [push]
+
+permissions:
+  contents: write
+  pull-requests: write
 
 jobs:
   nix-checks:
@@ -42,8 +46,46 @@ jobs:
           authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
 
       - name: Chapter ${{ matrix.test-chapter }} tests from Crafting Interpreters
-        run: nix run .#hox-tests -- ${{ matrix.test-chapter }}
+        run: nix run .#hox-crafting-interpreters-tests -- ${{ matrix.test-chapter }}
 
+  benchmarks:
+    runs-on: ${{ matrix.os }}
+    name: 📊 Benchmarks (${{ matrix.os }})
+    strategy:
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: cachix/install-nix-action@v31
+        with:
+          github_access_token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: cachix/cachix-action@v16
+        with:
+          name: hox
+          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
+
+      - name: Run benchmarks
+        run: nix run .#hox-bench -- +RTS -T -RTS --csv hox-bench-results.csv
+
+      - name: Convert results to JSON
+        run: python3 .github/scripts/bench_to_json.py hox-bench-results.csv hox-bench-results.json
+
+      - name: Store and Compare Benchmarks
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          name: Hox Benchmarks
+          tool: "customSmallerIsBetter"
+          output-file-path: hox-bench-results.json
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # Push and save only on master to build history
+          auto-push: ${{ github.ref == 'refs/heads/master' }}
+          save-data-file: ${{ github.ref == 'refs/heads/master' }}
+          # Alert/Comment configuration
+          alert-threshold: "120%"
+          comment-on-alert: true
+          fail-on-alert: false
+          summary-always: true
+          alert-comment-cc-users: "@DavSanchez"
   check-all-green:
     name: 🟢 All required checks and tests pass
     if: always()
@@ -51,6 +93,7 @@ jobs:
     needs:
       - nix-checks
       - crafting-interpreter-tests
+      - benchmarks
     steps:
       - name: Decide whether the needed jobs succeeded or failed
         uses: re-actors/alls-green@release/v1

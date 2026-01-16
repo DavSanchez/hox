@@ -119,6 +119,7 @@ library
     Language.Parser
     Language.Scanner
     Language.Syntax.Expression
+    Language.Syntax.Program
     Language.Syntax.Token
     Runtime.Error
     Runtime.Interpreter
@@ -128,9 +129,8 @@ library
   other-modules:
     Language.Analysis.Error
     Language.Scanner.Error
-    Language.Scanner.Internal
     Language.Scanner.Naive
-    Language.Syntax.Program
+    Language.Scanner.Types
     Runtime.Environment
     Runtime.Interpreter.ControlFlow
     Runtime.Interpreter.Error
@@ -190,6 +190,20 @@ test-suite hox-test
     tasty,
     tasty-hunit,
     tasty-quickcheck,
+
+  ghc-options:
+    -threaded
+    -rtsopts
+    -with-rtsopts=-N
+
+benchmark hox-bench
+  import: common-options
+  type: exitcode-stdio-1.0
+  hs-source-dirs: bench
+  main-is: Main.hs
+  build-depends:
+    hox,
+    tasty-bench,
 
   ghc-options:
     -threaded

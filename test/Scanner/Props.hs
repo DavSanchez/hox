@@ -2,7 +2,7 @@ module Scanner.Props (scannerProperties) where
 
 import Data.Bifunctor (Bifunctor (bimap))
 import Data.List.NonEmpty qualified as NE
-import Language.Scanner (errorMessage, scanTokens)
+import Language.Scanner (SyntaxError (..), scanTokens)
 import Language.Syntax.Token (Token (tokenType), TokenType (EOF))
 import Test.Tasty (TestTree, testGroup)
 import Test.Tasty.QuickCheck (testProperty)

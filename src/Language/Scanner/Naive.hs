@@ -1,13 +1,52 @@
 module Language.Scanner.Naive (naiveScanTokens) where
 
-import Data.Char (isDigit)
+import Data.Char (isAsciiLower, isAsciiUpper, isDigit)
 import Data.List.NonEmpty (NonEmpty ((:|)))
 import Data.Maybe (fromMaybe)
-import Language.Scanner.Internal (TokenResult, isAlpha, isAlphaNum, keywords, syntaxError, validToken)
-import Language.Syntax.Token (TokenType (..))
+import Language.Scanner.Error (SyntaxError (..))
+import Language.Scanner.Types (TokenResult)
+import Language.Syntax.Token (Token (..), TokenType (..))
 import Text.Read (readMaybe)
 
--- | Auxiliary function that scans the input strings and tracks the state: the current line number and the accumulated tokens
+validToken :: TokenType -> Int -> TokenResult
+validToken tokenType line =
+  Right (Token tokenType line)
+
+syntaxError :: String -> Int -> String -> TokenResult
+syntaxError msg line whereStr =
+  Left (Error msg line whereStr)
+
+isAlpha :: Char -> Bool
+isAlpha '_' = True
+isAlpha c
+  | isAsciiLower c || isAsciiUpper c =
+      True
+isAlpha _ = False
+
+isAlphaNum :: Char -> Bool
+isAlphaNum c = isAlpha c || isDigit c
+
+keywords :: [(String, TokenType)]
+keywords =
+  [ ("and", AND),
+    ("class", CLASS),
+    ("else", ELSE),
+    ("false", FALSE),
+    ("fun", FUN),
+    ("for", FOR),
+    ("if", IF),
+    ("nil", NIL),
+    ("or", OR),
+    ("print", PRINT),
+    ("return", RETURN),
+    ("super", SUPER),
+    ("this", THIS),
+    ("true", TRUE),
+    ("var", VAR),
+    ("while", WHILE)
+  ]
+
+-- | Scans the input strings and tracks the state: the current line number and the accumulated tokens
 naiveScanTokens ::
   -- | Input string
   String ->

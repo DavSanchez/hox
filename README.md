@@ -14,3 +14,7 @@
 - [x] Chapter 11: Resolving and Binding
 - [x] Chapter 12: Classes
 - [x] Chapter 13: Inheritance
+
+## Benchmark evolution
+
+See [per-commit charts](http://davsanchez.github.io/hox/dev/bench).

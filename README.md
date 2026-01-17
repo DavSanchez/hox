@@ -17,4 +17,7 @@
 
 ## Benchmark evolution
 
-See [per-commit charts](http://davsanchez.github.io/hox/dev/bench).
+Performance is frankly awful, though somewhat expected for tree-walk interpreters.
+Will be revisiting this to add improvements.
+See [per-commit charts](http://davsanchez.github.io/hox/dev/bench) to check
+how it's going.

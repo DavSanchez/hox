@@ -26,7 +26,7 @@ import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.Map qualified as M
+import Data.Map.Strict qualified as M
 import Data.Text (Text, unpack)
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Phase (Resolved), UnaryOperator (..))
 import Language.Syntax.Program (Class (..), Function (..))

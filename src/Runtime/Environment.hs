@@ -15,7 +15,7 @@ where
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor (($>))
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.Map qualified as M
+import Data.Map.Strict qualified as M
 import Data.Text (Text)
 import Numeric.Natural (Natural)
 

@@ -16,7 +16,7 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
-import Data.Map qualified as M
+import Data.Map.Strict qualified as M
 import Data.Text (Text)
 import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
 import Language.Syntax.Expression (Expression (..), Literal (Bool), NotResolved (..), Phase (..), expression)

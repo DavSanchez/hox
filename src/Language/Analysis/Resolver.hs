@@ -15,7 +15,7 @@ import Control.Monad.State (MonadState (..), State, gets, modify, runState)
 import Data.Foldable (for_)
 import Data.List.NonEmpty (NonEmpty ((:|)), (<|))
 import Data.List.NonEmpty qualified as NE
-import Data.Map qualified as M
+import Data.Map.Strict qualified as M
 import Data.Maybe (isJust)
 import Data.Text (Text)
 import Language.Analysis.Error (ResolveError (..), displayResolveError)

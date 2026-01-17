@@ -14,12 +14,12 @@ where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Data.Functor (($>))
+import Data.HashMap.Strict qualified as M
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.Map.Strict qualified as M
 import Data.Text (Text)
 import Numeric.Natural (Natural)
 
-type Frame a = IORef (M.Map Text a)
+type Frame a = IORef (M.HashMap Text a)
 
 type Environment a = [Frame a]
 

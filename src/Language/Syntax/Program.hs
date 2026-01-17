@@ -16,7 +16,7 @@ import Control.Applicative (Alternative ((<|>)))
 import Control.Monad (when)
 import Data.Either (lefts, rights)
 import Data.Functor (void, ($>))
-import Data.Map.Strict qualified as M
+import Data.HashMap.Strict qualified as M
 import Data.Text (Text)
 import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
 import Language.Syntax.Expression (Expression (..), Literal (Bool), NotResolved (..), Phase (..), expression)
@@ -40,7 +40,7 @@ deriving stock instance (Show (Expression p)) => Show (Declaration p)
 
 data Class (p :: Phase) = Class
   { className :: Text,
-    classMethods :: M.Map Text (Function p),
+    classMethods :: M.HashMap Text (Function p),
     classLine :: Int,
     superClass :: Maybe (Expression p)
   }
@@ -144,7 +144,7 @@ parseSuperClass = do
       pure (Just $ VariableExpr 0 superName NotResolved)
     else pure Nothing
 
-parseClassMethods :: TokenParser (M.Map Text (Function 'Unresolved))
+parseClassMethods :: TokenParser (M.HashMap Text (Function 'Unresolved))
 parseClassMethods = do
   t <- peek
   if tokenType t == RIGHT_BRACE

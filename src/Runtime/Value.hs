@@ -25,8 +25,8 @@ import Control.Monad.Error.Class (MonadError)
 import Control.Monad.IO.Class (MonadIO, liftIO)
 import Control.Monad.State.Class (MonadState)
 import Data.Char (toLower)
+import Data.HashMap.Strict qualified as M
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.Map.Strict qualified as M
 import Data.Text (Text, unpack)
 import Language.Syntax.Expression (BinaryOperator (..), Literal (..), Phase (Resolved), UnaryOperator (..))
 import Language.Syntax.Program (Class (..), Function (..))
@@ -55,7 +55,7 @@ data LoxClass = LoxClass
 
 data LoxClassInstance = LoxClassInstance
   { loxClass :: LoxClass,
-    instanceFields :: IORef (M.Map Text Value),
+    instanceFields :: IORef (M.HashMap Text Value),
     superClass :: Maybe SuperClass
   }
 

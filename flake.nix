@@ -134,7 +134,10 @@
                 ghcWithDeps
                 haskellPackages.doctest
               ];
-              text = "doctest -XGHC2024 -isrc src/ -w -Wdefault --verbose";
+              text = ''
+                export NIX_GHC=${ghcWithDeps}/bin/ghc
+                doctest -XGHC2024 -isrc src/ -w -Wdefault --verbose
+              '';
             };
             weederScript = pkgs.writeShellApplication {
               name = "hox-weeder";

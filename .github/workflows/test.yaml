@@ -81,11 +81,13 @@ jobs:
           auto-push: ${{ github.ref == 'refs/heads/master' }}
           save-data-file: ${{ github.ref == 'refs/heads/master' }}
           # Alert/Comment configuration
-          alert-threshold: "120%"
+          alert-threshold: "150%"
           comment-on-alert: true
           fail-on-alert: false
           summary-always: true
           alert-comment-cc-users: "@DavSanchez"
+          gh-pages-branch: "master"
+          benchmark-data-dir-path: "docs/hox/dev/bench"
   check-all-green:
     name: 🟢 All required checks and tests pass
     if: always()

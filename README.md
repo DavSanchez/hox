@@ -2,7 +2,7 @@
 
 [![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 
-[![❄️ Package checks](https://github.com/DavSanchez/hox/actions/workflows/test.yaml/badge.svg)](https://github.com/DavSanchez/hox/actions/workflows/test.yaml)
+[![❄️ Hox package checks](https://github.com/DavSanchez/hox/actions/workflows/test.yaml/badge.svg)](https://github.com/DavSanchez/hox/actions/workflows/test.yaml)
 
 - [x] Chapter 04: Scanning
 - [x] Chapter 05: Representing Code

@@ -141,10 +141,10 @@ library
   -- other-extensions:
   -- Other library packages from which modules are imported.
   build-depends:
-    containers,
     mtl,
     text,
     time,
+    unordered-containers,
 
   -- Directories containing source files.
   hs-source-dirs: src

@@ -1,7 +1,10 @@
 name: CI
 run-name: ${{ github.actor }} is testing Hox, his Haskell implementation of Lox 🚀
 
-on: [push]
+on:
+  push:
+    paths-ignore:
+      - "rox/**"
 
 permissions:
   contents: write

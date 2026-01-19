@@ -87,6 +87,7 @@ jobs:
           summary-always: true
           alert-comment-cc-users: "@DavSanchez"
           gh-pages-branch: "master"
+          skip-fetch-gh-pages: true
           benchmark-data-dir-path: "docs/dev/bench"
   check-all-green:
     name: 🟢 All required checks and tests pass

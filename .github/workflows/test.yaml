@@ -87,7 +87,7 @@ jobs:
           summary-always: true
           alert-comment-cc-users: "@DavSanchez"
           gh-pages-branch: "master"
-          benchmark-data-dir-path: "docs/hox/dev/bench"
+          benchmark-data-dir-path: "docs/dev/bench"
   check-all-green:
     name: 🟢 All required checks and tests pass
     if: always()

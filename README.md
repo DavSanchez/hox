@@ -25,6 +25,7 @@ and following (where possible) the Java original from the book
 
 Performance has room for improvements, though somewhat expected for tree-walk
 interpreters. Will be revisiting this to add improvements.
+
 I have minimal benchmarks set up, which I expect to expand upon and improve.
-See [per-commit performance charts](http://davsanchez.github.io/hox/dev/bench) to
-check how it's going.
+See [per-commit performance charts](http://davsanchez.github.io/hox/dev/bench)
+to check how it's going.

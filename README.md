@@ -8,6 +8,8 @@ This is my implementation of a tree-walk interpreter of Lox, written in Haskell
 and following (where possible) the Java original from the book
 [Crafting Interpreters](https://www.craftinginterpreters.com) by Robert Nystrom.
 
+## Completed chapters
+
 - [x] Chapter 04: Scanning
 - [x] Chapter 05: Representing Code
 - [x] Chapter 06: Parsing Expressions

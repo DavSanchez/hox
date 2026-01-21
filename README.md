@@ -4,6 +4,8 @@
 
 [![❄️ Hox package checks](https://github.com/DavSanchez/hox/actions/workflows/test.yaml/badge.svg)](https://github.com/DavSanchez/hox/actions/workflows/test.yaml)
 
+This is my implementation of a tree-walk interpreter of Lox, written in Haskell and following (where possible) the Java original from the book [Crafting Interpreters](https://www.craftinginterpreters.com) by Robert Nystrom.
+
 - [x] Chapter 04: Scanning
 - [x] Chapter 05: Representing Code
 - [x] Chapter 06: Parsing Expressions
@@ -17,7 +19,8 @@
 
 ## Benchmark evolution
 
-Performance is frankly awful, though somewhat expected for tree-walk interpreters.
+Performance has room for improvements, though somewhat expected for tree-walk interpreters.
 Will be revisiting this to add improvements.
-See [per-commit charts](http://davsanchez.github.io/hox/dev/bench) to check
+I have minimal benchmarks set up, which I expect to expand upon and improve.
+See [per-commit performance charts](http://davsanchez.github.io/hox/dev/bench) to check
 how it's going.

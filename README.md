@@ -1,4 +1,4 @@
-# `hox`: A tree-walk Lox interpreter in Haskell
+# `hox`: A tree-walk Lox implementation written in Haskell
 
 [![built with nix](https://builtwithnix.org/badge.svg)](https://builtwithnix.org)
 

@@ -1,5 +1,5 @@
 {
-  description = "My implementations of Lox, a programming language from the book 'Crafting Interpreters' by Robert Nystrom";
+  description = "Hox: my implementations of Lox, a programming language from the book 'Crafting Interpreters' by Robert Nystrom, as a tree-walk interpreter written in Haskell";
 
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";

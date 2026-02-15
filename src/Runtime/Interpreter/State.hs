@@ -27,8 +27,8 @@ import Runtime.Environment
   )
 
 data ProgramState a = ProgramState
-  { environment :: Environment a,
-    globals :: Frame a
+  { environment :: !(Environment a),
+    globals :: !(Frame a)
   }
 
 newProgramState :: (MonadIO m) => m (ProgramState a)

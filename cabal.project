@@ -1,0 +1,12 @@
+packages: .
+
+-- Uncomment the block below to build with profiling enabled:
+-- (run: cabal build --enable-profiling)
+-- profiling: True
+-- profiling-detail: all-functions
+
+-- For heap profiling:
+--   cabal run hox-bench --enable-profiling -- +RTS -hc -p -RTS
+--   hp2ps -c hox-bench.hp && evince hox-bench.ps
+
+optimization: 2

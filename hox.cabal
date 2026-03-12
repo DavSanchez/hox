@@ -148,6 +148,7 @@ library
 
   -- Directories containing source files.
   hs-source-dirs: src
+  ghc-options: -O2
 
 executable hox
   -- Import common warning flags.
@@ -209,4 +210,6 @@ benchmark hox-bench
   ghc-options:
     -threaded
     -rtsopts
+    -- Allow RTS flags to be passed at runtime, e.g.:
+    --   cabal bench --enable-profiling -- +RTS -p -hc -RTS
     -with-rtsopts=-N

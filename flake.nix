@@ -215,6 +215,7 @@
             # Git hooks
             pre-commit = {
               settings = {
+                package = pkgs.prek;
                 hooks = {
                   # Formatters
                   treefmt = {

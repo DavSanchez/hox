@@ -125,7 +125,9 @@
                       dart "tool/bin/test.dart" target "--interpreter" "${pkgs.lib.getExe interpreter}" "--arguments" ("--" ++ target)
                 '';
             haskellPackages = pkgs.haskell.packages.ghc9122; # GHC 9.12.2
-            hoxPkg = haskellPackages.callPackage ./hox.nix { };
+            hoxPkg = pkgs.haskell.lib.overrideCabal (haskellPackages.callPackage ./hox.nix { }) (_: {
+              configureFlags = [ "--enable-optimization=2" ];
+            });
             ghcWithDeps = haskellPackages.ghcWithPackages (p: hoxPkg.propagatedBuildInputs);
             doctestScript = pkgs.writeShellApplication {
               name = "hox-doctest";

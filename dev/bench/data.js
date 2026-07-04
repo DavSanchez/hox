@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773881516785,
+  "lastUpdate": 1783184019753,
   "repoUrl": "https://github.com/DavSanchez/hox",
   "entries": {
     "Hox Benchmarks (ubuntu-latest)": [
@@ -1565,6 +1565,93 @@ window.BENCHMARK_DATA = {
           {
             "name": "All.Interpreter.fib(30) - Peak Memory",
             "value": 171966464,
+            "unit": "Bytes"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "davidslt+git@pm.me",
+            "name": "David Sánchez",
+            "username": "DavSanchez"
+          },
+          "committer": {
+            "email": "davidslt+git@pm.me",
+            "name": "David Sánchez",
+            "username": "DavSanchez"
+          },
+          "distinct": true,
+          "id": "a2b48244732804c3e3ff379a1a54b2524eda96bd",
+          "message": "ci: weekly renovate",
+          "timestamp": "2026-07-04T17:51:39+01:00",
+          "tree_id": "a0a9f7528edbd57b5255f5357bc8537af46381ab",
+          "url": "https://github.com/DavSanchez/hox/commit/a2b48244732804c3e3ff379a1a54b2524eda96bd"
+        },
+        "date": 1783184019125,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "All.Interpreter.fib(20)",
+            "value": 28223330,
+            "range": "1918810.18",
+            "unit": "ns"
+          },
+          {
+            "name": "All.Interpreter.fib(20) - Allocated",
+            "value": 94053638,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(20) - Copied",
+            "value": 1356429,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(20) - Peak Memory",
+            "value": 22020096,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(25)",
+            "value": 323419852.8,
+            "range": "14718874.528",
+            "unit": "ns"
+          },
+          {
+            "name": "All.Interpreter.fib(25) - Allocated",
+            "value": 1043097210,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(25) - Copied",
+            "value": 18141264,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(25) - Peak Memory",
+            "value": 30408704,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(30)",
+            "value": 3541005254.6,
+            "range": "102675953.642",
+            "unit": "ns"
+          },
+          {
+            "name": "All.Interpreter.fib(30) - Allocated",
+            "value": 11567215769,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(30) - Copied",
+            "value": 218448833,
+            "unit": "Bytes"
+          },
+          {
+            "name": "All.Interpreter.fib(30) - Peak Memory",
+            "value": 166723584,
             "unit": "Bytes"
           }
         ]

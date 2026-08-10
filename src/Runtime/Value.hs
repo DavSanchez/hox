@@ -38,25 +38,25 @@ import Runtime.Interpreter.State (ProgramState (..))
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value
-  = VNumber Double
-  | VBool Bool
-  | VString Text
+  = VNumber !Double
+  | VBool !Bool
+  | VString !Text
   | VNil
-  | VCallable Callable
-  | VClassInstance LoxClassInstance
+  | VCallable !Callable
+  | VClassInstance !LoxClassInstance
   deriving stock (Eq, Show)
 
 data LoxClass = LoxClass
-  { classDefinition :: Class 'Resolved,
-    classClosure :: Closure,
-    classSuper :: Maybe LoxClass
+  { classDefinition :: !(Class 'Resolved),
+    classClosure :: !Closure,
+    classSuper :: !(Maybe LoxClass)
   }
   deriving stock (Eq)
 
 data LoxClassInstance = LoxClassInstance
-  { loxClass :: LoxClass,
-    instanceFields :: IORef (M.Map Text Value),
-    superClass :: Maybe SuperClass
+  { loxClass :: !LoxClass,
+    instanceFields :: !(IORef (M.Map Text Value)),
+    superClass :: !(Maybe SuperClass)
   }
 
 instance Eq LoxClassInstance where
@@ -107,15 +107,15 @@ type MonadCallable m =
   [Value] -> m Value
 
 data CallableType
-  = UserDefinedFunction (Function 'Resolved) Closure Bool
+  = UserDefinedFunction !(Function 'Resolved) !Closure !Bool
   | NativeFunction
       -- | arity
-      Int
+      !Int
       -- | name
-      Text
+      !Text
       -- | implementation
       (forall m. MonadCallable m)
-  | ClassConstructor LoxClass (Maybe SuperClass)
+  | ClassConstructor !LoxClass !(Maybe SuperClass)
 
 arity :: Callable -> Int
 arity (Callable (UserDefinedFunction func _ _)) = length . funcParams $ func

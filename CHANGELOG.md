@@ -4,6 +4,7 @@
 
 * Performance improvements: set up a baseline
 * Performance improvements: replace `String` with `Text` except in the `Scanner`.
+* Performance improvements: use `Data.Map.Strict`.
 
 ## 0.13.0.0 -- 2026-01-10
 

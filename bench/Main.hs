@@ -61,7 +61,7 @@ main =
       bgroup
         "Resolver"
         [ env (parsed W.frontEndSource) $ \(Shared prog) ->
-            bench "large program" $ whnf (\p -> let (Program ds, errs) = runResolver (programResolver p) in length errs + length ds) prog
+            bench "large program" $ whnf (\p -> let (Program ds, errs) = runResolver [] (programResolver p) in length errs + length ds) prog
         ],
       -- Back-end. These names (the fib ones in particular) are stable so the
       -- history tracked in CI stays comparable.

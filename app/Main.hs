@@ -103,8 +103,11 @@ runChapter07 expr = runInterpreter $ evaluateExpr (resolveGlobal expr)
     resolveGlobal (This line _) = This line (LocalResolution 0 0)
     resolveGlobal (Super line method _ _) = Super line method (LocalResolution 0 0) (LocalResolution 0 0)
     resolveGlobal (Grouping expr') = Grouping (resolveGlobal expr')
-    resolveGlobal (VariableExpr line name _) = VariableExpr line name Global
-    resolveGlobal (VariableAssignment line name val _) = VariableAssignment line name (resolveGlobal val) Global
+    resolveGlobal (VariableExpr line name _) = VariableExpr line name unknownGlobal
+    resolveGlobal (VariableAssignment line name val _) = VariableAssignment line name (resolveGlobal val) unknownGlobal
+    -- There is no program to resolve names against, so no global can exist:
+    -- an index the resolver never handed out always reads as undefined.
+    unknownGlobal = Global (-1)
 
 handleChap07Out :: Either InterpreterError Value -> IO ()
 handleChap07Out = either handleErr (putStrLn . displayValue)

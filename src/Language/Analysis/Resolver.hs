@@ -69,13 +69,17 @@ newtype Resolver a = Resolver {runResolverT :: State ResolverState a}
       MonadState ResolverState
     )
 
-runResolver :: Resolver a -> (a, [ResolveError])
-runResolver resolver =
-  let (result, finalState) = runState (runResolverT resolver) newScope
+-- | Runs a resolver. The given names are globals that exist before the program
+-- starts (the native functions), and take the first indices, in order.
+runResolver :: [Text] -> Resolver a -> (a, [ResolveError])
+runResolver predefined resolver =
+  let (result, finalState) = runState (runResolverT resolver) (initialState predefined)
    in (result, reverse (resolveErrors finalState))
 
-newScope :: ResolverState
-newScope = ResolverState (mempty :| []) FTypeNone CTypeNone []
+initialState :: [Text] -> ResolverState
+initialState predefined = ResolverState (globalScope :| []) FTypeNone CTypeNone []
+  where
+    globalScope = M.fromList [(name, VarInfo True i) | (i, name) <- zip [0 ..] predefined]
 
 reportError :: ResolveError -> Resolver ()
 reportError err = modify (\s -> s {resolveErrors = err : resolveErrors s})
@@ -122,6 +126,25 @@ currentSlot name = gets (maybe 0 varSlotIndex . M.lookup name . NE.head . scopes
 currentScopeSize :: Resolver Int
 currentScopeSize = gets (M.size . NE.head . scopes)
 
+-- | Index of a global in the table of globals, assigning the next free one the
+-- first time a name is seen. A global can be mentioned before it is declared
+-- (that is a runtime error, not a resolve error), so mentions intern it too.
+globalSlot :: Text -> Resolver Int
+globalSlot name = do
+  rs <- get
+  let globalScope = NE.last (scopes rs)
+  case M.lookup name globalScope of
+    Just info -> pure (varSlotIndex info)
+    Nothing -> do
+      let slot = M.size globalScope
+      put rs {scopes = modifyLast (M.insert name (VarInfo False slot)) (scopes rs)}
+      pure slot
+
+-- | Applies a function to the last (outermost) element.
+modifyLast :: (a -> a) -> NonEmpty a -> NonEmpty a
+modifyLast f (x :| []) = f x :| []
+modifyLast f (x :| (y : ys)) = x :| NE.toList (modifyLast f (y :| ys))
+
 resolveLocal :: Text -> Resolver Resolution
 resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
@@ -133,11 +156,11 @@ resolveLocal name = do
 
   case findScope scopesList 0 of
     Just (distance, slot) ->
-      -- The outermost scope is the global one, which lives in a map by name.
+      -- The outermost scope is the global one, which has its own table.
       if distance == length scopesList - 1
-        then pure Global
+        then pure (Global slot)
         else pure (Local (LocalResolution distance slot))
-    Nothing -> pure Global
+    Nothing -> Global <$> globalSlot name
 
 programResolver :: Program 'Unresolved -> Resolver (Program 'Resolved)
 programResolver (Program decls) = Program <$> mapM resolveDeclaration decls
@@ -306,4 +329,4 @@ resolveExpr (UnaryOperation line op operand) = UnaryOperation line op <$> resolv
 -- global resolution is not applicable (cannot happen).
 toLocal :: Resolution -> LocalResolution
 toLocal (Local n) = n
-toLocal Global = LocalResolution 0 0
+toLocal (Global _) = LocalResolution 0 0

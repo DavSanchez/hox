@@ -166,8 +166,9 @@ deriving stock instance (Eq (ResolutionInfo p), Eq (LocalPhase p)) => Eq (Expres
 
 -- | Represents the resolution status of a variable.
 data Resolution
-  = -- | The variable is global (not resolved to a specific depth).
-    Global
+  = -- | The variable is global: it is looked up by its index in the table of
+    -- globals, which the resolver assigns to every global name it sees.
+    Global Int
   | -- | The variable is local, found at a specific depth (number of scopes up).
     Local LocalResolution
   deriving stock (Show, Eq)

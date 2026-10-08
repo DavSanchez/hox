@@ -10,6 +10,7 @@ module Runtime.Environment
     lookupGlobal,
     assignGlobal,
     newFrame,
+    frameSize,
     readSlot,
     writeSlot,
     popFrame,
@@ -19,9 +20,8 @@ module Runtime.Environment
 where
 
 import Control.Monad.IO.Class (MonadIO, liftIO)
-import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
-import Data.Map.Strict qualified as M
-import Data.Text (Text)
+import Data.Foldable (for_)
+import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import GHC.Exts
   ( Int (I#),
     RealWorld,
@@ -37,9 +37,13 @@ import GHC.Exts
   )
 import GHC.IO (IO (IO))
 
--- | Global variables live in a map, by name: they can be declared at any time
--- and referred to before they exist (the latter is a runtime error).
-type Globals a = IORef (M.Map Text a)
+-- | The table of global variables.
+--
+-- The resolver gives every global name an index, so a global is read and
+-- written by index like a local. A global is 'Nothing' until it is declared.
+-- Globals can be declared at any point of the program, and the table is
+-- created before the program is resolved, so it grows on demand.
+type Globals a = IORef (Frame (Maybe a))
 
 -- | The frame of a local scope: a fixed number of slots.
 --
@@ -56,23 +60,47 @@ instance Eq (Frame a) where
 type Environment a = [Frame a]
 
 newGlobals :: (MonadIO m) => m (Globals a)
-newGlobals = liftIO $ newIORef mempty
+newGlobals = do
+  table <- newFrame initialGlobals Nothing
+  liftIO $ newIORef table
+  where
+    initialGlobals = 16
 
-declareGlobal :: (MonadIO m) => Text -> a -> Globals a -> m ()
-declareGlobal name val globals = liftIO $ modifyIORef' globals (M.insert name val)
+declareGlobal :: (MonadIO m) => Int -> a -> Globals a -> m ()
+declareGlobal slot val globals = do
+  table <- liftIO $ readIORef globals
+  size <- frameSize table
+  if slot < size
+    then writeSlot table slot (Just $! val)
+    else do
+      -- Grow, at least geometrically so that declaring n globals stays linear.
+      bigger <- newFrame (max (slot + 1) (2 * size)) Nothing
+      for_ [0 .. size - 1] $ \i -> readSlot table i >>= writeSlot bigger i
+      writeSlot bigger slot (Just $! val)
+      liftIO $ writeIORef globals bigger
 
-lookupGlobal :: (MonadIO m) => Text -> Globals a -> m (Maybe a)
-lookupGlobal name globals = do
-  m <- liftIO $ readIORef globals
-  pure $ M.lookup name m
+-- | 'Nothing' if the global has not been declared (including an index the
+-- resolver never handed out).
+lookupGlobal :: (MonadIO m) => Int -> Globals a -> m (Maybe a)
+lookupGlobal slot globals = do
+  table <- liftIO $ readIORef globals
+  size <- frameSize table
+  if slot >= 0 && slot < size then readSlot table slot else pure Nothing
+{-# INLINE lookupGlobal #-}
 
--- | Assigns to an existing global. 'False' if there is no such global.
-assignGlobal :: (MonadIO m) => Text -> a -> Globals a -> m Bool
-assignGlobal name val globals = do
-  m <- liftIO $ readIORef globals
-  if M.member name m
-    then liftIO (modifyIORef' globals (M.insert name val)) >> pure True
+-- | Assigns to a declared global. 'False' if there is no such global.
+assignGlobal :: (MonadIO m) => Int -> a -> Globals a -> m Bool
+assignGlobal slot val globals = do
+  table <- liftIO $ readIORef globals
+  size <- frameSize table
+  if slot >= 0 && slot < size
+    then do
+      current <- readSlot table slot
+      case current of
+        Nothing -> pure False
+        Just _ -> writeSlot table slot (Just $! val) >> pure True
     else pure False
+{-# INLINE assignGlobal #-}
 
 -- | A frame of the given size, with every slot set to the given filler.
 newFrame :: (MonadIO m) => Int -> a -> m (Frame a)
@@ -80,6 +108,12 @@ newFrame (I# n) filler = liftIO $ IO $ \s ->
   case newSmallArray# n filler s of
     (# s1, arr #) -> (# s1, Frame arr #)
 {-# INLINE newFrame #-}
+
+frameSize :: (MonadIO m) => Frame a -> m Int
+frameSize (Frame arr) = liftIO $ IO $ \s ->
+  case getSizeofSmallMutableArray# arr s of
+    (# s1, n# #) -> (# s1, I# n# #)
+{-# INLINE frameSize #-}
 
 readSlot :: (MonadIO m) => Frame a -> Int -> m a
 readSlot (Frame arr) i@(I# i#) = liftIO $ IO $ \s ->

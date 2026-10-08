@@ -10,7 +10,6 @@ module Runtime.Interpreter.State
 where
 
 import Control.Monad.IO.Class (MonadIO)
-import Data.Text (Text)
 import Language.Syntax.Expression (LocalResolution (LocalResolution), Resolution (..))
 import Runtime.Environment
   ( Environment,
@@ -36,29 +35,30 @@ newProgramState = do
   g <- newGlobals
   pure $ ProgramState {environment = [], globals = g}
 
--- | Declares a variable in the innermost scope: a global (by name) at the top
--- level, otherwise the given slot of the current frame.
-declare :: (MonadIO m) => Text -> Int -> a -> ProgramState a -> m ()
-declare name slot val state = do
+-- | Declares a variable in the innermost scope, at the slot the resolver
+-- assigned it: in the table of globals at the top level, otherwise in the
+-- current frame.
+declare :: (MonadIO m) => Int -> a -> ProgramState a -> m ()
+declare slot val state = do
   case environment state of
-    [] -> declareGlobal name val (globals state)
+    [] -> declareGlobal slot val (globals state)
     (top : _) -> writeSlot top slot val
 {-# INLINE declare #-}
 
 -- | 'Nothing' only for an undefined global: a resolved local always exists.
-getVariable :: (MonadIO m) => Text -> Resolution -> ProgramState a -> m (Maybe a)
-getVariable name distance st =
+getVariable :: (MonadIO m) => Resolution -> ProgramState a -> m (Maybe a)
+getVariable distance st =
   case distance of
     Local (LocalResolution d slot) -> Just <$> getAtDistance d slot (environment st)
-    Global -> lookupGlobal name (globals st)
+    Global slot -> lookupGlobal slot (globals st)
 {-# INLINE getVariable #-}
 
 -- | 'False' only for an undefined global.
-assignVariable :: (MonadIO m) => Text -> Resolution -> a -> ProgramState a -> m Bool
-assignVariable name distance val st =
+assignVariable :: (MonadIO m) => Resolution -> a -> ProgramState a -> m Bool
+assignVariable distance val st =
   case distance of
     Local (LocalResolution d slot) -> assignAtDistance d slot val (environment st) >> pure True
-    Global -> assignGlobal name val (globals st)
+    Global slot -> assignGlobal slot val (globals st)
 {-# INLINE assignVariable #-}
 
 -- | Pushes a fresh frame with the given number of slots.

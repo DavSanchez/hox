@@ -38,7 +38,7 @@ import Runtime.Interpreter.State (ProgramState (..))
 
 -- | Represents the values that can be produced by evaluating an expression.
 data Value
-  = VNumber Double
+  = VNumber !Double
   | VBool Bool
   | VString Text
   | VNil

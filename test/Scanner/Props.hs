@@ -18,17 +18,25 @@ scannerProperties =
 eofOrUnterminatedString :: String -> Bool
 eofOrUnterminatedString s =
   let lastToken = NE.last $ scanTokens s
-      numDoubleQuotes = length $ filter (== '"') $ removeComments s
       result = bimap errorMessage tokenType lastToken
    in result
-        == if even numDoubleQuotes -- Strings are closed?
-          then Right EOF
-          else Left "Unterminated string."
+        == if endsInsideString s
+          then Left "Unterminated string."
+          else Right EOF
 
-removeComments :: String -> String
-removeComments ('/' : '/' : ss) = removeComments $ drop 1 $ dropWhile (/= '\n') ss
-removeComments (s : ss) = s : removeComments ss
-removeComments [] = []
+-- | Whether the input ends inside a string literal, i.e. a string is never
+-- closed.
+--
+-- A @//@ only starts a comment outside of a string: inside one it is just
+-- text, so @"//"@ is a complete string. Stripping comments before counting
+-- quotes would get that wrong. Strings may span lines, comments may not.
+endsInsideString :: String -> Bool
+endsInsideString = go False
+  where
+    go inString ('"' : ss) = go (not inString) ss
+    go False ('/' : '/' : ss) = go False (dropWhile (/= '\n') ss)
+    go inString (_ : ss) = go inString ss
+    go inString [] = inString
 
 lessOrEqualTokensThanInputLength :: String -> Bool
 lessOrEqualTokensThanInputLength s =

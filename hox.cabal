@@ -164,10 +164,12 @@ executable hox
 
   -- Directories containing source files.
   hs-source-dirs: app
+  -- One capability: the interpreter is single-threaded, so extra ones only add
+  -- parallel-GC coordination cost (about 16% on fib(40), see bench/README.md).
   ghc-options:
     -threaded
     -rtsopts
-    -with-rtsopts=-N
+    -with-rtsopts=-N1
 
 test-suite hox-test
   -- Import common warning flags.
@@ -202,11 +204,15 @@ benchmark hox-bench
   type: exitcode-stdio-1.0
   hs-source-dirs: bench
   main-is: Main.hs
+  other-modules: Workloads
   build-depends:
+    deepseq,
     hox,
     tasty-bench,
 
+  -- Deliberately NOT -threaded / -N: the interpreter is single-threaded and
+  -- parallel GC adds noise (and cost) to the measurements. -T enables the
+  -- allocation / copied / peak-memory columns.
   ghc-options:
-    -threaded
     -rtsopts
-    -with-rtsopts=-N
+    -with-rtsopts=-T

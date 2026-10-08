@@ -14,7 +14,7 @@ mkStdEnv :: (MonadIO m) => m (ProgramState Value)
 mkStdEnv = do
   let clockCallable = VCallable (Callable (NativeFunction 0 "clock" clock))
   state <- newProgramState
-  declare "clock" clockCallable state
+  declare "clock" 0 clockCallable state
   pure state
 
 clock :: forall m. (MonadIO m) => [Value] -> m Value

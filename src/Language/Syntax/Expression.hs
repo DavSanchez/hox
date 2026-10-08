@@ -28,6 +28,7 @@ module Language.Syntax.Expression
     LocalResolution (..),
     NotResolved (..),
     Phase (..),
+    FrameInfo,
 
     -- * Parsing
     expression,
@@ -44,7 +45,6 @@ import Data.Kind (Type)
 import Data.Text (Text, unpack)
 import Language.Parser (TokenParser, peek, satisfy)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
-import Numeric.Natural (Natural)
 
 -- $setup
 -- >>> import Language.Parser (runParser)
@@ -62,6 +62,13 @@ data Phase = Unresolved | Resolved
 type family ResolutionInfo (p :: Phase) :: Type where
   ResolutionInfo 'Unresolved = NotResolved
   ResolutionInfo 'Resolved = Resolution
+
+-- | Layout information the resolver computes for declarations and scopes: the
+-- slot a declared name occupies in its frame, or the number of slots a frame
+-- needs.
+type family FrameInfo (p :: Phase) :: Type where
+  FrameInfo 'Unresolved = NotResolved
+  FrameInfo 'Resolved = Int
 
 type family LocalPhase (p :: Phase) :: Type where
   LocalPhase 'Unresolved = NotResolved
@@ -165,10 +172,15 @@ data Resolution
     Local LocalResolution
   deriving stock (Show, Eq)
 
--- | Represents a local resolution (always resolved to a specific depth).
-newtype LocalResolution = LocalResolution Natural
+-- | Represents a local resolution: where, relative to the current scope, a
+-- local variable lives.
+data LocalResolution = LocalResolution
+  { -- | Number of frames to walk up from the current one.
+    resolvedDepth :: Int,
+    -- | Index of the variable within that frame.
+    resolvedSlot :: Int
+  }
   deriving stock (Show, Eq)
-  deriving newtype (Enum)
 
 -- | Represents an unresolved variable.
 data NotResolved = NotResolved

@@ -19,14 +19,14 @@ import Data.Functor (void, ($>))
 import Data.Map.Strict qualified as M
 import Data.Text (Text)
 import Language.Parser (ParseError, Parser (..), TokenParser, consume, peek, satisfy)
-import Language.Syntax.Expression (Expression (..), Literal (Bool), NotResolved (..), Phase (..), expression)
+import Language.Syntax.Expression (Expression (..), FrameInfo, Literal (Bool), NotResolved (..), Phase (..), expression)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier)
 
 newtype Program (p :: Phase) = Program [Declaration p]
 
-deriving stock instance (Show (Expression p)) => Show (Program p)
+deriving stock instance (Show (Expression p), Show (FrameInfo p)) => Show (Program p)
 
-deriving stock instance (Eq (Expression p)) => Eq (Program p)
+deriving stock instance (Eq (Expression p), Eq (FrameInfo p)) => Eq (Program p)
 
 data Declaration (p :: Phase)
   = ClassDecl (Class p)
@@ -34,20 +34,22 @@ data Declaration (p :: Phase)
   | VarDecl (Variable p)
   | Statement (Statement p)
 
-deriving stock instance (Eq (Expression p)) => Eq (Declaration p)
+deriving stock instance (Eq (Expression p), Eq (FrameInfo p)) => Eq (Declaration p)
 
-deriving stock instance (Show (Expression p)) => Show (Declaration p)
+deriving stock instance (Show (Expression p), Show (FrameInfo p)) => Show (Declaration p)
 
 data Class (p :: Phase) = Class
   { className :: Text,
     classMethods :: M.Map Text (Function p),
     classLine :: Int,
-    superClass :: Maybe (Expression p)
+    superClass :: Maybe (Expression p),
+    -- | Slot of the class name in the enclosing scope.
+    classSlot :: FrameInfo p
   }
 
-deriving stock instance (Eq (Expression p)) => Eq (Class p)
+deriving stock instance (Eq (Expression p), Eq (FrameInfo p)) => Eq (Class p)
 
-deriving stock instance (Show (Expression p)) => Show (Class p)
+deriving stock instance (Show (Expression p), Show (FrameInfo p)) => Show (Class p)
 
 type Block (p :: Phase) = [Declaration p]
 
@@ -55,22 +57,28 @@ data Function (p :: Phase) = Function
   { funcName :: Text,
     funcParams :: [(Text, Int)],
     funcBody :: Block p,
-    funcLine :: Int
+    funcLine :: Int,
+    -- | Number of slots in the frame of a call: parameters and body locals.
+    funcFrameSize :: FrameInfo p,
+    -- | Slot of the function name in the enclosing scope.
+    funcSlot :: FrameInfo p
   }
 
-deriving stock instance (Eq (Expression p)) => Eq (Function p)
+deriving stock instance (Eq (Expression p), Eq (FrameInfo p)) => Eq (Function p)
 
-deriving stock instance (Show (Expression p)) => Show (Function p)
+deriving stock instance (Show (Expression p), Show (FrameInfo p)) => Show (Function p)
 
 data Variable (p :: Phase) = Variable
   { varName :: Text,
     varInitializer :: Maybe (Expression p),
-    varLine :: Int
+    varLine :: Int,
+    -- | Slot of the variable in its scope.
+    varSlot :: FrameInfo p
   }
 
-deriving stock instance (Eq (Expression p)) => Eq (Variable p)
+deriving stock instance (Eq (Expression p), Eq (FrameInfo p)) => Eq (Variable p)
 
-deriving stock instance (Show (Expression p)) => Show (Variable p)
+deriving stock instance (Show (Expression p), Show (FrameInfo p)) => Show (Variable p)
 
 data Statement (p :: Phase)
   = ExprStmt (Expression p)
@@ -84,11 +92,12 @@ data Statement (p :: Phase)
   | PrintStmt (Expression p)
   | ReturnStmt Int (Maybe (Expression p))
   | WhileStmt (Expression p) (Statement p)
-  | BlockStmt (Block p)
+  | -- | A block, with the number of slots its frame needs.
+    BlockStmt (FrameInfo p) (Block p)
 
-deriving stock instance (Eq (Expression p)) => Eq (Statement p)
+deriving stock instance (Eq (Expression p), Eq (FrameInfo p)) => Eq (Statement p)
 
-deriving stock instance (Show (Expression p)) => Show (Statement p)
+deriving stock instance (Show (Expression p), Show (FrameInfo p)) => Show (Statement p)
 
 parseProgram :: [Token] -> Either [ParseError] (Program 'Unresolved)
 parseProgram tokens =
@@ -132,7 +141,7 @@ classDeclaration = do
   void $ satisfy ((LEFT_BRACE ==) . tokenType) "Expect '{' before class body."
   methods <- parseClassMethods
   void $ satisfy ((RIGHT_BRACE ==) . tokenType) "Expect '}' after class body."
-  pure $ Class name methods l superClassName
+  pure $ Class name methods l superClassName NotResolved
 
 parseSuperClass :: TokenParser (Maybe (Expression 'Unresolved))
 parseSuperClass = do
@@ -172,7 +181,7 @@ function kind = do
   void $ satisfy ((RIGHT_PAREN ==) . tokenType) "Expect ')' after parameters."
   void $ satisfy ((LEFT_BRACE ==) . tokenType) ("Expect '{' before " <> displayFunctionKind kind <> " body.") -- start function body
   body <- parseScopedProgram
-  pure $ Function name params body l
+  pure $ Function name params body l NotResolved NotResolved
 
 parseFunctionParameters :: TokenParser [(Text, Int)]
 parseFunctionParameters = do
@@ -203,13 +212,13 @@ variable = do
   (name, l) <- variableName
   initExpr <- withInitializer <|> noInitializer
   void varDeclEnd
-  pure $ Variable name initExpr l
+  pure $ Variable name initExpr l NotResolved
 
 variable' :: TokenParser (Variable 'Unresolved)
 variable' = do
   (name, l) <- variableName
   initExpr <- withInitializer <|> noInitializer
-  pure $ Variable name initExpr l
+  pure $ Variable name initExpr l NotResolved
 
 withInitializer :: TokenParser (Maybe (Expression 'Unresolved))
 withInitializer = Just <$> (satisfy ((EQUAL ==) . tokenType) ("Expect " <> displayTokenType EQUAL <> ".") *> expression)
@@ -257,7 +266,7 @@ parseForStmt = do
   let -- body with increment?
       body' = case increment of
         Nothing -> body
-        Just cond -> BlockStmt $ Statement <$> [body, ExprStmt cond]
+        Just cond -> BlockStmt NotResolved $ Statement <$> [body, ExprStmt cond]
       -- body with condition?
       cond' = case condition of
         Just c -> c
@@ -266,7 +275,7 @@ parseForStmt = do
       -- body with initializer?
       body''' = case initializer of
         Nothing -> body''
-        Just initr -> BlockStmt [initr, Statement body'']
+        Just initr -> BlockStmt NotResolved [initr, Statement body'']
   pure body'''
 
 parseForComponents ::
@@ -340,7 +349,7 @@ parseWhileStmt = do
   WhileStmt expr <$> statement
 
 parseBlockStmt :: TokenParser (Statement 'Unresolved)
-parseBlockStmt = satisfy ((LEFT_BRACE ==) . tokenType) ("Expect " <> displayTokenType LEFT_BRACE <> ".") *> (BlockStmt <$> parseScopedProgram)
+parseBlockStmt = satisfy ((LEFT_BRACE ==) . tokenType) ("Expect " <> displayTokenType LEFT_BRACE <> ".") *> (BlockStmt NotResolved <$> parseScopedProgram)
 
 parseScopedProgram :: TokenParser [Declaration 'Unresolved]
 parseScopedProgram = Parser $ \tokens -> go tokens []

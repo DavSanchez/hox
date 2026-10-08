@@ -15,7 +15,7 @@ where
 import Control.Monad ((>=>))
 import Control.Monad.Except (ExceptT, MonadError (catchError, throwError), runExceptT)
 import Control.Monad.IO.Class (MonadIO (liftIO))
-import Control.Monad.State (MonadState, StateT, evalStateT, get, gets, modify, put)
+import Control.Monad.State.Strict (MonadState, StateT, evalStateT, get, gets, modify, put)
 import Data.Functor (($>))
 import Data.Text (Text, pack)
 import Language.Analysis.Resolver (programResolver, runResolver)

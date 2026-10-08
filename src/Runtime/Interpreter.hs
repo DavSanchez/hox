@@ -51,7 +51,7 @@ import Runtime.Interpreter.State
     popScope,
     pushScope,
   )
-import Runtime.Interpreter.StdEnv (mkStdEnv)
+import Runtime.Interpreter.StdEnv (mkStdEnv, stdGlobalNames)
 import Runtime.Value
   ( Callable (..),
     CallableType (..),
@@ -147,7 +147,7 @@ instance MonadError InterpreterError Interpreter where
 programInterpreter ::
   Program 'Unresolved -> Interpreter ()
 programInterpreter prog = do
-  let (resolvedProg, errors) = runResolver (programResolver prog)
+  let (resolvedProg, errors) = runResolver stdGlobalNames (programResolver prog)
   if null errors
     then interpretProgram resolvedProg
     else throwError (Resolve errors)
@@ -165,10 +165,10 @@ interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareClass ::
   Class 'Resolved -> Interpreter ()
-declareClass cls@(Class className _ l superClass slot) = do
+declareClass cls@(Class _ _ l superClass slot) = do
   superClass' <- mapM (evaluateExpr >=> asClass) superClass
   state <- get
-  declare className slot VNil state
+  declare slot VNil state
   -- Build class object
   env <- case superClass' of
     Just sC -> do
@@ -179,7 +179,7 @@ declareClass cls@(Class className _ l superClass slot) = do
     Nothing -> pure $ environment state
   let loxClass = LoxClass cls env superClass'
       callable = Callable (ClassConstructor loxClass superClass')
-  declare className slot (VCallable callable) state
+  declare slot (VCallable callable) state
   where
     asClass (VCallable (Callable (ClassConstructor superC _))) = pure superC
     asClass _ = evalError l "Superclass must be a class."
@@ -190,7 +190,7 @@ declareFunction func = do
   env <- gets environment
   let callable = Callable (UserDefinedFunction func env False)
   state <- get
-  declare (funcName func) (funcSlot func) (VCallable callable) state
+  declare (funcSlot func) (VCallable callable) state
 
 runFunctionBody ::
   [Declaration 'Resolved] -> Interpreter Value
@@ -209,12 +209,12 @@ interpretDeclF (Fun f) = declareFunction f $> Continue ()
 
 declareVariable ::
   Variable 'Resolved -> Interpreter ()
-declareVariable (Variable {varName, varInitializer, varSlot}) = do
+declareVariable (Variable {varInitializer, varSlot}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
   state <- get
-  declare varName varSlot value state
+  declare varSlot value state
 
 interpretStatement ::
   Statement 'Resolved -> Interpreter ()
@@ -356,7 +356,7 @@ executeVariable ::
   Interpreter Value
 executeVariable line name dist = do
   state <- get
-  val <- getVariable name dist state
+  val <- getVariable dist state
   case val of
     Just v -> pure v
     Nothing -> evalError line ("Undefined variable '" <> name <> "'.")
@@ -375,7 +375,7 @@ evaluateVarAssignment line name expr dist = do
   -- applied to it by evaluating the expression first.
   value <- evaluateExpr expr
   state <- get
-  found <- assignVariable name dist value state
+  found <- assignVariable dist value state
   if found
     then pure value
     else evalError line ("Undefined variable '" <> name <> "'.")

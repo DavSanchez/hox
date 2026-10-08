@@ -1,5 +1,5 @@
-{ mkDerivation, base, containers, lib, mtl, tasty, tasty-bench
-, tasty-hunit, tasty-quickcheck, text, time
+{ mkDerivation, base, containers, deepseq, lib, mtl, tasty
+, tasty-bench, tasty-hunit, tasty-quickcheck, text, time
 }:
 mkDerivation {
   pname = "hox";
@@ -10,7 +10,7 @@ mkDerivation {
   libraryHaskellDepends = [ base containers mtl text time ];
   executableHaskellDepends = [ base ];
   testHaskellDepends = [ base tasty tasty-hunit tasty-quickcheck ];
-  benchmarkHaskellDepends = [ base tasty-bench ];
+  benchmarkHaskellDepends = [ base deepseq tasty-bench ];
   homepage = "https://github.com/DavSanchez/hox";
   description = "An implementation of a tree-walk interpreter for Lox, the language explored in the book Crafting Interpreters by Robert Nystrom";
   license = lib.licensesSpdx."BSD-3-Clause";

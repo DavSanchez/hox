@@ -202,11 +202,15 @@ benchmark hox-bench
   type: exitcode-stdio-1.0
   hs-source-dirs: bench
   main-is: Main.hs
+  other-modules: Workloads
   build-depends:
+    deepseq,
     hox,
     tasty-bench,
 
+  -- Deliberately NOT -threaded / -N: the interpreter is single-threaded and
+  -- parallel GC adds noise (and cost) to the measurements. -T enables the
+  -- allocation / copied / peak-memory columns.
   ghc-options:
-    -threaded
     -rtsopts
-    -with-rtsopts=-N
+    -with-rtsopts=-T

@@ -1,0 +1,5 @@
+-- Project file used by scripts/bench.sh and scripts/profile.sh (via
+-- `--project-file=cabal.project.perf`), so that performance measurements do not
+-- depend on whatever a developer has in their cabal.project.local.
+packages: .
+optimization: 2

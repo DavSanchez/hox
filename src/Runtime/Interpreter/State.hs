@@ -14,53 +14,58 @@ import Data.Text (Text)
 import Language.Syntax.Expression (LocalResolution (LocalResolution), Resolution (..))
 import Runtime.Environment
   ( Environment,
-    Frame,
+    Globals,
     assignAtDistance,
-    assignInFrame,
-    declareInFrame,
-    findInFrame,
+    assignGlobal,
+    declareGlobal,
     getAtDistance,
+    lookupGlobal,
     newFrame,
+    newGlobals,
     popFrame,
-    pushFrame,
+    writeSlot,
   )
 
 data ProgramState a = ProgramState
   { environment :: !(Environment a),
-    globals :: !(Frame a)
+    globals :: !(Globals a)
   }
 
 newProgramState :: (MonadIO m) => m (ProgramState a)
 newProgramState = do
-  g <- newFrame
+  g <- newGlobals
   pure $ ProgramState {environment = [], globals = g}
 
-declare :: (MonadIO m) => Text -> a -> ProgramState a -> m ()
-declare name val state = do
+-- | Declares a variable in the innermost scope: a global (by name) at the top
+-- level, otherwise the given slot of the current frame.
+declare :: (MonadIO m) => Text -> Int -> a -> ProgramState a -> m ()
+declare name slot val state = do
   case environment state of
-    [] -> declareInFrame name val (globals state)
-    (top : _) -> declareInFrame name val top
+    [] -> declareGlobal name val (globals state)
+    (top : _) -> writeSlot top slot val
+{-# INLINE declare #-}
 
+-- | 'Nothing' only for an undefined global: a resolved local always exists.
 getVariable :: (MonadIO m) => Text -> Resolution -> ProgramState a -> m (Maybe a)
 getVariable name distance st =
-  let env' = environment st
-      globals' = globals st
-   in case distance of
-        Local (LocalResolution d) -> getAtDistance d name env'
-        Global -> findInFrame name globals'
+  case distance of
+    Local (LocalResolution d slot) -> Just <$> getAtDistance d slot (environment st)
+    Global -> lookupGlobal name (globals st)
+{-# INLINE getVariable #-}
 
+-- | 'False' only for an undefined global.
 assignVariable :: (MonadIO m) => Text -> Resolution -> a -> ProgramState a -> m Bool
 assignVariable name distance val st =
-  let env' = environment st
-      globals' = globals st
-   in case distance of
-        Local (LocalResolution d) -> assignAtDistance d name val env'
-        Global -> assignInFrame name val globals'
+  case distance of
+    Local (LocalResolution d slot) -> assignAtDistance d slot val (environment st) >> pure True
+    Global -> assignGlobal name val (globals st)
+{-# INLINE assignVariable #-}
 
-pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)
-pushScope state = do
-  newEnv <- pushFrame (environment state)
-  pure $ state {environment = newEnv}
+-- | Pushes a fresh frame with the given number of slots.
+pushScope :: (MonadIO m) => Int -> a -> ProgramState a -> m (ProgramState a)
+pushScope size filler state = do
+  frame <- newFrame size filler
+  pure $ state {environment = frame : environment state}
 
 popScope :: ProgramState a -> ProgramState a
 popScope state = state {environment = popFrame (environment state)}

@@ -48,7 +48,18 @@ data FunctionType = FTypeNone | FTypeFunction | FTypeMethod | FTypeInitializer
 data ClassType = CTypeNone | CTypeClass | CTypeSubclass
   deriving stock (Show, Eq)
 
-type Scope = M.Map Text Bool
+-- | What the resolver knows about a name in a scope.
+data VarInfo = VarInfo
+  { -- | Has the declaration finished (so the name may be read)?
+    varDefined :: Bool,
+    -- | Index of the name in the runtime frame of this scope. Slots are handed
+    -- out in declaration order, which is also the order the interpreter
+    -- executes the declarations in.
+    varSlotIndex :: Int
+  }
+  deriving stock (Show, Eq)
+
+type Scope = M.Map Text VarInfo
 
 newtype Resolver a = Resolver {runResolverT :: State ResolverState a}
   deriving newtype
@@ -87,8 +98,11 @@ declareSafe name line = do
 
 declare :: Text -> Int -> ResolverState -> Either ResolveError ResolverState
 declare name line rs@ResolverState {scopes = currentScope :| rest} =
-  let alreadyDeclared = M.member name currentScope
-      updatedScope = M.insert name False currentScope
+  let existing = M.lookup name currentScope
+      alreadyDeclared = isJust existing
+      -- Redeclaring (only legal for globals) keeps the original slot.
+      slot = maybe (M.size currentScope) varSlotIndex existing
+      updatedScope = M.insert name (VarInfo False slot) currentScope
       isGlobal = null rest
    in if alreadyDeclared && not isGlobal
         then Left $ ResolveError name line "Already a variable with this name in this scope."
@@ -96,36 +110,46 @@ declare name line rs@ResolverState {scopes = currentScope :| rest} =
 
 define :: Text -> ResolverState -> ResolverState
 define name rs@ResolverState {scopes = currentScope :| rest} =
-  let updatedScope = M.insert name True currentScope
+  let slot = maybe (M.size currentScope) varSlotIndex (M.lookup name currentScope)
+      updatedScope = M.insert name (VarInfo True slot) currentScope
    in rs {scopes = updatedScope :| rest}
+
+-- | Slot of a name already declared in the innermost scope.
+currentSlot :: Text -> Resolver Int
+currentSlot name = gets (maybe 0 varSlotIndex . M.lookup name . NE.head . scopes)
+
+-- | Number of slots the innermost scope needs at runtime.
+currentScopeSize :: Resolver Int
+currentScopeSize = gets (M.size . NE.head . scopes)
 
 resolveLocal :: Text -> Resolver Resolution
 resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
-  let findScopeIndex :: [Scope] -> Int -> Maybe Int
-      findScopeIndex [] _ = Nothing
-      findScopeIndex (s : ss) i =
-        if M.member name s
-          then Just i
-          else findScopeIndex ss (i + 1)
+  let findScope :: [Scope] -> Int -> Maybe (Int, Int)
+      findScope [] _ = Nothing
+      findScope (sc : ss) i = case M.lookup name sc of
+        Just info -> Just (i, varSlotIndex info)
+        Nothing -> findScope ss (i + 1)
 
-  case findScopeIndex scopesList 0 of
-    Just distance -> do
-      let isGlobal = distance == length scopesList - 1
-      if not isGlobal
-        then pure (Local (LocalResolution distance))
-        else pure Global
+  case findScope scopesList 0 of
+    Just (distance, slot) ->
+      -- The outermost scope is the global one, which lives in a map by name.
+      if distance == length scopesList - 1
+        then pure Global
+        else pure (Local (LocalResolution distance slot))
     Nothing -> pure Global
 
 programResolver :: Program 'Unresolved -> Resolver (Program 'Resolved)
 programResolver (Program decls) = Program <$> mapM resolveDeclaration decls
 
-resolveBlock :: [Declaration 'Unresolved] -> Resolver [Declaration 'Resolved]
+-- | Resolves a block in a new scope, returning the size of its frame.
+resolveBlock :: [Declaration 'Unresolved] -> Resolver (Int, [Declaration 'Resolved])
 resolveBlock block = do
   modify beginScope
   decls <- mapM resolveDeclaration block
+  size <- currentScopeSize
   modify endScope
-  pure decls
+  pure (size, decls)
 
 resolveDeclaration :: Declaration 'Unresolved -> Resolver (Declaration 'Resolved)
 resolveDeclaration (ClassDecl cls) = ClassDecl <$> resolveClassDecl cls
@@ -142,9 +166,10 @@ withClassType cType action = do
   pure res
 
 resolveClassDecl :: Class 'Unresolved -> Resolver (Class 'Resolved)
-resolveClassDecl (Class className methods line superClass) = do
+resolveClassDecl (Class className methods line superClass _) = do
   declareSafe className line
   modify (define className)
+  slot <- currentSlot className
 
   when (isJust superClass) $ modify (\s -> s {currentClass = CTypeSubclass})
   resolvedSuperClass <- mapM resolveExpr superClass
@@ -156,7 +181,7 @@ resolveClassDecl (Class className methods line superClass) = do
 
   when (isJust resolvedSuperClass) $ modify endScope
 
-  pure (Class className methods' line resolvedSuperClass)
+  pure (Class className methods' line resolvedSuperClass slot)
   where
     hasOwnClassName superClassExpr = case superClassExpr of
       Just (VariableExpr _ name _) -> name == className
@@ -185,14 +210,15 @@ resolveStatement (ReturnStmt line maybeExpr) = do
       Nothing -> pure ()
   ReturnStmt line <$> traverse resolveExpr maybeExpr
 resolveStatement (WhileStmt cond body) = WhileStmt <$> resolveExpr cond <*> resolveStatement body
-resolveStatement (BlockStmt block) = BlockStmt <$> resolveBlock block
+resolveStatement (BlockStmt _ block) = uncurry BlockStmt <$> resolveBlock block
 
 resolveVarDecl :: Variable 'Unresolved -> Resolver (Variable 'Resolved)
-resolveVarDecl (Variable vName vValue vLine) = do
+resolveVarDecl (Variable vName vValue vLine _) = do
   declareSafe vName vLine
+  slot <- currentSlot vName
   vValue' <- traverse resolveExpr vValue
   modify (define vName)
-  pure (Variable vName vValue' vLine)
+  pure (Variable vName vValue' vLine slot)
 
 withFunctionType :: FunctionType -> Resolver a -> Resolver a
 withFunctionType t action = do
@@ -203,25 +229,37 @@ withFunctionType t action = do
   pure res
 
 resolveFuncDecl :: FunctionType -> Function 'Unresolved -> Resolver (Function 'Resolved)
-resolveFuncDecl fType (Function fName fParams fBody fLine) = do
-  declareSafe fName fLine
-  modify (define fName)
-  fBody' <- withFunctionType fType $ resolveFunction fParams fBody
-  pure (Function fName fParams fBody' fLine)
+resolveFuncDecl fType (Function fName fParams fBody fLine _ _) = do
+  -- Methods are not variables of the scope that binds `this`: they are looked
+  -- up through the instance. Declaring them there would make a bare reference
+  -- to a global of the same name resolve to the wrong place.
+  slot <-
+    if isMethod fType
+      then pure 0
+      else do
+        declareSafe fName fLine
+        modify (define fName)
+        currentSlot fName
+  (frameSize, fBody') <- withFunctionType fType $ resolveFunction fParams fBody
+  pure (Function fName fParams fBody' fLine frameSize slot)
+  where
+    isMethod t = t == FTypeMethod || t == FTypeInitializer
 
+-- | Resolves parameters and body in one scope (they share the call frame),
+-- returning the size of that frame.
 resolveFunction ::
-  (Traversable t) =>
-  t (Text, Int) ->
-  t (Declaration 'Unresolved) ->
-  Resolver (t (Declaration 'Resolved))
+  [(Text, Int)] ->
+  [Declaration 'Unresolved] ->
+  Resolver (Int, [Declaration 'Resolved])
 resolveFunction params body = do
   modify beginScope
   for_ params $ \(param, line) -> do
     declareSafe param line
     modify (define param)
   body' <- mapM resolveDeclaration body
+  size <- currentScopeSize
   modify endScope
-  pure body'
+  pure (size, body')
 
 resolveExpr :: Expression 'Unresolved -> Resolver (Expression 'Resolved)
 resolveExpr (VariableExpr line name _) = do
@@ -229,7 +267,7 @@ resolveExpr (VariableExpr line name _) = do
   let currentScope = NE.head scopesList
       isGlobal = length scopesList == 1
   case M.lookup name currentScope of
-    Just False | not isGlobal -> reportError (ResolveError name line "Can't read local variable in its own initializer.")
+    Just (VarInfo False _) | not isGlobal -> reportError (ResolveError name line "Can't read local variable in its own initializer.")
     _ -> pure ()
 
   dist <- resolveLocal name
@@ -268,4 +306,4 @@ resolveExpr (UnaryOperation line op operand) = UnaryOperation line op <$> resolv
 -- global resolution is not applicable (cannot happen).
 toLocal :: Resolution -> LocalResolution
 toLocal (Local n) = n
-toLocal Global = LocalResolution 0
+toLocal Global = LocalResolution 0 0

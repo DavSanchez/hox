@@ -39,7 +39,7 @@ import Language.Syntax.Program
     parseProgram,
   )
 import Language.Syntax.Token (Token)
-import Runtime.Environment (declareInFrame, newFrame)
+import Runtime.Environment (newFrame, readSlot, writeSlot)
 import Runtime.Environment qualified as Env
 import Runtime.Interpreter.ControlFlow (ControlFlow (Continue), pattern Return)
 import Runtime.Interpreter.Error (InterpreterError (..))
@@ -165,20 +165,21 @@ interpretDecl (Statement stmt) = interpretStatement stmt
 
 declareClass ::
   Class 'Resolved -> Interpreter ()
-declareClass cls@(Class className _ l superClass) = do
+declareClass cls@(Class className _ l superClass slot) = do
   superClass' <- mapM (evaluateExpr >=> asClass) superClass
   state <- get
-  declare className VNil state
+  declare className slot VNil state
   -- Build class object
   env <- case superClass' of
     Just sC -> do
-      frame <- newFrame
-      declareInFrame "super" (VCallable (Callable (ClassConstructor sC Nothing))) frame
+      -- The scope that binds `super`: a single slot.
+      frame <- newFrame 1 VNil
+      writeSlot frame 0 (VCallable (Callable (ClassConstructor sC Nothing)))
       pure (frame : environment state)
     Nothing -> pure $ environment state
   let loxClass = LoxClass cls env superClass'
       callable = Callable (ClassConstructor loxClass superClass')
-  declare className (VCallable callable) state
+  declare className slot (VCallable callable) state
   where
     asClass (VCallable (Callable (ClassConstructor superC _))) = pure superC
     asClass _ = evalError l "Superclass must be a class."
@@ -189,7 +190,7 @@ declareFunction func = do
   env <- gets environment
   let callable = Callable (UserDefinedFunction func env False)
   state <- get
-  declare (funcName func) (VCallable callable) state
+  declare (funcName func) (funcSlot func) (VCallable callable) state
 
 runFunctionBody ::
   [Declaration 'Resolved] -> Interpreter Value
@@ -208,12 +209,12 @@ interpretDeclF (Fun f) = declareFunction f $> Continue ()
 
 declareVariable ::
   Variable 'Resolved -> Interpreter ()
-declareVariable (Variable {varName, varInitializer}) = do
+declareVariable (Variable {varName, varInitializer, varSlot}) = do
   value <- case varInitializer of
     Just expr -> evaluateExpr expr
     Nothing -> pure VNil -- Assuming VNil is the default uninitialized value
   state <- get
-  declare varName value state
+  declare varName varSlot value state
 
 interpretStatement ::
   Statement 'Resolved -> Interpreter ()
@@ -227,7 +228,7 @@ interpretStatementCF ::
 interpretStatementCF (PrintStmt expr) = interpretPrint expr $> Continue ()
 interpretStatementCF (ExprStmt expr) = evaluateExpr expr $> Continue ()
 interpretStatementCF (IfStmt expr thenBranch elseBranch) = executeIf expr thenBranch elseBranch
-interpretStatementCF (BlockStmt decls) = executeBlock decls
+interpretStatementCF (BlockStmt size decls) = executeBlock size decls
 interpretStatementCF (WhileStmt expr stmt) = executeWhile expr stmt
 interpretStatementCF (ReturnStmt _ maybeExpr) = Return <$> maybe (pure VNil) evaluateExpr maybeExpr
 
@@ -245,11 +246,12 @@ executeIf expr thenBranch elseBranch = do
       Nothing -> pure (Continue ())
 
 executeBlock ::
+  Int ->
   [Declaration 'Resolved] ->
   Interpreter (ControlFlow Value ())
-executeBlock decls = do
+executeBlock size decls = do
   state' <- get
-  newState <- pushScope state'
+  newState <- pushScope size VNil state'
   put newState
   -- No handler to pop the scope on error: an error aborts the whole run and
   -- the state is discarded, so there is nothing left to keep consistent.
@@ -431,8 +433,9 @@ executeGet line objectExpr propName = do
 
 bindMethod :: Function Resolved -> LoxClassInstance -> LoxClass -> Interpreter Callable
 bindMethod func clsInstance definingClass = do
-  newFrame' <- newFrame
-  Env.declareInFrame "this" (VClassInstance clsInstance) newFrame'
+  -- The scope that binds `this`: a single slot.
+  newFrame' <- newFrame 1 VNil
+  writeSlot newFrame' 0 (VClassInstance clsInstance)
   let closure = classClosure definingClass
       newEnv = newFrame' : closure
       isInit = funcName func == "init"
@@ -486,13 +489,16 @@ callCallable line callable args
 
 -- | Declares each parameter in the (fresh) call frame. Arity has been checked.
 bindParams :: [(Text, Int)] -> [Value] -> Env.Frame Value -> Interpreter ()
-bindParams ((name, _) : ps) (a : as) frame = declareInFrame name a frame >> bindParams ps as frame
-bindParams _ _ _ = pure ()
+bindParams params args frame = go 0 params args
+  where
+    -- Parameters take the first slots of the frame, in order.
+    go !slot (_ : ps) (a : as) = writeSlot frame slot a >> go (slot + 1) ps as
+    go _ _ _ = pure ()
 
 call :: Callable -> [Value] -> Interpreter Value
 call (Callable (UserDefinedFunction func closure isInit)) args = do
   state <- get
-  frame <- newFrame
+  frame <- newFrame (funcFrameSize func) VNil
   put state {environment = frame : closure}
   -- Set variables for the params and args in the function's environment
   bindParams (funcParams func) args frame
@@ -503,11 +509,8 @@ call (Callable (UserDefinedFunction func closure isInit)) args = do
   if isInit
     then do
       case closure of
-        (thisFrame : _) -> do
-          maybeThis <- Env.findInFrame "this" thisFrame
-          case maybeThis of
-            Just thisVal -> pure thisVal
-            Nothing -> pure result
+        -- An initializer returns `this`, which is the only slot of its frame.
+        (thisFrame : _) -> readSlot thisFrame 0
         [] -> pure result
     else pure result
 call (Callable (NativeFunction _ _ implementation)) args = implementation args
@@ -516,8 +519,8 @@ call (Callable (ClassConstructor loxClass superClass)) args = do
   case lookupMethod "init" loxClass of
     Just (func, _) -> do
       -- Create environment with 'this' bound to instance
-      newFrame' <- newFrame
-      Env.declareInFrame "this" (VClassInstance instance') newFrame'
+      newFrame' <- newFrame 1 VNil
+      writeSlot newFrame' 0 (VClassInstance instance')
       let closure = classClosure loxClass
           newEnv = newFrame' : closure
           -- isInit is True for initializer

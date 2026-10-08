@@ -37,7 +37,8 @@ cabal bench hox-bench --benchmark-options '-p closures'   # one group / name
 `-T` is enabled in the benchmark's RTS options, so the allocation columns are
 always present. The benchmark executable is intentionally **not** `-threaded`
 and has no `-N`: the interpreter is single-threaded and parallel GC only adds
-noise (on `fib(27)` the `hox` executable's `-N` costs ~25% versus `-N1`).
+noise. The `hox` executable itself uses `-N1` for the same reason: with `-N`
+(one capability per core) `fib(40)` took 106 s against 89 s.
 
 ### Baselines and comparison
 

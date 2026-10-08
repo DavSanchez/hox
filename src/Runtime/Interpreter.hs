@@ -22,7 +22,7 @@ import Data.IORef (IORef, newIORef, readIORef, writeIORef)
 import Data.Text (Text, pack)
 import Language.Analysis.Resolver (programResolver, runResolver)
 import Language.Syntax.Expression
-  ( BinaryOperator,
+  ( BinaryOperator (..),
     Expression (..),
     LogicalOperator (..),
     Phase (..),
@@ -49,7 +49,6 @@ import Runtime.Interpreter.State
     declare,
     getVariable,
     popScope,
-    pushClosureScope,
     pushScope,
   )
 import Runtime.Interpreter.StdEnv (mkStdEnv)
@@ -288,7 +287,7 @@ interpretPrint expr = evaluateExpr expr >>= liftIO . putStrLn . displayValue
 -- | Evaluates an expression and returns a value or an error message in the monad.
 evaluateExpr ::
   Expression 'Resolved -> Interpreter Value
-evaluateExpr (Literal lit) = pure $ evalLiteral lit
+evaluateExpr (Literal lit) = pure $! evalLiteral lit
 evaluateExpr (Grouping expr) = evaluateExpr expr
 evaluateExpr (UnaryOperation line op e) = executeUnary line op e
 evaluateExpr (BinaryOperation line op e1 e2) = executeBinary line op e1 e2
@@ -328,7 +327,25 @@ executeBinary ::
 executeBinary line op e1 e2 = do
   v1 <- evaluateExpr e1
   v2 <- evaluateExpr e2
-  either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
+  -- Fast path for the overwhelmingly common number-number case, which avoids
+  -- allocating an Either per operation. Anything that can fail (e.g. division
+  -- by zero) or isn't listed goes through 'evalBinaryOp', which defines the
+  -- semantics.
+  case v1 of
+    VNumber a | VNumber b <- v2 -> case op of
+      Plus -> pure (VNumber (a + b))
+      BMinus -> pure (VNumber (a - b))
+      Star -> pure (VNumber (a * b))
+      Less -> pure (VBool (a < b))
+      LessEqual -> pure (VBool (a <= b))
+      Greater -> pure (VBool (a > b))
+      GreaterEqual -> pure (VBool (a >= b))
+      EqualEqual -> pure (VBool (a == b))
+      BangEqual -> pure (VBool (a /= b))
+      Slash -> slow v1 v2
+    _ -> slow v1 v2
+  where
+    slow v1 v2 = either (throwError . Eval) pure (evalBinaryOp line op v1 v2)
 
 executeVariable ::
   Int ->
@@ -380,10 +397,18 @@ executeCall ::
   Interpreter Value
 executeCall line calleeExpr argExprs = do
   callee <- evaluateExpr calleeExpr
-  args <- mapM evaluateExpr argExprs
+  args <- evaluateArgs argExprs
   case callee of
     VCallable callable -> callCallable line callable args
     _ -> evalError line "Can only call functions and classes."
+
+-- | Evaluates call arguments left to right.
+evaluateArgs :: [Expression 'Resolved] -> Interpreter [Value]
+evaluateArgs [] = pure []
+evaluateArgs (e : es) = do
+  v <- evaluateExpr e
+  vs <- evaluateArgs es
+  pure (v : vs)
 
 executeGet ::
   Int ->
@@ -451,26 +476,26 @@ callCallable ::
   Callable ->
   [Value] ->
   Interpreter Value
-callCallable line callable args =
-  let expectedArity = arity callable
-      actualArity = length args
-   in if actualArity /= expectedArity
-        then evalError line ("Expected " <> pack (show expectedArity) <> " arguments but got " <> pack (show (length args)) <> ".")
-        else call callable args
+callCallable line callable args
+  | actualArity /= expectedArity =
+      evalError line ("Expected " <> pack (show expectedArity) <> " arguments but got " <> pack (show actualArity) <> ".")
+  | otherwise = call callable args
+  where
+    expectedArity = arity callable
+    actualArity = length args
+
+-- | Declares each parameter in the (fresh) call frame. Arity has been checked.
+bindParams :: [(Text, Int)] -> [Value] -> Env.Frame Value -> Interpreter ()
+bindParams ((name, _) : ps) (a : as) frame = declareInFrame name a frame >> bindParams ps as frame
+bindParams _ _ _ = pure ()
 
 call :: Callable -> [Value] -> Interpreter Value
 call (Callable (UserDefinedFunction func closure isInit)) args = do
   state <- get
-  newState <- pushClosureScope closure state
-  put newState
-  let paramWithArgs = zip (funcParams func) args
+  frame <- newFrame
+  put state {environment = frame : closure}
   -- Set variables for the params and args in the function's environment
-  mapM_
-    ( \((paramName, _), argValue) -> do
-        s <- get
-        declare paramName argValue s
-    )
-    paramWithArgs
+  bindParams (funcParams func) args frame
   -- Run the function body
   result <- runFunctionBody (funcBody func)
   -- Restore the previous environment

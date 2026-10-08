@@ -44,7 +44,6 @@ import Data.Kind (Type)
 import Data.Text (Text, unpack)
 import Language.Parser (TokenParser, peek, satisfy)
 import Language.Syntax.Token (Token (..), TokenType (..), displayTokenType, isIdentifier, isNumber, isString)
-import Numeric.Natural (Natural)
 
 -- $setup
 -- >>> import Language.Parser (runParser)
@@ -166,7 +165,7 @@ data Resolution
   deriving stock (Show, Eq)
 
 -- | Represents a local resolution (always resolved to a specific depth).
-newtype LocalResolution = LocalResolution Natural
+newtype LocalResolution = LocalResolution Int
   deriving stock (Show, Eq)
   deriving newtype (Enum)
 

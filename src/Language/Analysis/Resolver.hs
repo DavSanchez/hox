@@ -33,7 +33,6 @@ import Language.Syntax.Program
     Statement (..),
     Variable (..),
   )
-import Numeric.Natural (Natural)
 
 data ResolverState = ResolverState
   { scopes :: NE.NonEmpty Scope,
@@ -103,7 +102,7 @@ define name rs@ResolverState {scopes = currentScope :| rest} =
 resolveLocal :: Text -> Resolver Resolution
 resolveLocal name = do
   scopesList <- gets (NE.toList . scopes)
-  let findScopeIndex :: [Scope] -> Natural -> Maybe Natural
+  let findScopeIndex :: [Scope] -> Int -> Maybe Int
       findScopeIndex [] _ = Nothing
       findScopeIndex (s : ss) i =
         if M.member name s
@@ -112,7 +111,7 @@ resolveLocal name = do
 
   case findScopeIndex scopesList 0 of
     Just distance -> do
-      let isGlobal = toInteger distance == toInteger (length scopesList - 1)
+      let isGlobal = distance == length scopesList - 1
       if not isGlobal
         then pure (Local (LocalResolution distance))
         else pure Global

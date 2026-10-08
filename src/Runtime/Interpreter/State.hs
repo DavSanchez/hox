@@ -3,7 +3,6 @@ module Runtime.Interpreter.State
     newProgramState,
     declare,
     pushScope,
-    pushClosureScope,
     popScope,
     getVariable,
     assignVariable,
@@ -61,11 +60,6 @@ assignVariable name distance val st =
 pushScope :: (MonadIO m) => ProgramState a -> m (ProgramState a)
 pushScope state = do
   newEnv <- pushFrame (environment state)
-  pure $ state {environment = newEnv}
-
-pushClosureScope :: (MonadIO m) => Environment a -> ProgramState a -> m (ProgramState a)
-pushClosureScope closure state = do
-  newEnv <- pushFrame closure
   pure $ state {environment = newEnv}
 
 popScope :: ProgramState a -> ProgramState a

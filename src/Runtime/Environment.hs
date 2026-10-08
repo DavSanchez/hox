@@ -17,7 +17,6 @@ import Data.Functor (($>))
 import Data.IORef (IORef, modifyIORef', newIORef, readIORef)
 import Data.Map.Strict qualified as M
 import Data.Text (Text)
-import Numeric.Natural (Natural)
 
 type Frame a = IORef (M.Map Text a)
 
@@ -51,12 +50,12 @@ popFrame [] = []
 popFrame (_ : xs) = xs
 
 -- Interaction with distances gotten from the resolver
-getAtDistance :: (MonadIO m) => Natural -> Text -> Environment a -> m (Maybe a)
+getAtDistance :: (MonadIO m) => Int -> Text -> Environment a -> m (Maybe a)
 getAtDistance _ _ [] = pure Nothing
 getAtDistance 0 name (f : _) = findInFrame name f
 getAtDistance n name (_ : fs) = getAtDistance (n - 1) name fs
 
-assignAtDistance :: (MonadIO m) => Natural -> Text -> a -> Environment a -> m Bool
+assignAtDistance :: (MonadIO m) => Int -> Text -> a -> Environment a -> m Bool
 assignAtDistance _ _ _ [] = pure False
 assignAtDistance 0 name val (f : _) = assignInFrame name val f
 assignAtDistance n name val (_ : fs) = assignAtDistance (n - 1) name val fs
